@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "nodeforge"
+version = "0.1.0"
+description = "Securely bootstrap Linux servers with auditable plans, generated ops docs, and encrypted local inventory"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+    "typer[all]>=0.9.0",
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+    "fabric>=3.2",
+    "sqlcipher3>=0.5.4",
+    "jinja2>=3.1",
+    "rich>=13.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-mock>=3.12",
+    "pyfakefs>=5.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+
+[project.scripts]
+nodeforge = "nodeforge.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["nodeforge*"]

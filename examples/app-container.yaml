@@ -1,0 +1,45 @@
+kind: service
+
+meta:
+  name: app-node-services
+  description: Install Docker and deploy the app container
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: deploy
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+docker:
+  enabled: true
+
+containers:
+  - name: webapp
+    image: ghcr.io/acme/myapp:1.0.0
+    ports:
+      - "8080:8080"
+    env:
+      APP_ENV: production
+    restart: unless-stopped
+    healthcheck:
+      type: http
+      url: http://localhost:8080/health
+      expect_status: 200
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+    key_source: env
+    key_env: NODEFORGE_SQLCIPHER_KEY
+
+checks:
+  - type: container_running
+    name: webapp
+
+  - type: http
+    url: http://localhost:8080/health
