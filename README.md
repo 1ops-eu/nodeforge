@@ -4,6 +4,67 @@
 
 ---
 
+## Installation
+
+### Option 1 — pip (recommended for Python users)
+
+**System dependency — required on all platforms:**
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install libsqlcipher-dev
+
+# macOS
+brew install sqlcipher
+
+# Windows — see note below
+```
+
+> **Windows:** `sqlcipher3` requires manual setup on Windows. The simplest path is to use the Docker image or wait for a pre-built `.exe` from the [Releases](../../releases) page.
+
+```bash
+pip install nodeforge
+```
+
+### Option 2 — Standalone binary
+
+Download the pre-built binary for your platform from the [Releases](../../releases) page:
+
+| Platform | File |
+|---|---|
+| Linux (x86-64) | `nodeforge-linux-amd64` |
+| macOS | `nodeforge-macos-amd64` |
+| Windows (x86-64) | `nodeforge-windows-amd64.exe` |
+
+```bash
+# Linux / macOS
+chmod +x nodeforge-linux-amd64
+sudo mv nodeforge-linux-amd64 /usr/local/bin/nodeforge
+
+# Verify
+nodeforge --help
+```
+
+> **Note:** Standalone binaries link against the SQLCipher shared library. Linux binaries are built on Ubuntu; macOS binaries require `sqlcipher` installed via Homebrew for the inventory feature to work. If SQLCipher is not present, all commands except `inventory` will work normally.
+
+### Option 3 — Docker
+
+```bash
+docker run --rm ghcr.io/1ops-eu/nodeforge:latest --help
+```
+
+With a spec file and SSH key:
+
+```bash
+docker run --rm \
+  -v ~/.ssh:/root/.ssh:ro \
+  -v $(pwd)/my-server.yaml:/spec.yaml:ro \
+  -e NODEFORGE_SQLCIPHER_KEY=your-key \
+  ghcr.io/1ops-eu/nodeforge:latest apply /spec.yaml
+```
+
+---
+
 ## What nodeforge does
 
 1. **Validate** — checks a YAML spec for correctness and safety
@@ -16,21 +77,6 @@ From a single YAML spec, you get:
 - A Markdown runbook you can put in your wiki
 - A local `~/.ssh/conf.d/` entry for easy SSH access
 - An encrypted local inventory (SQLCipher) with full historization
-
----
-
-## Installation
-
-```bash
-# System dependency (Debian/Ubuntu)
-apt-get install libsqlcipher-dev
-
-# macOS
-brew install sqlcipher
-
-# Install nodeforge
-pip install .
-```
 
 ---
 
@@ -202,10 +248,62 @@ nodeforge inventory show prod-node-1
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-pytest tests/test_specs/ tests/test_compiler/ tests/test_plan/ -v
-pytest tests/test_local/ -v  # requires sqlcipher3
+# Install with dev dependencies (creates .venv automatically)
+make dev
+
+# Run tests
+make test            # unit + integration (no live host needed)
+make test-local      # requires sqlcipher3
+
+# Lint and format
+make lint
+make fmt
+
+# Smoke tests against example specs
+make validate-example
+make plan-example
+make docs-example
 ```
+
+### Building a standalone binary locally
+
+```bash
+# Linux / macOS (requires sqlcipher system dep)
+make build-binary
+
+# Windows
+python scripts/build_binary.py
+# or
+powershell -ExecutionPolicy Bypass -File scripts\build_binary.ps1
+```
+
+### Building the Docker image locally
+
+```bash
+make build-docker
+```
+
+---
+
+## Release flow
+
+Releases are triggered by Git tags:
+
+```bash
+# Bump version in pyproject.toml and nodeforge/__init__.py, then:
+git add pyproject.toml nodeforge/__init__.py
+git commit -m "chore(release): bump version to 0.2.0"
+git push origin main
+
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+GitHub Actions will automatically:
+1. Build binaries for Linux, macOS, and Windows
+2. Generate `checksums.txt`
+3. Create a GitHub Release with all assets
+4. Build and push the Docker image to `ghcr.io/1ops-eu/nodeforge`
 
 ---
 
@@ -217,6 +315,12 @@ pytest tests/test_local/ -v  # requires sqlcipher3
 - Not an agent framework
 
 **V1 scope:** Single host, Debian/Ubuntu only, PostgreSQL + Docker as the only add-ons.
+
+---
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the full milestone plan, including planned RFC work on release signing, open-core packaging, plugin architecture, and cross-platform QA gates.
 
 ---
 

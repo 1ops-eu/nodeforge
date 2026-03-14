@@ -1,0 +1,126 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build platform binaries ─────────────────────────────────────────────────
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: nodeforge-linux-amd64
+            binary_path: dist/nodeforge
+            # sqlcipher3 system dep: libsqlcipher-dev
+            setup_cmd: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
+          - os: macos-latest
+            artifact_name: nodeforge-macos-amd64
+            binary_path: dist/nodeforge
+            # sqlcipher3 system dep: sqlcipher via homebrew
+            setup_cmd: brew install sqlcipher
+
+          - os: windows-latest
+            artifact_name: nodeforge-windows-amd64.exe
+            binary_path: dist/nodeforge.exe
+            # sqlcipher3 on Windows requires manual setup — best-effort build.
+            # See README.md for details. Build may fail if sqlcipher3 cannot
+            # compile; Windows users are recommended to use pip install instead.
+            setup_cmd: ""
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies (Linux / macOS)
+        if: matrix.setup_cmd != ''
+        run: ${{ matrix.setup_cmd }}
+        shell: bash
+
+      - name: Build binary
+        run: python scripts/build_binary.py
+
+      - name: Prepare artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p release
+          cp "${{ matrix.binary_path }}" "release/${{ matrix.artifact_name }}"
+
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item "${{ matrix.binary_path }}" "release/${{ matrix.artifact_name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release/${{ matrix.artifact_name }}
+
+  # ── Generate checksums ──────────────────────────────────────────────────────
+  checksums:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      - name: Flatten artifact directories
+        run: |
+          mkdir -p flat
+          find release -type f -exec cp {} flat/ \;
+
+      - name: Generate SHA-256 checksums
+        run: |
+          cd flat
+          sha256sum * > checksums.txt
+          cat checksums.txt
+
+      - name: Upload checksums artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: flat/checksums.txt
+
+  # ── Publish GitHub Release ──────────────────────────────────────────────────
+  publish:
+    needs: [build, checksums]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      - name: Flatten artifact directories
+        run: |
+          mkdir -p final
+          find release -type f -exec cp {} final/ \;
+          ls -lh final/
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: final/*
+          generate_release_notes: true

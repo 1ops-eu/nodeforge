@@ -1,23 +1,65 @@
-.PHONY: venv install install-dev test test-local test-all lint validate-example plan-example docs-example test-goss clean
+.PHONY: help venv install dev test test-local test-all lint fmt \
+        validate-example plan-example docs-example \
+        build-binary build-docker test-goss clean
 
-VENV := .venv
-PYTHON := $(VENV)/bin/python
-PIP := $(VENV)/bin/pip
+VENV      := .venv
+PYTHON    := $(VENV)/bin/python
+PIP       := $(VENV)/bin/pip
+APP_NAME  := nodeforge
+IMAGE_NAME ?= ghcr.io/1ops-eu/nodeforge
+VERSION   ?= $(shell python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null || python -c "import tomli; print(tomli.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null || grep '^version' pyproject.toml | head -1 | cut -d'"' -f2)
+
+# ── Help ───────────────────────────────────────────────────────────────────────
+
+help:
+	@echo ""
+	@echo "nodeforge — available targets"
+	@echo ""
+	@echo "  Setup"
+	@echo "    make venv            Create .venv virtualenv"
+	@echo "    make install         Install package (runtime deps)"
+	@echo "    make dev             Install package + dev deps (editable)"
+	@echo ""
+	@echo "  Testing"
+	@echo "    make test            Run unit/integration tests (no live host needed)"
+	@echo "    make test-local      Run tests requiring sqlcipher3 locally"
+	@echo "    make test-all        Run all tests"
+	@echo ""
+	@echo "  Code quality"
+	@echo "    make lint            Run ruff + black --check"
+	@echo "    make fmt             Auto-format with black"
+	@echo ""
+	@echo "  Smoke tests (no remote host needed)"
+	@echo "    make validate-example"
+	@echo "    make plan-example"
+	@echo "    make docs-example"
+	@echo ""
+	@echo "  Distribution"
+	@echo "    make build-binary    Build standalone CLI binary via PyInstaller"
+	@echo "    make build-docker    Build Docker image ($(IMAGE_NAME):$(VERSION))"
+	@echo ""
+	@echo "  Goss integration tests (requires a live Ubuntu server)"
+	@echo "    make test-goss HOST=<ip> PORT=<port> USER=<user>"
+	@echo ""
+	@echo "  Maintenance"
+	@echo "    make clean           Remove all build artifacts"
+	@echo ""
 
 # ── Virtualenv ─────────────────────────────────────────────────────────────────
 
 venv:
-	virtualenv $(VENV)
+	python3 -m venv $(VENV)
 	@echo "Virtualenv created. Activate with: source .venv/bin/activate"
 
 # ── Install ────────────────────────────────────────────────────────────────────
 
 install: venv
-	$(PIP) install -r requirements.txt
+	$(PIP) install --upgrade pip
+	$(PIP) install .
 
-install-dev: venv
-	$(PIP) install -r requirements-dev.txt
-	$(PIP) install -e .
+dev: venv
+	$(PIP) install --upgrade pip
+	$(PIP) install -e ".[dev]"
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -30,6 +72,15 @@ test-local:
 test-all:
 	pytest tests/ -v
 
+# ── Code quality ───────────────────────────────────────────────────────────────
+
+lint:
+	ruff check .
+	black --check .
+
+fmt:
+	black .
+
 # ── Smoke tests (no remote needed) ────────────────────────────────────────────
 
 validate-example:
@@ -41,6 +92,18 @@ plan-example:
 docs-example:
 	nodeforge docs examples/bootstrap.yaml -o BOOTSTRAP.md
 	@echo "Docs written to BOOTSTRAP.md"
+
+# ── Distribution ──────────────────────────────────────────────────────────────
+
+build-binary:
+	python scripts/build_binary.py
+
+build-docker:
+	docker build \
+	  -t $(IMAGE_NAME):$(VERSION) \
+	  -t $(IMAGE_NAME):latest \
+	  .
+	@echo "Built $(IMAGE_NAME):$(VERSION) and $(IMAGE_NAME):latest"
 
 # ── Goss integration tests (requires a live Ubuntu server) ────────────────────
 # Goss is shipped and run automatically by `nodeforge apply` for bootstrap specs.
@@ -73,4 +136,4 @@ test-goss:
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -name "*.pyc" -delete 2>/dev/null || true
-	rm -rf .pytest_cache dist build *.egg-info BOOTSTRAP.md
+	rm -rf .pytest_cache .ruff_cache dist build release *.egg-info *.spec BOOTSTRAP.md
