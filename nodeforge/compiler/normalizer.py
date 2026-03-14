@@ -43,13 +43,13 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
     # Resolve login private key path
     ctx.login_key_path = expand_path(spec.login.private_key)
 
-    # Read pubkey file contents
+    # Read pubkey file contents (missing files are stored as placeholder for plan/docs)
     for pk_path_str in spec.admin_user.pubkeys:
         pk_path = expand_path(pk_path_str)
         if pk_path.exists():
             ctx.pubkey_contents.append(pk_path.read_text(encoding="utf-8").strip())
         else:
-            raise ValueError(f"Public key file not found: {pk_path}")
+            ctx.pubkey_contents.append(f"<key not found: {pk_path}>")
 
     # Read WireGuard private key
     if spec.wireguard.enabled and spec.wireguard.private_key_file:
@@ -57,7 +57,7 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
         if wg_key_path.exists():
             ctx.wireguard_private_key = wg_key_path.read_text(encoding="utf-8").strip()
         else:
-            raise ValueError(f"WireGuard private key file not found: {wg_key_path}")
+            ctx.wireguard_private_key = f"<key not found: {wg_key_path}>"
 
     # Compute SSH conf.d path
     ssh_conf_d_base = Path("~/.ssh/conf.d").expanduser()

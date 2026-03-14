@@ -7,7 +7,7 @@ PIP := $(VENV)/bin/pip
 # ── Virtualenv ─────────────────────────────────────────────────────────────────
 
 venv:
-	python3 -m venv $(VENV)
+	virtualenv $(VENV)
 	@echo "Virtualenv created. Activate with: source .venv/bin/activate"
 
 # ── Install ────────────────────────────────────────────────────────────────────

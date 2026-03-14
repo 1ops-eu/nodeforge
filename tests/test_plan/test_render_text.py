@@ -29,7 +29,7 @@ def test_render_plan_shows_gate(bootstrap_yaml):
     p = plan(ctx)
 
     buf = StringIO()
-    console = Console(file=buf, no_color=True)
+    console = Console(file=buf, no_color=True, width=200)
     render_plan(p, console=console)
     output = buf.getvalue()
 

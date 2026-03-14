@@ -32,7 +32,7 @@ class AdminUserBlock(BaseModel):
 class SSHBlock(BaseModel):
     port: int = 2222
     disable_root_login: bool = True
-    disable_password_auth: bool = True
+    disable_password_auth: bool = False
 
 
 class FirewallBlock(BaseModel):

@@ -259,6 +259,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             "Password auth not disabled (no pubkeys or config not set)",
             R, StepKind.VERIFY,
             command="echo 'password auth left enabled'",
+            depends_on=[idx_gate],
             tags=["ssh", "hardening"],
         ))
 
