@@ -199,7 +199,21 @@ class Executor:
         if self._session is None:
             raise RuntimeError("No SSH session available")
         if step.file_content and step.target_path:
-            self._session.upload_content(step.file_content, step.target_path, sudo=step.sudo)
+            # Expand ~ on the remote side so paths like ~/.goss/... resolve
+            # correctly for the connecting user (not necessarily root).
+            target = step.target_path
+            if target.startswith("~/") or target == "~":
+                expand_result = self._session.run("echo $HOME", sudo=False, warn=True)
+                if expand_result.ok:
+                    home = expand_result.stdout.strip()
+                    target = home + target[1:]  # replace leading ~ with $HOME
+
+            # For goss files: ensure the parent directory exists first
+            if "/.goss/" in target:
+                parent = target.rsplit("/", 1)[0]
+                self._session.run(f"mkdir -p {parent}", sudo=False, warn=True)
+
+            self._session.upload_content(step.file_content, target, sudo=step.sudo)
         return StepResult(
             step_index=step.index,
             step_id=step.id,
@@ -231,6 +245,25 @@ class Executor:
 
     def _execute_verify(self, step: Step) -> StepResult:
         """Execute a verify step (non-gate)."""
+        # ── goss: no spec was generated (generator failed) ──────────────
+        if step.command == "goss_unavailable":
+            self._console.print(
+                "\n[bold yellow]⚠  No goss spec is available for this run.[/bold yellow]\n"
+                "   Server state will NOT be automatically verified.\n"
+                "   Ensure nodeforge.goss.generator can import and run cleanly.\n"
+            )
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="success",  # warning, not a hard failure
+                output="[WARNING] goss spec unavailable — server state not verified",
+            )
+
+        # ── goss: ship succeeded, now run validate ───────────────────────
+        if step.command == "goss_validate":
+            return self._execute_goss_validate(step)
+
         if step.command and step.command.startswith("check:"):
             return StepResult(
                 step_index=step.index,
@@ -247,6 +280,84 @@ class Executor:
             scope=step.scope.value,
             status="success",
             output="ok",
+        )
+
+    def _execute_goss_validate(self, step: Step) -> StepResult:
+        """Install goss on the remote, update the master gossfile, run validate."""
+        from nodeforge.goss.shipper import ship_and_run
+        from nodeforge.goss.renderer import render_goss_results
+
+        if self._session is None:
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="success",
+                output="[dry-run or no session — goss validate skipped]",
+            )
+
+        spec_name = self._plan.spec_name
+        admin_user = self._spec.admin_user.name if self._spec else "admin"
+
+        # Retrieve the goss file content that was embedded in the ship step
+        goss_content: str | None = None
+        for s in self._plan.steps:
+            if s.id == "ship_goss_file":
+                goss_content = s.file_content
+                break
+
+        if not goss_content:
+            self._console.print(
+                "[bold yellow]⚠  goss_validate: could not find ship_goss_file content "
+                "in plan — skipping.[/bold yellow]"
+            )
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="success",
+                output="[WARNING] goss content missing in plan — validate skipped",
+            )
+
+        goss_result = ship_and_run(
+            session=self._session,
+            spec_name=spec_name,
+            goss_yaml_content=goss_content,
+            admin_user=admin_user,
+        )
+
+        # Always render — even on error the renderer shows a clear message
+        self._console.print()
+        render_goss_results(goss_result, console=self._console)
+
+        # A goss failure is "success_with_warnings" territory — the server WAS
+        # configured; goss surfaces discrepancies for the operator to review.
+        # We mark the step failed so the final apply status reflects reality,
+        # but we do NOT abort the plan (step.gate is False).
+        if goss_result.get("error"):
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="failed",
+                error=goss_result["error"],
+                output=goss_result.get("raw_output", ""),
+            )
+
+        status = "success" if goss_result["exit_ok"] else "failed"
+        summary = goss_result.get("summary", {})
+        output = (
+            f"goss: {summary.get('test-count', '?')} checks, "
+            f"{summary.get('success-count', '?')} passed, "
+            f"{summary.get('failed-count', '?')} failed"
+        )
+        return StepResult(
+            step_index=step.index,
+            step_id=step.id,
+            scope=step.scope.value,
+            status=status,
+            output=output,
+            error="" if goss_result["exit_ok"] else f"{summary.get('failed-count', '?')} check(s) failed",
         )
 
     def _execute_local_file_write(self, step: Step) -> StepResult:

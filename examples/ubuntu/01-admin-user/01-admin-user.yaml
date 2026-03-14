@@ -1,0 +1,48 @@
+kind: bootstrap
+
+# Example 1.1: Root login disabled, admin user created
+# Minimal hardening: creates a sudo-capable admin user and disables direct
+# root SSH login. Password authentication is still permitted at this stage.
+
+meta:
+  name: ubuntu-01-admin-user
+  description: Disable root login and create an admin user on a fresh Ubuntu server
+
+host:
+  name: ubuntu-node-1
+  address: 203.0.113.10
+  os_family: ubuntu
+
+login:
+  user: root
+  private_key: ~/.ssh/id_ed25519
+  port: 22
+
+admin_user:
+  name: admin
+  groups:
+    - sudo
+  pubkeys: []
+
+ssh:
+  port: 22
+  disable_root_login: true
+  disable_password_auth: false
+
+local:
+  ssh_config:
+    enabled: true
+    host_alias: ubuntu-node-1
+    config_path: ~/.ssh/config
+    preserve_legacy_entry: false
+
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+    key_source: env
+    key_env: NODEFORGE_SQLCIPHER_KEY
+
+checks:
+  - type: ssh_reachable
+    port: 22
+    user: admin

@@ -1,0 +1,57 @@
+kind: bootstrap
+
+# Example 1.4: SSH moved to port 2222, UFW updated to allow only port 2222
+# Builds on 03-firewall-ssh22: SSH daemon is reconfigured to listen on the
+# non-standard port 2222. UFW rules are updated accordingly so that only
+# port 2222 is allowed inbound. Port 22 is no longer open.
+
+meta:
+  name: ubuntu-04-firewall-ssh2222
+  description: Move SSH to port 2222 and restrict UFW to allow only that port
+
+host:
+  name: ubuntu-node-1
+  address: 203.0.113.10
+  os_family: ubuntu
+
+login:
+  user: root
+  private_key: ~/.ssh/id_ed25519
+  port: 22
+
+admin_user:
+  name: admin
+  groups:
+    - sudo
+  pubkeys:
+    - ~/.ssh/id_ed25519.pub
+
+ssh:
+  port: 2222
+  disable_root_login: true
+  disable_password_auth: true
+
+firewall:
+  provider: ufw
+  ssh_only: true
+
+local:
+  ssh_config:
+    enabled: true
+    host_alias: ubuntu-node-1
+    config_path: ~/.ssh/config
+    preserve_legacy_entry: false
+
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+    key_source: env
+    key_env: NODEFORGE_SQLCIPHER_KEY
+
+checks:
+  - type: ssh_reachable
+    port: 2222
+    user: admin
+
+  - type: port_open
+    port: 2222

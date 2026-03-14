@@ -1,0 +1,96 @@
+kind: bootstrap
+
+# Example 1.5: WireGuard VPN hub on the remote server
+# Builds on 04-firewall-ssh2222: a WireGuard interface (wg0) is set up on the
+# remote Ubuntu server acting as the VPN hub. The local machine connects as a
+# client peer.
+#
+# Server-side (this spec):
+#   - Interface: wg0, address 10.10.0.1/24
+#   - Listens on UDP 51820 (add to UFW if needed: ufw allow 51820/udp)
+#   - Peers are added via the server's wg config; this spec sets the server
+#     interface and private key only.
+#
+# Local machine client config (wg-quick, NOT managed by nodeforge):
+#   Create /etc/wireguard/wg0.conf on your local machine:
+#
+#   [Interface]
+#   Address    = 10.10.0.2/32
+#   PrivateKey = <local-machine-private-key>
+#
+#   [Peer]
+#   PublicKey  = <server-public-key>         # output of: wg pubkey < .secrets/wg-server.key
+#   Endpoint   = 203.0.113.10:51820
+#   AllowedIPs = 10.10.0.1/32
+#   PersistentKeepalive = 25
+#
+#   Then run: wg-quick up wg0
+
+meta:
+  name: ubuntu-05-wireguard
+  description: Add WireGuard VPN hub on the server; local machine connects as a client peer
+
+host:
+  name: ubuntu-node-1
+  address: 203.0.113.10
+  os_family: ubuntu
+
+login:
+  user: root
+  private_key: ~/.ssh/id_ed25519
+  port: 22
+
+admin_user:
+  name: admin
+  groups:
+    - sudo
+  pubkeys:
+    - ~/.ssh/id_ed25519.pub
+
+ssh:
+  port: 2222
+  disable_root_login: true
+  disable_password_auth: true
+
+firewall:
+  provider: ufw
+  ssh_only: true
+
+# WireGuard: configure the remote server as the VPN hub.
+# Replace placeholder values with your real keys and endpoint before applying.
+#   Generate server key pair:  wg genkey | tee .secrets/wg-server.key | wg pubkey > .secrets/wg-server.pub
+#   Generate client key pair:  wg genkey | tee .secrets/wg-client.key | wg pubkey > .secrets/wg-client.pub
+wireguard:
+  enabled: true
+  interface: wg0
+  address: 10.10.0.1/24
+  private_key_file: .secrets/wg-server.key
+  server_public_key: REPLACE_WITH_CLIENT_PUBLIC_KEY
+  endpoint: 203.0.113.10:51820
+  allowed_ips:
+    - 10.10.0.2/32
+  persistent_keepalive: 25
+
+local:
+  ssh_config:
+    enabled: true
+    host_alias: ubuntu-node-1
+    config_path: ~/.ssh/config
+    preserve_legacy_entry: false
+
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+    key_source: env
+    key_env: NODEFORGE_SQLCIPHER_KEY
+
+checks:
+  - type: ssh_reachable
+    port: 2222
+    user: admin
+
+  - type: port_open
+    port: 2222
+
+  - type: wireguard_up
+    interface: wg0

@@ -332,6 +332,48 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         ))
 
     # ------------------------------------------------------------------ #
+    # 18-19: Goss — generate, ship, and run server-spec verification.
+    # This is optional but strongly recommended.  If the goss generator
+    # raises for any reason the steps are emitted as no-ops so the plan
+    # never breaks because of test-tooling issues.
+    # ------------------------------------------------------------------ #
+    goss_content: str | None = None
+    try:
+        from nodeforge.goss.generator import generate_goss_yaml
+        goss_content = generate_goss_yaml(spec)
+    except Exception:
+        goss_content = None
+
+    if goss_content is not None:
+        idx_ship = len(steps)
+        steps.append(_s(
+            "ship_goss_file",
+            f"Ship goss spec to ~/.goss/{spec.meta.name}.yaml on remote",
+            R, StepKind.SSH_UPLOAD,
+            file_content=goss_content,
+            target_path=f"~/.goss/{spec.meta.name}.yaml",
+            sudo=False,
+            tags=["goss"],
+        ))
+        steps.append(_s(
+            "run_goss_validate",
+            "Run goss validate and display verification results",
+            V, StepKind.VERIFY,
+            command="goss_validate",
+            depends_on=[idx_ship],
+            tags=["goss", "verify"],
+        ))
+    else:
+        # Emit a visible warning step so the operator sees it in the plan output
+        steps.append(_s(
+            "goss_unavailable",
+            "[WARNING] No goss spec available — server state will NOT be verified",
+            V, StepKind.VERIFY,
+            command="goss_unavailable",
+            tags=["goss", "warning"],
+        ))
+
+    # ------------------------------------------------------------------ #
     # LOCAL: only after remote success
     # ------------------------------------------------------------------ #
     remote_indices = list(range(len(steps)))  # all remote steps must succeed

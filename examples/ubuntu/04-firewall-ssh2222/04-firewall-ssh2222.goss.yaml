@@ -1,0 +1,60 @@
+# Static goss reference spec for: examples/ubuntu/04-firewall-ssh2222.yaml
+# nodeforge ships this automatically to ~/.goss/ during `apply`.
+# Manual run on the target server:
+#   goss -g ~/.goss/goss.yaml validate
+#
+# Verifies everything in 03-firewall-ssh22, plus:
+#   - SSH daemon is configured for port 2222
+#   - sshd is listening on port 2222 (not 22)
+#   - UFW allows port 2222 and has no open rule for port 22
+
+user:
+  admin:
+    exists: true
+    groups:
+      - sudo
+    home: /home/admin
+    shell: /bin/bash
+
+file:
+  /etc/ssh/sshd_config:
+    exists: true
+    contains:
+      - /^Port\s+2222/
+      - /^PermitRootLogin\s+no/
+      - /^PasswordAuthentication\s+no/
+      - /^PubkeyAuthentication\s+yes/
+
+  /home/admin/.ssh/authorized_keys:
+    exists: true
+    mode: "0600"
+    contains:
+      - /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256)\s+/
+
+service:
+  ssh:
+    enabled: true
+    running: true
+  ufw:
+    enabled: true
+    running: true
+
+# sshd must listen on 2222, not 22
+port:
+  tcp:2222:
+    listening: true
+    ip:
+      - "0.0.0.0"
+  tcp:22:
+    listening: false
+
+command:
+  "ufw status verbose":
+    exit-status: 0
+    stdout:
+      - /Status:\s+active/
+      - /Default:\s+deny\s+\(incoming\)/
+      - /2222\/tcp\s+ALLOW\s+IN/
+    # Port 22 must NOT appear as an allowed rule
+    stderr: []
+    timeout: 10000

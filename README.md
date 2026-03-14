@@ -121,12 +121,44 @@ Step 12: disable_password_auth      (depends_on: [10])
 
 Steps 11 and 12 **never execute** unless the gate (SSH login verification) passes. If the gate fails, the plan aborts and you keep root access.
 
+### Server Verification (Goss)
+
+`nodeforge apply` automatically verifies the server after every successful bootstrap using [Goss](https://github.com/goss-org/goss):
+
+1. Generates a goss spec from the live spec values (ports, users, WireGuard interface, etc.)
+2. Installs goss on the remote server if absent
+3. Uploads the spec to `~/.goss/<spec-name>.yaml`
+4. Accumulates it into a master gossfile `~/.goss/goss.yaml` (so re-running adds to, not replaces, prior specs)
+5. Runs `goss -g ~/.goss/goss.yaml validate` and displays a Rich results table
+
+If goss cannot run for any reason, apply prints a **bold yellow warning** and continues — the server is still configured.
+
+To re-run goss manually or check a specific static reference spec:
+
+```bash
+# On the server
+goss -g ~/.goss/goss.yaml validate
+
+# Via Makefile (copies a static reference spec and runs it)
+make test-goss HOST=203.0.113.10 PORT=2222 USER=admin
+```
+
+Each example in `examples/ubuntu/` ships as a pair — a nodeforge YAML and a matching `.goss.yaml` reference spec side-by-side in the same folder:
+
+```
+examples/ubuntu/
+  04-firewall-ssh2222/
+    04-firewall-ssh2222.yaml        ← nodeforge spec
+    04-firewall-ssh2222.goss.yaml   ← static goss reference
+```
+
 ### Local State Management
 
 After a successful bootstrap:
 - `~/.ssh/conf.d/{host_name}.conf` — SSH alias to the new server
 - `~/.nodeforge/inventory.db` — SQLCipher-encrypted server inventory
 - `~/.nodeforge/runs/` — JSON execution logs
+- `~/.goss/` — goss specs and master gossfile deposited by nodeforge
 
 ---
 

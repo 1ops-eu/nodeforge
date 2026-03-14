@@ -1,0 +1,94 @@
+# Static goss reference spec for: examples/ubuntu/05-wireguard.yaml
+# nodeforge ships this automatically to ~/.goss/ during `apply`.
+# Manual run on the target server:
+#   goss -g ~/.goss/goss.yaml validate
+#
+# Verifies everything in 04-firewall-ssh2222, plus:
+#   - WireGuard package (wireguard-tools) is installed
+#   - wg0 interface exists and is up
+#   - wg0 has the expected server-side VPN address (10.10.0.1)
+#   - WireGuard service / config file is present
+#   - UFW allows WireGuard UDP port 51820
+
+user:
+  admin:
+    exists: true
+    groups:
+      - sudo
+    home: /home/admin
+    shell: /bin/bash
+
+file:
+  /etc/ssh/sshd_config:
+    exists: true
+    contains:
+      - /^Port\s+2222/
+      - /^PermitRootLogin\s+no/
+      - /^PasswordAuthentication\s+no/
+      - /^PubkeyAuthentication\s+yes/
+
+  /home/admin/.ssh/authorized_keys:
+    exists: true
+    mode: "0600"
+    contains:
+      - /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256)\s+/
+
+  # WireGuard server config must exist
+  /etc/wireguard/wg0.conf:
+    exists: true
+    # Owner root, not world-readable (contains private key)
+    mode: "0600"
+    contains:
+      - /\[Interface\]/
+      - /Address\s*=\s*10\.10\.0\.1\/24/
+
+package:
+  wireguard-tools:
+    installed: true
+
+service:
+  ssh:
+    enabled: true
+    running: true
+  ufw:
+    enabled: true
+    running: true
+  wg-quick@wg0:
+    enabled: true
+    running: true
+
+port:
+  tcp:2222:
+    listening: true
+    ip:
+      - "0.0.0.0"
+  tcp:22:
+    listening: false
+  # WireGuard listens on UDP 51820
+  udp:51820:
+    listening: true
+
+command:
+  # WireGuard interface is up and has an assigned address
+  "ip address show wg0":
+    exit-status: 0
+    stdout:
+      - /wg0/
+      - /10\.10\.0\.1/
+    timeout: 5000
+
+  # wg show reports the interface is active
+  "wg show wg0":
+    exit-status: 0
+    stdout:
+      - /interface: wg0/
+    timeout: 5000
+
+  "ufw status verbose":
+    exit-status: 0
+    stdout:
+      - /Status:\s+active/
+      - /Default:\s+deny\s+\(incoming\)/
+      - /2222\/tcp\s+ALLOW\s+IN/
+      - /51820\/udp\s+ALLOW\s+IN/
+    timeout: 10000

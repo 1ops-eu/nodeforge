@@ -1,0 +1,61 @@
+# Static goss reference spec for: examples/ubuntu/03-firewall-ssh22.yaml
+# nodeforge ships this automatically to ~/.goss/ during `apply`.
+# Manual run on the target server:
+#   goss -g ~/.goss/goss.yaml validate
+#
+# Verifies everything in 02-ssh-key-no-password, plus:
+#   - UFW is active and enabled at boot
+#   - UFW allows SSH on port 22
+#   - UFW default incoming policy is deny
+
+user:
+  admin:
+    exists: true
+    groups:
+      - sudo
+    home: /home/admin
+    shell: /bin/bash
+
+file:
+  /etc/ssh/sshd_config:
+    exists: true
+    contains:
+      - /^PermitRootLogin\s+no/
+      - /^PasswordAuthentication\s+no/
+      - /^PubkeyAuthentication\s+yes/
+
+  /home/admin/.ssh/authorized_keys:
+    exists: true
+    mode: "0600"
+    contains:
+      - /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256)\s+/
+
+service:
+  ssh:
+    enabled: true
+    running: true
+  ufw:
+    enabled: true
+    running: true
+
+port:
+  tcp:22:
+    listening: true
+    ip:
+      - "0.0.0.0"
+
+# UFW status checks via command output
+command:
+  "ufw status verbose":
+    exit-status: 0
+    stdout:
+      - /Status:\s+active/
+      - /Default:\s+deny\s+\(incoming\)/
+      - /22\/tcp\s+ALLOW\s+IN/
+    timeout: 10000
+
+  "ufw status numbered":
+    exit-status: 0
+    stdout:
+      - /22/
+    timeout: 10000

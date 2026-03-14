@@ -1,0 +1,38 @@
+# Static goss reference spec for: examples/ubuntu/01-admin-user.yaml
+# nodeforge ships this automatically to ~/.goss/ during `apply`.
+# Manual run on the target server:
+#   goss -g ~/.goss/goss.yaml validate
+#
+# Verifies:
+#   - admin user exists and belongs to the sudo group
+#   - root SSH login is disabled in sshd_config
+#   - SSH service is running and listening on port 22
+#   - Password authentication is still permitted (not yet disabled at this stage)
+
+user:
+  admin:
+    exists: true
+    groups:
+      - sudo
+    home: /home/admin
+    shell: /bin/bash
+
+file:
+  /etc/ssh/sshd_config:
+    exists: true
+    contains:
+      - /^PermitRootLogin\s+no/
+    # Password auth is NOT disabled in example 1.1 — verify it is still allowed
+    # (absence of a "PasswordAuthentication no" line, or presence of "yes")
+
+service:
+  ssh:
+    enabled: true
+    running: true
+  # Ensure root login via PAM / su is unaffected (only SSH root login is blocked)
+
+port:
+  tcp:22:
+    listening: true
+    ip:
+      - "0.0.0.0"

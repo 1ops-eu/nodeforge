@@ -1,4 +1,4 @@
-.PHONY: venv install install-dev test test-local test-all lint validate-example plan-example docs-example clean
+.PHONY: venv install install-dev test test-local test-all lint validate-example plan-example docs-example test-goss clean
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -41,6 +41,32 @@ plan-example:
 docs-example:
 	nodeforge docs examples/bootstrap.yaml -o BOOTSTRAP.md
 	@echo "Docs written to BOOTSTRAP.md"
+
+# ── Goss integration tests (requires a live Ubuntu server) ────────────────────
+# Goss is shipped and run automatically by `nodeforge apply` for bootstrap specs.
+# Use this target to manually re-run a static reference spec or the master gossfile.
+#
+# Usage:
+#   make test-goss HOST=203.0.113.10 PORT=2222 USER=admin
+#       → runs the master ~/.goss/goss.yaml on the server (all shipped specs)
+#
+#   make test-goss HOST=203.0.113.10 PORT=2222 USER=admin \
+#        SPEC=examples/ubuntu/04-firewall-ssh2222/04-firewall-ssh2222.goss.yaml
+#       → copies a specific static reference spec and runs it
+
+SPEC ?=
+HOST ?= 203.0.113.10
+PORT ?= 22
+USER ?= admin
+
+test-goss:
+	@if [ -n "$(SPEC)" ]; then \
+	  echo ">>> Copying $(SPEC) to $(USER)@$(HOST):~/.goss/ (port $(PORT))"; \
+	  ssh -p "$(PORT)" "$(USER)@$(HOST)" "mkdir -p ~/.goss"; \
+	  scp -P "$(PORT)" "$(SPEC)" "$(USER)@$(HOST):~/.goss/$$(basename $(SPEC))"; \
+	fi
+	@echo ">>> Running goss validate on $(HOST)"
+	ssh -p "$(PORT)" "$(USER)@$(HOST)" "goss -g ~/.goss/goss.yaml validate"
 
 # ── Maintenance ────────────────────────────────────────────────────────────────
 
