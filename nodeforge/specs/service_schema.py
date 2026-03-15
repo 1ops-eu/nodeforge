@@ -1,7 +1,7 @@
 """Pydantic v2 models for kind: service YAML specs (RFC section 8)."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -16,6 +16,7 @@ from nodeforge.specs.bootstrap_schema import (
 class ServiceLoginBlock(BaseModel):
     user: str = "admin"
     private_key: str = "~/.ssh/id_ed25519"
+    password: Optional[str] = None
     port: int = 2222
 
 

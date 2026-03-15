@@ -166,6 +166,37 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             tags=["ssh", "keys"],
         ))
 
+    # 4b: ensure PubkeyAuthentication yes + reload sshd
+    # Some images (e.g. this VirtualBox Ubuntu) ship with PubkeyAuthentication no.
+    # The gate below requires key auth to work, so we must enable it first.
+    steps.append(_s(
+        "enable_pubkey_auth",
+        "Enable PubkeyAuthentication in sshd and reload",
+        R, StepKind.SSH_COMMAND,
+        command=bs.enable_pubkey_auth(),
+        sudo=True,
+        tags=["ssh", "sshd"],
+    ))
+
+    # 4c: GATE — verify admin login on current port BEFORE touching sshd
+    # This is the critical safety gate: if admin key login doesn't work yet,
+    # we must NOT change the SSH port — the server would become unrecoverable.
+    if pubkey_content:
+        idx_pre_gate = len(steps)
+        steps.append(_s(
+            "verify_admin_login_before_port_change",
+            f"[GATE] Verify admin SSH login before port change: "
+            f"{spec.admin_user.name}@{spec.host.address}:{spec.login.port}",
+            V, StepKind.GATE,
+            command=f"ssh_check:{spec.host.address}:{spec.login.port}:{spec.admin_user.name}",
+            rollback_hint=(
+                "Admin key login failed — SSH port has NOT been changed. "
+                "Safe to re-run. Check that admin user and authorized_keys were created correctly."
+            ),
+            gate=True,
+            tags=["gate", "ssh", "lockout-prevention"],
+        ))
+
     # 5: write sshd config candidate (port change, defer root/password disable)
     steps.append(_s(
         "write_sshd_config_candidate",

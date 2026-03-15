@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from nodeforge.local.sqlcipher import InventoryDB
+    from nodeforge.local.inventory_db import InventoryDB
     from nodeforge.runtime.executor import ApplyResult
     from nodeforge.specs.bootstrap_schema import BootstrapSpec
     from nodeforge.specs.service_schema import ServiceSpec

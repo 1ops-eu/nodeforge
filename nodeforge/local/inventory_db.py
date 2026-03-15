@@ -1,11 +1,14 @@
-"""SQLCipher encrypted inventory database.
+"""Local SQLite inventory database with versionize historization.
 
-Uses the versionize trigger system carried from vm_wizard.
-Connection pattern from vm_wizard/fab_infra/tasks/sqlcipher/create_sqlcipher_db/create_sqlcipher_db.py:73-81.
-Versionize activation from vm_wizard/fab_infra/utils/sqlcipher/versionize_table/versionize_table.py.
+Uses Python's built-in sqlite3 — no native dependencies, works on all platforms.
+The schema, temporal versioning pattern, and all queries are identical to the
+former SQLCipher implementation; the commercial edition can swap in encryption
+by replacing `import sqlite3` with `from sqlcipher3 import dbapi2 as sqlite3`
+and adding the two PRAGMA key/cipher_compatibility calls in open().
 """
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -15,13 +18,12 @@ from nodeforge.local.ddl.versionize_system import VERSIONIZE_SYSTEM_DDLS
 
 
 class InventoryDB:
-    """Local SQLCipher-encrypted inventory database with versionize historization."""
+    """Local SQLite inventory database with versionize historization."""
 
     DEFAULT_DB_PATH = "~/.nodeforge/inventory.db"
 
-    def __init__(self, key: str, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         self._path = Path(db_path or self.DEFAULT_DB_PATH).expanduser()
-        self._key = key
         self._conn = None
         self._cursor = None
 
@@ -30,19 +32,10 @@ class InventoryDB:
     # ------------------------------------------------------------------ #
 
     def open(self) -> None:
-        """Connect to the SQLCipher DB and set the encryption key.
-
-        Exact pattern from vm_wizard create_sqlcipher_db.py:73-81.
-        """
-        from sqlcipher3 import dbapi2 as sqlcipher
-
+        """Open (or create) the SQLite database."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlcipher.connect(str(self._path))
+        self._conn = sqlite3.connect(str(self._path))
         self._cursor = self._conn.cursor()
-        self._conn.executescript(f"""
-            PRAGMA cipher_compatibility = 4;
-            PRAGMA key = '{self._key}';
-        """)
 
     def close(self) -> None:
         """Close the database connection."""
@@ -69,39 +62,27 @@ class InventoryDB:
         """Create the versionize system + domain tables + activate historization.
 
         Idempotent — safe to call on an already-initialized database.
-        Follows vm_wizard create_sqlcipher_db.py + create_and_versionize_table.py pattern.
         """
-        # Step 1: Install versionize DDL system (4 templates)
         for ddl in VERSIONIZE_SYSTEM_DDLS:
             self._cursor.executescript(ddl)
 
-        # Step 2: Create domain tables + activate versionize on each
         for table_name, table_ddl in DOMAIN_TABLES:
-            # Create the tv_* table
             self._cursor.executescript(table_ddl)
-            # Activate versionize historization (vm_wizard versionize_table.py pattern)
             self._versionize_table(table_name)
 
     def _versionize_table(self, table_name: str) -> None:
-        """Activate versionize historization on a tv_* table.
-
-        Exact logic from vm_wizard/fab_infra/utils/sqlcipher/versionize_table/versionize_table.py.
-        """
-        # Check if view already exists (idempotency guard)
+        """Activate versionize historization on a tv_* table."""
         result = self._conn.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='vv' || SUBSTR(?, 3);",
             (table_name,),
         )
-        view_exists = result.fetchone()[0]
-        if view_exists > 0:
+        if result.fetchone()[0] > 0:
             return
 
-        # Insert job row — fires trg_versionize_jobs which generates DDL
         self._cursor.executescript(
             f"INSERT INTO t_versionize_jobs (table_name) VALUES ('{table_name}');"
         )
 
-        # Read back generated DDL
         result = self._conn.execute(
             "SELECT view_ddl, trigger_insert_ddl, trigger_update_ddl, trigger_delete_ddl "
             "FROM t_versionize_ddl WHERE table_name = ?;",
@@ -113,13 +94,11 @@ class InventoryDB:
 
         view_ddl, trigger_insert_ddl, trigger_update_ddl, trigger_delete_ddl = ddl_row
 
-        # Execute the 4 generated DDLs
         self._cursor.executescript(view_ddl)
         self._cursor.executescript(trigger_insert_ddl)
         self._cursor.executescript(trigger_update_ddl)
         self._cursor.executescript(trigger_delete_ddl)
 
-        # Clean up control table rows
         self._cursor.executescript(
             f"DELETE FROM t_versionize_jobs WHERE table_name = '{table_name}';"
             f"DELETE FROM t_versionize_ddl WHERE table_name = '{table_name}';"
@@ -167,7 +146,6 @@ class InventoryDB:
         self._conn.commit()
 
     def get_server(self, server_id: str) -> dict | None:
-        """Query vv_server for the current active record."""
         result = self._conn.execute(
             "SELECT * FROM vv_server WHERE id = ?", (server_id,)
         )
@@ -178,7 +156,6 @@ class InventoryDB:
         return dict(zip(cols, row))
 
     def list_servers(self) -> list[dict]:
-        """List all current active server records."""
         result = self._conn.execute("SELECT * FROM vv_server ORDER BY name")
         cols = [d[0] for d in result.description]
         return [dict(zip(cols, row)) for row in result.fetchall()]

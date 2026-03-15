@@ -38,7 +38,8 @@ def create_admin_user(username: str, groups: list[str]) -> str:
     """Create admin user idempotently and add to specified groups."""
     group_str = ",".join(groups) if groups else "sudo"
     cmds = [
-        f"id {username} >/dev/null 2>&1 || adduser --disabled-password --gecos '' {username}",
+        f"getent group {username} >/dev/null 2>&1 || addgroup {username}",
+        f"id {username} >/dev/null 2>&1 || adduser --disabled-password --gecos '' --ingroup {username} {username}",
         f"usermod -aG {group_str} {username}",
     ]
     return " && ".join(cmds)
@@ -66,6 +67,21 @@ def install_authorized_keys(username: str, pubkey_content: str) -> str:
         f"chmod 700 /home/{username}/.ssh && "
         f"chmod 600 /home/{username}/.ssh/authorized_keys && "
         f"chown -R {username}:{username} /home/{username}/.ssh"
+    )
+
+
+def enable_pubkey_auth() -> str:
+    """Ensure PubkeyAuthentication yes is active so admin key login can succeed.
+
+    Some distro images ship with PubkeyAuthentication no. We must enable it and
+    reload sshd before running the admin-login gate, otherwise key auth never works.
+    The grep+sed pattern handles commented, uncommented, or missing lines.
+    """
+    return (
+        "grep -q '^#\\?PubkeyAuthentication' /etc/ssh/sshd_config "
+        "&& sed -i 's/^#\\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config "
+        "|| echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config && "
+        "systemctl reload ssh || systemctl reload sshd"
     )
 
 

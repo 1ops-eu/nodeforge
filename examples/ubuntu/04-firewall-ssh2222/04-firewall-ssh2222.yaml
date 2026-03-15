@@ -45,8 +45,6 @@ local:
   inventory:
     enabled: true
     db_path: ~/.nodeforge/inventory.db
-    key_source: env
-    key_env: NODEFORGE_SQLCIPHER_KEY
 
 checks:
   - type: ssh_reachable

@@ -7,8 +7,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import paramiko
 from fabric import Connection
 from pydantic import BaseModel
+
+
+class _AutoAddConnection(Connection):
+    """Fabric Connection that auto-accepts unknown host keys.
+
+    Provisioning tools connect to fresh VMs whose keys are not yet in
+    ~/.ssh/known_hosts.  Paramiko's default RejectPolicy would abort the
+    connection; AutoAddPolicy accepts the key and adds it to known_hosts.
+    """
+
+    def create_client(self) -> paramiko.SSHClient:  # type: ignore[override]
+        client = super().create_client()  # type: ignore[misc]
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        return client
 
 
 class CommandResult(BaseModel):
@@ -35,7 +50,7 @@ class SSHSession:
         if key_path:
             connect_kwargs["key_filename"] = str(Path(key_path).expanduser())
 
-        self._conn = Connection(
+        self._conn = _AutoAddConnection(
             host=host,
             user=user,
             port=port,

@@ -1,23 +1,15 @@
-"""Tests for the SQLCipher inventory database.
-
-Requires sqlcipher3 to be installed. Tests are skipped if not available.
-"""
+"""Tests for the SQLite inventory database."""
 from __future__ import annotations
 
 import pytest
 
-sqlcipher3 = pytest.importorskip("sqlcipher3", reason="sqlcipher3 not installed")
-
-from nodeforge.local.sqlcipher import InventoryDB
-
-
-TEST_KEY = "test-encryption-key-12345"
+from nodeforge.local.inventory_db import InventoryDB
 
 
 @pytest.fixture
 def db(tmp_path):
     db_path = str(tmp_path / "test_inventory.db")
-    db = InventoryDB(key=TEST_KEY, db_path=db_path)
+    db = InventoryDB(db_path=db_path)
     db.open()
     db.initialize()
     yield db
@@ -29,8 +21,7 @@ def test_initialize_creates_tables(db):
     result = db._conn.execute(
         "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name='vv_server'"
     )
-    count = result.fetchone()[0]
-    assert count == 1
+    assert result.fetchone()[0] == 1
 
 
 def test_initialize_creates_all_views(db):
@@ -39,8 +30,7 @@ def test_initialize_creates_all_views(db):
         result = db._conn.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name=?", (view,)
         )
-        count = result.fetchone()[0]
-        assert count == 1, f"View {view} not found"
+        assert result.fetchone()[0] == 1, f"View {view} not found"
 
 
 def test_upsert_server(db):
@@ -64,9 +54,7 @@ def test_list_servers(db):
     db.upsert_server(id="s2", name="beta", address="2.2.2.2", bootstrap_status="bootstrapped")
     servers = db.list_servers()
     assert len(servers) == 2
-    names = {s["name"] for s in servers}
-    assert "alpha" in names
-    assert "beta" in names
+    assert {s["name"] for s in servers} == {"alpha", "beta"}
 
 
 def test_upsert_service(db):
@@ -99,19 +87,18 @@ def test_record_run(db):
 
 
 def test_initialize_is_idempotent(tmp_path):
-    """Calling initialize() twice should not raise an error."""
+    """Calling initialize() twice should not raise."""
     db_path = str(tmp_path / "idempotent.db")
-    db = InventoryDB(key=TEST_KEY, db_path=db_path)
+    db = InventoryDB(db_path=db_path)
     db.open()
     db.initialize()
-    db.initialize()  # second call should be safe
+    db.initialize()
     db.close()
 
 
 def test_context_manager(tmp_path):
     db_path = str(tmp_path / "ctx.db")
-    with InventoryDB(key=TEST_KEY, db_path=db_path) as db:
+    with InventoryDB(db_path=db_path) as db:
         db.initialize()
         db.upsert_server(id="x", name="x", address="0.0.0.0", bootstrap_status="bootstrapped")
-    # Connection should be closed after exit
     assert db._conn is None

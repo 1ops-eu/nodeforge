@@ -94,7 +94,18 @@ class Executor:
             self._print_step(step, result)
 
             if result.status == "failed":
-                if step.gate:
+                if step.index == 0:
+                    # Preflight connection failure — abort immediately with a clear message.
+                    # Continuing makes no sense: every subsequent step would fail with the
+                    # same connection error, obscuring the real problem.
+                    self._console.print(
+                        f"\n[bold red]✗ Preflight failed: cannot connect to the host.[/bold red]\n"
+                        f"  Check that the host is up, login.port is correct, and credentials are valid.\n"
+                        f"  Error: {result.error or result.output}"
+                    )
+                    aborted_at = step.index
+                    break
+                elif step.gate:
                     aborted_at = step.index
                     self._console.print(
                         f"\n[bold red]⛔ GATE FAILED at step {step.index}: {step.id}[/bold red]"
@@ -229,9 +240,21 @@ class Executor:
         if step.command and step.command.startswith("ssh_check:"):
             _, host, port_str, user = step.command.split(":", 3)
             key_path = None
+            password = None
             if self._ctx:
-                key_path = str(self._ctx.login_key_path) if self._ctx.login_key_path else None
-            check = check_ssh_reachable(host, int(port_str), user, key_path=key_path)
+                # Use admin key (no password) when the gate target is the admin user.
+                # Use root login credentials (key or password) for all other gates.
+                admin_name = (
+                    self._spec.admin_user.name
+                    if self._spec and hasattr(self._spec, "admin_user")
+                    else None
+                )
+                if user == admin_name and self._ctx.admin_key_path:
+                    key_path = str(self._ctx.admin_key_path)
+                else:
+                    key_path = str(self._ctx.login_key_path) if self._ctx.login_key_path else None
+                    password = self._ctx.login_password
+            check = check_ssh_reachable(host, int(port_str), user, key_path=key_path, password=password)
             return StepResult(
                 step_index=step.index,
                 step_id=step.id,

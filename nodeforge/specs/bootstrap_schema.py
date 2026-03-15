@@ -1,7 +1,7 @@
 """Pydantic v2 models for kind: bootstrap YAML specs (RFC section 7)."""
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,7 @@ class HostBlock(BaseModel):
 class LoginBlock(BaseModel):
     user: str = "root"
     private_key: str = "~/.ssh/id_ed25519"
+    password: Optional[str] = None
     port: int = 22
 
 
@@ -61,8 +62,6 @@ class SSHConfigBlock(BaseModel):
 class InventoryBlock(BaseModel):
     enabled: bool = True
     db_path: str = "~/.nodeforge/inventory.db"
-    key_source: str = "env"
-    key_env: str = "NODEFORGE_SQLCIPHER_KEY"
 
 
 class LocalBlock(BaseModel):

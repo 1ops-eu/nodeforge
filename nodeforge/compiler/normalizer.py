@@ -23,8 +23,9 @@ class NormalizedContext:
     wireguard_private_key: str = ""
     ssh_conf_d_path: Path | None = None
     db_path: Path | None = None
-    db_key: str = ""
     login_key_path: Path | None = None
+    login_password: str | None = None
+    admin_key_path: Path | None = None
 
 
 def normalize(spec: AnySpec) -> NormalizedContext:
@@ -42,6 +43,16 @@ def normalize(spec: AnySpec) -> NormalizedContext:
 def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
     # Resolve login private key path
     ctx.login_key_path = expand_path(spec.login.private_key)
+    ctx.login_password = spec.login.password or None
+
+    # Derive admin private key path from the first .pub entry in pubkeys
+    for pk_str in spec.admin_user.pubkeys:
+        pk_path = expand_path(pk_str)
+        if pk_path.suffix == ".pub":
+            candidate = pk_path.with_suffix("")
+            if candidate.exists():
+                ctx.admin_key_path = candidate
+                break
 
     # Read pubkey file contents (missing files are stored as placeholder for plan/docs)
     for pk_path_str in spec.admin_user.pubkeys:
@@ -70,19 +81,16 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
     # Resolve inventory db path and key
     inv = spec.local.inventory
     ctx.db_path = expand_path(inv.db_path)
-    if inv.enabled and inv.key_source == "env":
-        ctx.db_key = os.environ.get(inv.key_env, "")
 
 
 def _normalize_service(spec: ServiceSpec, ctx: NormalizedContext) -> None:
     # Resolve login key
     ctx.login_key_path = expand_path(spec.login.private_key)
+    ctx.login_password = spec.login.password or None
 
     # Resolve inventory
     inv = spec.local.inventory
     ctx.db_path = expand_path(inv.db_path)
-    if inv.enabled and inv.key_source == "env":
-        ctx.db_key = os.environ.get(inv.key_env, "")
 
     # Resolve postgres role password from env
     if spec.postgres and spec.postgres.create_role:

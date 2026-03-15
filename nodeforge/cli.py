@@ -37,15 +37,23 @@ app.add_typer(inspect_app, name="inspect")
 console = Console()
 
 
-def _build_pipeline(spec_path: Path):
-    """Run Parse → Validate → Normalize → Plan. Returns (spec, ctx, plan, issues)."""
+def _build_pipeline(spec_path: Path, ensure_keys: bool = False):
+    """Run Parse → Validate → (KeyGen) → Normalize → Plan. Returns (spec, ctx, plan, issues)."""
     from nodeforge.compiler.parser import parse
     from nodeforge.compiler.normalizer import normalize
     from nodeforge.compiler.planner import plan as make_plan
     from nodeforge.specs.validators import validate_spec
+    from nodeforge.specs.bootstrap_schema import BootstrapSpec
 
     spec = parse(spec_path)
     issues = validate_spec(spec)
+
+    # Ensure admin SSH key pairs exist before normalization reads pubkey content.
+    # Only done during apply (not plan/docs/validate) and only for bootstrap specs.
+    if ensure_keys and isinstance(spec, BootstrapSpec):
+        from nodeforge.local.keys import ensure_admin_keys
+        ensure_admin_keys(spec, console=console)
+
     ctx = normalize(spec)
     p = make_plan(ctx)
     return spec, ctx, p, issues
@@ -155,19 +163,17 @@ def docs(
 def apply(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
-    db_key: Optional[str] = typer.Option(None, "--db-key", envvar="NODEFORGE_SQLCIPHER_KEY",
-                                          help="SQLCipher inventory key"),
 ) -> None:
     """Apply a spec to provision infrastructure."""
     from nodeforge.runtime.ssh import SSHSession
     from nodeforge.runtime.executor import Executor
-    from nodeforge.local.sqlcipher import InventoryDB
+    from nodeforge.local.inventory_db import InventoryDB
     from nodeforge.local.inventory import record_bootstrap, record_service_apply
     from nodeforge.logs.writer import write_log
     from nodeforge.specs.bootstrap_schema import BootstrapSpec
 
     try:
-        parsed_spec, ctx, p, issues = _build_pipeline(spec)
+        parsed_spec, ctx, p, issues = _build_pipeline(spec, ensure_keys=True)
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1)
@@ -187,26 +193,50 @@ def apply(
     # Build SSH session
     ssh_session = None
     if not dry_run:
+        import socket
+
+        def _tcp_reachable(host: str, port: int, timeout: float = 2.0) -> bool:
+            try:
+                with socket.create_connection((host, port), timeout=timeout):
+                    return True
+            except OSError:
+                return False
+
         login = parsed_spec.login
         key_path = str(ctx.login_key_path) if ctx.login_key_path and ctx.login_key_path.exists() else None
+
+        # For bootstrap specs, if login.port is unreachable try ssh.port as fallback.
+        # This allows clean re-runs after a partial apply that already moved SSH.
+        effective_port = login.port
+        if isinstance(parsed_spec, BootstrapSpec) and not _tcp_reachable(parsed_spec.host.address, login.port):
+            fallback_port = parsed_spec.ssh.port
+            if fallback_port != login.port and _tcp_reachable(parsed_spec.host.address, fallback_port):
+                console.print(
+                    f"[yellow]⚠ login.port {login.port} unreachable — "
+                    f"reconnecting on ssh.port {fallback_port}[/yellow]"
+                )
+                effective_port = fallback_port
+            else:
+                console.print(
+                    f"[bold red]✗ Cannot reach {parsed_spec.host.address} "
+                    f"on port {login.port} or {fallback_port} — "
+                    f"check that the host is up and reachable.[/bold red]"
+                )
+                raise typer.Exit(1)
+
         ssh_session = SSHSession(
             host=parsed_spec.host.address,
             user=login.user,
-            port=login.port,
+            port=effective_port,
             key_path=key_path,
+            password=ctx.login_password,
         )
 
     # Build inventory DB
     inventory_db = None
-    inv_cfg = (
-        parsed_spec.local.inventory
-        if isinstance(parsed_spec, BootstrapSpec)
-        else parsed_spec.local.inventory
-    )
-    if inv_cfg.enabled and db_key:
-        inventory_db = InventoryDB(key=db_key, db_path=str(ctx.db_path))
-    elif inv_cfg.enabled:
-        console.print("[yellow]⚠ NODEFORGE_SQLCIPHER_KEY not set — inventory will be skipped[/yellow]")
+    inv_cfg = parsed_spec.local.inventory
+    if inv_cfg.enabled:
+        inventory_db = InventoryDB(db_path=str(ctx.db_path))
 
     executor = Executor(
         plan=p,
@@ -308,26 +338,19 @@ def inspect_run(
 # inventory list | show
 # ------------------------------------------------------------------ #
 
-def _get_db(db_key: str | None) -> "InventoryDB":
-    from nodeforge.local.sqlcipher import InventoryDB
-
-    key = db_key or os.environ.get("NODEFORGE_SQLCIPHER_KEY")
-    if not key:
-        console.print("[red]NODEFORGE_SQLCIPHER_KEY not set[/red]")
-        raise typer.Exit(1)
+def _get_db() -> "InventoryDB":
+    from nodeforge.local.inventory_db import InventoryDB
 
     db_path = os.environ.get("NODEFORGE_DB_PATH", "~/.nodeforge/inventory.db")
-    db = InventoryDB(key=key, db_path=db_path)
+    db = InventoryDB(db_path=db_path)
     db.open()
     return db
 
 
 @inventory_app.command("list")
-def inventory_list(
-    db_key: Optional[str] = typer.Option(None, "--db-key", envvar="NODEFORGE_SQLCIPHER_KEY"),
-) -> None:
+def inventory_list() -> None:
     """List all provisioned servers from local inventory."""
-    db = _get_db(db_key)
+    db = _get_db()
     try:
         servers = db.list_servers()
     finally:
@@ -361,12 +384,11 @@ def inventory_list(
 @inventory_app.command("show")
 def inventory_show(
     server_id: str = typer.Argument(..., help="Server name or ID"),
-    db_key: Optional[str] = typer.Option(None, "--db-key", envvar="NODEFORGE_SQLCIPHER_KEY"),
 ) -> None:
     """Show details of a specific server from local inventory."""
     from nodeforge.local.inventory import show_server
 
-    db = _get_db(db_key)
+    db = _get_db()
     try:
         data = show_server(db, server_id)
     finally:
