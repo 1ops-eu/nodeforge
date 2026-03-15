@@ -37,20 +37,27 @@ app.add_typer(inspect_app, name="inspect")
 console = Console()
 
 
+@app.callback()
+def _startup() -> None:
+    """Load built-in kinds and any installed addons before running a command."""
+    from nodeforge.registry import load_addons
+    load_addons()
+
+
 def _build_pipeline(spec_path: Path, ensure_keys: bool = False):
     """Run Parse → Validate → (KeyGen) → Normalize → Plan. Returns (spec, ctx, plan, issues)."""
     from nodeforge.compiler.parser import parse
     from nodeforge.compiler.normalizer import normalize
     from nodeforge.compiler.planner import plan as make_plan
     from nodeforge.specs.validators import validate_spec
-    from nodeforge.specs.bootstrap_schema import BootstrapSpec
+    from nodeforge.registry import get_kind_hooks
 
     spec = parse(spec_path)
     issues = validate_spec(spec)
 
     # Ensure admin SSH key pairs exist before normalization reads pubkey content.
-    # Only done during apply (not plan/docs/validate) and only for bootstrap specs.
-    if ensure_keys and isinstance(spec, BootstrapSpec):
+    # Determined by the kind's registered hooks, not by a hardcoded isinstance check.
+    if ensure_keys and get_kind_hooks(spec.kind).needs_key_generation:
         from nodeforge.local.keys import ensure_admin_keys
         ensure_admin_keys(spec, console=console)
 
@@ -168,9 +175,8 @@ def apply(
     from nodeforge.runtime.ssh import SSHSession
     from nodeforge.runtime.executor import Executor
     from nodeforge.local.inventory_db import InventoryDB
-    from nodeforge.local.inventory import record_bootstrap, record_service_apply
     from nodeforge.logs.writer import write_log
-    from nodeforge.specs.bootstrap_schema import BootstrapSpec
+    from nodeforge.registry import get_kind_hooks
 
     try:
         parsed_spec, ctx, p, issues = _build_pipeline(spec, ensure_keys=True)
@@ -205,10 +211,12 @@ def apply(
         login = parsed_spec.login
         key_path = str(ctx.login_key_path) if ctx.login_key_path and ctx.login_key_path.exists() else None
 
-        # For bootstrap specs, if login.port is unreachable try ssh.port as fallback.
-        # This allows clean re-runs after a partial apply that already moved SSH.
+        # For specs that declare ssh_port_fallback (e.g. bootstrap), if login.port is
+        # unreachable try ssh.port as fallback. This allows clean re-runs after a
+        # partial apply that already moved SSH to the new port.
         effective_port = login.port
-        if isinstance(parsed_spec, BootstrapSpec) and not _tcp_reachable(parsed_spec.host.address, login.port):
+        hooks = get_kind_hooks(parsed_spec.kind)
+        if hooks.ssh_port_fallback and not _tcp_reachable(parsed_spec.host.address, login.port):
             fallback_port = parsed_spec.ssh.port
             if fallback_port != login.port and _tcp_reachable(parsed_spec.host.address, fallback_port):
                 console.print(
@@ -249,13 +257,12 @@ def apply(
 
     result = executor.apply(dry_run=dry_run)
 
-    # Post-apply: record inventory
+    # Post-apply: record inventory via the kind's registered hook.
     if not dry_run and inventory_db and "success" in result.status:
         try:
-            if isinstance(parsed_spec, BootstrapSpec):
-                record_bootstrap(inventory_db, parsed_spec, result)
-            else:
-                record_service_apply(inventory_db, parsed_spec, result)
+            record_fn = get_kind_hooks(parsed_spec.kind).on_inventory_record
+            if record_fn is not None:
+                record_fn(inventory_db, parsed_spec, result)
         except Exception as e:
             console.print(f"[yellow]⚠ Inventory update failed: {e}[/yellow]")
         finally:

@@ -4,15 +4,10 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from typing import Union
+from typing import Any
 
 import yaml
 from pydantic import ValidationError
-
-from nodeforge.specs.bootstrap_schema import BootstrapSpec
-from nodeforge.specs.service_schema import ServiceSpec
-
-AnySpec = Union[BootstrapSpec, ServiceSpec]
 
 _ENV_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
@@ -40,8 +35,12 @@ def _resolve_env_vars(obj):
     return obj
 
 
-def load_spec(path: Path) -> AnySpec:
+def load_spec(path: Path) -> Any:
     """Load and parse a YAML spec file into a typed model."""
+    # Ensure built-in and addon kinds are registered (idempotent).
+    from nodeforge.registry import load_addons, get_spec_model, list_spec_kinds
+    load_addons()
+
     if not path.exists():
         raise SpecLoadError(f"Spec file not found: {path}")
 
@@ -54,9 +53,11 @@ def load_spec(path: Path) -> AnySpec:
         raise SpecLoadError(f"Spec file must be a YAML mapping, got {type(raw).__name__}")
 
     kind = raw.get("kind")
-    if kind not in ("bootstrap", "service"):
+    model_class = get_spec_model(kind)
+    if model_class is None:
+        known = ", ".join(list_spec_kinds()) or "none"
         raise SpecLoadError(
-            f"Unknown spec kind '{kind}'. Supported: bootstrap, service"
+            f"Unknown spec kind '{kind}'. Supported: {known}"
         )
 
     try:
@@ -65,9 +66,6 @@ def load_spec(path: Path) -> AnySpec:
         raise
 
     try:
-        if kind == "bootstrap":
-            return BootstrapSpec.model_validate(data)
-        else:
-            return ServiceSpec.model_validate(data)
+        return model_class.model_validate(data)
     except ValidationError as e:
         raise SpecLoadError(f"Spec validation error in {path}:\n{e}") from e

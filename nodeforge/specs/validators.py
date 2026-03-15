@@ -112,10 +112,16 @@ def validate_service(spec: ServiceSpec) -> list[ValidationIssue]:
     return issues
 
 
-def validate_spec(spec: AnySpec) -> list[ValidationIssue]:
-    if isinstance(spec, BootstrapSpec):
-        return validate_bootstrap(spec)
-    return validate_service(spec)
+def validate_spec(spec) -> list[ValidationIssue]:
+    # Ensure built-in and addon kinds are registered (idempotent).
+    from nodeforge.registry import load_addons, get_validator
+    load_addons()
+
+    validator = get_validator(spec.kind)
+    if validator is None:
+        return [ValidationIssue("error", "kind",
+                                f"No validator registered for spec kind '{spec.kind}'")]
+    return validator(spec)
 
 
 def has_errors(issues: list[ValidationIssue]) -> bool:

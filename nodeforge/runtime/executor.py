@@ -159,27 +159,20 @@ class Executor:
             )
 
         try:
-            if step.kind == StepKind.GATE:
-                result = self._execute_gate(step)
-            elif step.kind == StepKind.SSH_COMMAND:
-                result = self._execute_ssh_command(step)
-            elif step.kind == StepKind.SSH_UPLOAD:
-                result = self._execute_ssh_upload(step)
-            elif step.kind == StepKind.LOCAL_FILE_WRITE:
-                result = self._execute_local_file_write(step)
-            elif step.kind == StepKind.LOCAL_DB_WRITE:
-                result = self._execute_local_db_write(step)
-            elif step.kind == StepKind.LOCAL_COMMAND:
-                result = self._execute_local_command(step)
-            elif step.kind == StepKind.VERIFY:
-                result = self._execute_verify(step)
+            from nodeforge.registry.executors import get_step_handler
+            handler = get_step_handler(step.kind)
+            if handler is not None:
+                result = handler(self, step)
             else:
                 result = StepResult(
                     step_index=step.index,
                     step_id=step.id,
                     scope=step.scope.value,
                     status="failed",
-                    error=f"Unknown step kind: {step.kind}",
+                    error=(
+                        f"Unknown step kind: '{step.kind}'. "
+                        "Is the required addon installed?"
+                    ),
                 )
         except Exception as e:
             result = StepResult(

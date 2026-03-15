@@ -28,14 +28,18 @@ class NormalizedContext:
     admin_key_path: Path | None = None
 
 
-def normalize(spec: AnySpec) -> NormalizedContext:
+def normalize(spec) -> NormalizedContext:
     """Resolve all paths, read key files, compute derived values."""
+    # Ensure built-in and addon kinds are registered (idempotent).
+    from nodeforge.registry import load_addons, get_normalizer
+    load_addons()
+
     ctx = NormalizedContext(spec=spec)
 
-    if isinstance(spec, BootstrapSpec):
-        _normalize_bootstrap(spec, ctx)
-    else:
-        _normalize_service(spec, ctx)
+    normalizer = get_normalizer(spec.kind)
+    if normalizer is None:
+        raise RuntimeError(f"No normalizer registered for spec kind '{spec.kind}'")
+    normalizer(spec, ctx)
 
     return ctx
 

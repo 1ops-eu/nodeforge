@@ -22,11 +22,14 @@ AnySpec = Union[BootstrapSpec, ServiceSpec]
 
 def plan(ctx: NormalizedContext) -> Plan:
     """Convert a NormalizedContext into an executable Plan."""
+    from nodeforge.registry import load_addons, get_planner
+    load_addons()
+
     spec = ctx.spec
-    if isinstance(spec, BootstrapSpec):
-        steps = _plan_bootstrap(spec, ctx)
-    else:
-        steps = _plan_service(spec, ctx)
+    planner_fn = get_planner(spec.kind)
+    if planner_fn is None:
+        raise RuntimeError(f"No planner registered for spec kind '{spec.kind}'")
+    steps = planner_fn(spec, ctx)
 
     # Re-index all steps
     for i, step in enumerate(steps):
