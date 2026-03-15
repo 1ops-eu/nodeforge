@@ -3,6 +3,7 @@
 Adapted from vm_wizard's run_fabric_process() pattern.
 Fabric is transport only — business logic lives in plan/executor layers.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -47,6 +48,11 @@ class SSHSession:
         connect_kwargs: dict = {}
         if password:
             connect_kwargs["password"] = password
+            # When using password auth without a key, tell Paramiko not to
+            # try key-based auth. This prevents "allowed types: ['publickey']"
+            # errors when the server has both auth methods available.
+            if not key_path:
+                connect_kwargs["look_for_keys"] = False
         if key_path:
             connect_kwargs["key_filename"] = str(Path(key_path).expanduser())
 
@@ -92,7 +98,9 @@ class SSHSession:
         """Upload a local file to the remote host."""
         self._conn.put(str(local_path), remote=remote_path)
 
-    def upload_content(self, content: str, remote_path: str, sudo: bool = False) -> None:
+    def upload_content(
+        self, content: str, remote_path: str, sudo: bool = False
+    ) -> None:
         """Write string content to a remote file via /tmp."""
         import tempfile
         import os
