@@ -210,3 +210,6 @@ __marimo__/
 # Roadmap
 .roadmap_internal/*
 .roadmap_internal/
+
+# Claude guide (local development)
+CLAUDE.md

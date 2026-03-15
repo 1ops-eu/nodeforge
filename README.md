@@ -1,26 +1,12 @@
 # nodeforge
 
-> **A CLI that safely bootstraps fresh Linux servers into production-ready self-hosted nodes — generating human-readable ops documentation, managing local SSH config, and maintaining an encrypted local inventory — all from a single typed YAML spec.**
+> **A CLI that safely bootstraps fresh Linux servers into production-ready self-hosted nodes — generating human-readable ops documentation, managing local SSH config, and maintaining a local inventory — all from a single typed YAML spec.**
 
 ---
 
 ## Installation
 
 ### Option 1 — pip (recommended for Python users)
-
-**System dependency — required on all platforms:**
-
-```bash
-# Debian / Ubuntu
-sudo apt-get install libsqlcipher-dev
-
-# macOS
-brew install sqlcipher
-
-# Windows — see note below
-```
-
-> **Windows:** `sqlcipher3` requires manual setup on Windows. The simplest path is to use the Docker image or wait for a pre-built `.exe` from the [Releases](../../releases) page.
 
 ```bash
 pip install nodeforge
@@ -45,8 +31,6 @@ sudo mv nodeforge-linux-amd64 /usr/local/bin/nodeforge
 nodeforge --help
 ```
 
-> **Note:** Standalone binaries link against the SQLCipher shared library. Linux binaries are built on Ubuntu; macOS binaries require `sqlcipher` installed via Homebrew for the inventory feature to work. If SQLCipher is not present, all commands except `inventory` will work normally.
-
 ### Option 3 — Docker
 
 ```bash
@@ -59,7 +43,6 @@ With a spec file and SSH key:
 docker run --rm \
   -v ~/.ssh:/root/.ssh:ro \
   -v $(pwd)/my-server.yaml:/spec.yaml:ro \
-  -e NODEFORGE_SQLCIPHER_KEY=your-key \
   ghcr.io/1ops-eu/nodeforge:latest apply /spec.yaml
 ```
 
@@ -76,7 +59,7 @@ From a single YAML spec, you get:
 - A secure, hardened Linux server (SSH key-only, custom port, ufw, WireGuard)
 - A Markdown runbook you can put in your wiki
 - A local `~/.ssh/conf.d/` entry for easy SSH access
-- An encrypted local inventory (SQLCipher) with full historization
+- A local inventory with full historization
 
 ---
 
@@ -99,7 +82,7 @@ nodeforge plan my-server.yaml
 nodeforge docs my-server.yaml -o MY_SERVER_BOOTSTRAP.md
 
 # Apply (bootstraps the server)
-NODEFORGE_SQLCIPHER_KEY='your-key' nodeforge apply my-server.yaml
+nodeforge apply my-server.yaml
 ```
 
 After apply, you can SSH directly:
@@ -150,7 +133,7 @@ YAML Spec
                                ├─ Remote: SSH via Fabric
                                └─ Local:
                                     ├─ SSH conf.d entry
-                                    └─ SQLCipher inventory
+                                     └─ Local inventory
 ```
 
 **Plan is the single source of truth.** Both docs and apply are generated from the same Plan object — what you review is exactly what executes.
@@ -202,7 +185,7 @@ examples/ubuntu/
 
 After a successful bootstrap:
 - `~/.ssh/conf.d/{host_name}.conf` — SSH alias to the new server
-- `~/.nodeforge/inventory.db` — SQLCipher-encrypted server inventory
+- `~/.nodeforge/inventory.db` — local server inventory
 - `~/.nodeforge/runs/` — JSON execution logs
 - `~/.goss/` — goss specs and master gossfile deposited by nodeforge
 
@@ -218,7 +201,7 @@ Hardens a fresh Debian/Ubuntu server:
 - Disables root login and password auth
 - Enables UFW firewall
 - Configures WireGuard VPN
-- Updates local SSH config + encrypted inventory
+- Updates local SSH config + inventory
 
 See [examples/bootstrap.yaml](examples/bootstrap.yaml)
 
@@ -233,12 +216,11 @@ See [examples/postgres.yaml](examples/postgres.yaml) and [examples/app-container
 
 ---
 
-## SQLCipher Inventory
+## Local Inventory
 
-nodeforge maintains a local encrypted database using the `sqlcipher3` library. The database uses a full historization system (versionize triggers) — every change is recorded with timestamps, so you can see the full history of your server inventory.
+nodeforge maintains a local database with a full historization system (versionize triggers) — every change is recorded with timestamps, so you can see the full history of your server inventory.
 
 ```bash
-export NODEFORGE_SQLCIPHER_KEY='your-strong-key'
 nodeforge inventory list
 nodeforge inventory show prod-node-1
 ```
@@ -253,7 +235,7 @@ make dev
 
 # Run tests
 make test            # unit + integration (no live host needed)
-make test-local      # requires sqlcipher3
+make test-local      # local integration tests
 
 # Lint and format
 make lint
@@ -268,7 +250,7 @@ make docs-example
 ### Building a standalone binary locally
 
 ```bash
-# Linux / macOS (requires sqlcipher system dep)
+# Linux / macOS
 make build-binary
 
 # Windows
@@ -320,7 +302,7 @@ GitHub Actions will automatically:
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the full milestone plan, including planned RFC work on release signing, open-core packaging, plugin architecture, and cross-platform QA gates.
+See [ROADMAP.md](ROADMAP.md) for the full milestone plan from v0.1 through v1.0, including planned work on stack deployment, Docker Compose runtime, operational primitives, reusable blueprints, and multi-host operations.
 
 ---
 

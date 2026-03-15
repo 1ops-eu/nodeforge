@@ -370,7 +370,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
     # ------------------------------------------------------------------ #
     goss_content: str | None = None
     try:
-        from nodeforge.goss.generator import generate_goss_yaml
+        from nodeforge.addons.goss.generator import generate_goss_yaml
         goss_content = generate_goss_yaml(spec)
     except Exception:
         goss_content = None

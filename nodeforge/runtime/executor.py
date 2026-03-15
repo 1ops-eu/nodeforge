@@ -307,8 +307,8 @@ class Executor:
 
     def _execute_goss_validate(self, step: Step) -> StepResult:
         """Install goss on the remote, update the master gossfile, run validate."""
-        from nodeforge.goss.shipper import ship_and_run
-        from nodeforge.goss.renderer import render_goss_results
+        from nodeforge.addons.goss.shipper import ship_and_run
+        from nodeforge.addons.goss.renderer import render_goss_results
 
         if self._session is None:
             return StepResult(
