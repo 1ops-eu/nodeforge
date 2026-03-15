@@ -53,6 +53,7 @@ class SSHSession:
             # errors when the server has both auth methods available.
             if not key_path:
                 connect_kwargs["look_for_keys"] = False
+                connect_kwargs["allow_agent"] = False
         if key_path:
             connect_kwargs["key_filename"] = str(Path(key_path).expanduser())
 

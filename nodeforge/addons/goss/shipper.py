@@ -11,6 +11,7 @@ Responsibilities:
 
 The caller (executor) decides what to do with the result dict.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,8 +22,11 @@ import yaml
 if TYPE_CHECKING:
     from nodeforge.runtime.ssh import SSHSession
 
-# Remote directory where nodeforge deposits all goss files
-GOSS_REMOTE_DIR = "~/.goss"
+# Remote directory where nodeforge deposits all goss files.
+# Use the absolute path so goss gossfile references resolve correctly
+# (goss resolves relative gossfile keys against the master file's directory,
+# so a literal "~/.goss/..." key would expand to "/root/.goss/~/.goss/...").
+GOSS_REMOTE_DIR = "/root/.goss"
 GOSS_MASTER_FILE = f"{GOSS_REMOTE_DIR}/goss.yaml"
 
 # Install command: idempotent — only runs curl if goss is not already on PATH.
@@ -76,14 +80,17 @@ def ship_and_run(
     # ------------------------------------------------------------------ #
     master_result = session.run(
         f"cat {GOSS_MASTER_FILE} 2>/dev/null || echo '{{}}'",
-        sudo=False, warn=True,
+        sudo=False,
+        warn=True,
     )
     try:
         existing_master = yaml.safe_load(master_result.stdout or "{}") or {}
     except yaml.YAMLError:
         existing_master = {}
 
-    if "gossfile" not in existing_master or not isinstance(existing_master["gossfile"], dict):
+    if "gossfile" not in existing_master or not isinstance(
+        existing_master["gossfile"], dict
+    ):
         existing_master["gossfile"] = {}
 
     # Register this spec in the master; key is the remote path
@@ -113,7 +120,8 @@ def ship_and_run(
         # (e.g. /usr/local/bin not in PATH). Try the full path.
         goss_result2 = session.run(
             f"/usr/local/bin/goss -g {GOSS_MASTER_FILE} validate --format json --no-color",
-            sudo=False, warn=True,
+            sudo=False,
+            warn=True,
         )
         raw_output = goss_result2.stdout.strip()
         try:

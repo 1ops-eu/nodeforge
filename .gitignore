@@ -213,3 +213,7 @@ __marimo__/
 
 # Claude guide (local development)
 CLAUDE.md
+
+# E2E test framework (local development, temporary)
+.dev-temporary-vm-test/
+.claude/
