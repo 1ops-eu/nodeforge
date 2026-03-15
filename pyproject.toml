@@ -38,6 +38,12 @@ python_functions = ["test_*"]
 [project.scripts]
 nodeforge = "nodeforge.cli:app"
 
+# Addon discovery group. External packages register here to extend nodeforge
+# with new spec kinds, step handlers, and lifecycle hooks without modifying core.
+# Example (in an addon's pyproject.toml):
+#   [project.entry-points."nodeforge.addons"]
+#   my_addon = "my_addon:register"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["nodeforge*"]

@@ -74,12 +74,15 @@ The product evolves in three deliberate stages:
 
 ---
 
-## v0.4 -- Stack Foundations
+## v0.4 -- Stack Foundations + Addon Architecture
 
-**Goal:** Introduce a first-class single-host stack model. This is the foundation for deploying real production stacks.
+**Goal:** Introduce a first-class single-host stack model and the addon extension system that makes new spec kinds possible without touching core source.
 
 | Item | Description |
 |---|---|
+| Addon registry | `nodeforge/registry/` -- open extension points for spec kinds, planners, normalizers, validators, step handlers, and lifecycle hooks |
+| Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` |
+| `nodeforge/addons/` | Package for built-in optional components (goss ships here as reference) |
 | `kind: stack` | Group related resources into a single deployable application boundary |
 | `kind: file_template` | Render managed configuration files from templates and variables |
 | Managed directories | Deterministic runtime directory layout |
