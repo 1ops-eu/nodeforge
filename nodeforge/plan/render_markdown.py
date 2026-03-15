@@ -55,7 +55,7 @@ that will be executed remotely or locally.
 > Depends on steps: {{ step.depends_on | join(', ') }}
 {% endif %}
 
-{% if step.kind.value == 'ssh_upload' %}
+{% if step.kind == 'ssh_upload' %}
 **File:** `{{ step.target_path }}`
 
 ```

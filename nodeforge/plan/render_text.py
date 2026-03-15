@@ -15,7 +15,7 @@ _SCOPE_COLORS = {
     StepScope.VERIFY: "blue",
 }
 
-_KIND_LABELS = {
+_KIND_LABELS: dict[str, str] = {
     StepKind.SSH_COMMAND: "ssh cmd",
     StepKind.SSH_UPLOAD: "ssh upload",
     StepKind.LOCAL_COMMAND: "local cmd",
@@ -55,7 +55,7 @@ def render_plan(plan: Plan, console: Console | None = None) -> None:
     for step in plan.steps:
         color = _SCOPE_COLORS.get(step.scope, "white")
         scope_text = Text(step.scope.value, style=color)
-        kind_label = _KIND_LABELS.get(step.kind, step.kind.value)
+        kind_label = _KIND_LABELS.get(step.kind, step.kind)
 
         gate_text = Text("YES", style="bold yellow") if step.gate else Text("")
         depends_text = Text(", ".join(str(d) for d in step.depends_on)) if step.depends_on else Text("")

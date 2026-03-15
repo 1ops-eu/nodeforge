@@ -13,7 +13,19 @@ class StepScope(str, Enum):
     VERIFY = "verify"
 
 
-class StepKind(str, Enum):
+class StepKind:
+    """Open string constants for step execution kinds.
+
+    Unlike a closed Enum, new step kinds can be added by addons simply by
+    registering a handler in the executor registry -- no core edits required:
+
+        from nodeforge.registry import register_step_handler
+        register_step_handler("compose_up", _handle_compose_up)
+
+    All built-in kind strings are preserved as class attributes so existing
+    code using StepKind.SSH_COMMAND continues to work unchanged.
+    """
+
     SSH_COMMAND = "ssh_command"
     SSH_UPLOAD = "ssh_upload"
     LOCAL_COMMAND = "local_command"
@@ -28,7 +40,7 @@ class Step(BaseModel):
     index: int
     description: str
     scope: StepScope
-    kind: StepKind
+    kind: str                       # StepKind constant or addon-defined string
     command: str | None = None      # shell command for SSH/local
     file_content: str | None = None # for file writes/uploads
     target_path: str | None = None  # for file operations

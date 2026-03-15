@@ -154,7 +154,7 @@ class Executor:
                 step_id=step.id,
                 scope=step.scope.value,
                 status="success",
-                output=f"[dry-run] would execute: {step.command or step.kind.value}",
+                output=f"[dry-run] would execute: {step.command or step.kind}",
                 duration_seconds=duration,
             )
 
