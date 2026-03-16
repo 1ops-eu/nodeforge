@@ -4,6 +4,7 @@ The generated spec is driven entirely by the live spec values — admin user nam
 SSH port, firewall settings, WireGuard interface, etc. — so it always matches
 exactly what nodeforge configured on the server.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -108,8 +109,9 @@ def generate_goss_yaml(spec: "BootstrapSpec") -> str:
     if spec.ssh.port != 22:
         doc["port"]["tcp:22"] = {"listening": False}
 
-    if spec.wireguard.enabled:
-        doc["port"]["udp:51820"] = {"listening": True}
+    # Note: WireGuard UDP sockets are managed by the kernel module and do not
+    # appear as "listening" in ss/netstat output, so we skip the port check here.
+    # Interface state is verified via the "wg show" command check instead.
 
     # ------------------------------------------------------------------ #
     # package: wireguard-tools must be installed when WireGuard is enabled
@@ -164,4 +166,6 @@ def generate_goss_yaml(spec: "BootstrapSpec") -> str:
         f"# Run on the server:  goss -g ~/.goss/goss.yaml validate\n"
         f"#\n"
     )
-    return header + yaml.dump(doc, default_flow_style=False, sort_keys=True, allow_unicode=True)
+    return header + yaml.dump(
+        doc, default_flow_style=False, sort_keys=True, allow_unicode=True
+    )
