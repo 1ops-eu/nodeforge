@@ -374,7 +374,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         )
     )
 
-    # 14-16: WireGuard
+    # 14-18: WireGuard (remote steps + local state save)
     if spec.wireguard.enabled:
         wg_conf = wg.generate_wireguard_config(
             interface=spec.wireguard.interface,
@@ -385,6 +385,9 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             allowed_ips=spec.wireguard.allowed_ips,
             persistent_keepalive=spec.wireguard.persistent_keepalive,
         )
+        # Store on ctx so the executor can persist it locally after apply
+        ctx.wireguard_conf_content = wg_conf
+
         steps.append(
             _s(
                 "write_wireguard_config",
@@ -507,43 +510,53 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
     # ------------------------------------------------------------------ #
     remote_indices = list(range(len(steps)))  # all remote steps must succeed
 
-    # 18: backup local SSH config
-    steps.append(
-        _s(
-            "backup_local_ssh_config",
-            "Backup local ~/.ssh/config",
-            L,
-            StepKind.LOCAL_COMMAND,
-            command="backup_ssh_config",
-            tags=["local", "ssh-config"],
+    # SSH conf.d entry — only when local.ssh_config.enabled (default: true)
+    if spec.local.ssh_config.enabled:
+        steps.append(
+            _s(
+                "backup_local_ssh_config",
+                "Backup local ~/.ssh/config",
+                L,
+                StepKind.LOCAL_COMMAND,
+                command="backup_ssh_config",
+                tags=["local", "ssh-config"],
+            )
         )
-    )
-
-    # 19: write SSH conf.d entry
-    steps.append(
-        _s(
-            "write_local_ssh_conf_d",
-            f"Write local SSH conf.d entry: {ctx.ssh_conf_d_path}",
-            L,
-            StepKind.LOCAL_FILE_WRITE,
-            target_path=str(ctx.ssh_conf_d_path) if ctx.ssh_conf_d_path else "",
-            tags=["local", "ssh-config"],
+        steps.append(
+            _s(
+                "write_local_ssh_conf_d",
+                f"Write local SSH conf.d entry: {ctx.ssh_conf_d_path}",
+                L,
+                StepKind.LOCAL_FILE_WRITE,
+                target_path=str(ctx.ssh_conf_d_path) if ctx.ssh_conf_d_path else "",
+                tags=["local", "ssh-config"],
+            )
         )
-    )
-
-    # 20: ensure Include directive
-    steps.append(
-        _s(
-            "ensure_include_directive",
-            "Ensure Include directive in ~/.ssh/config",
-            L,
-            StepKind.LOCAL_COMMAND,
-            command="ensure_include",
-            tags=["local", "ssh-config"],
+        steps.append(
+            _s(
+                "ensure_include_directive",
+                "Ensure Include directive in ~/.ssh/config",
+                L,
+                StepKind.LOCAL_COMMAND,
+                command="ensure_include",
+                tags=["local", "ssh-config"],
+            )
         )
-    )
 
-    # 21: init inventory DB
+    # WireGuard local state — save key material + metadata after remote success
+    if spec.wireguard.enabled:
+        steps.append(
+            _s(
+                "save_local_wireguard_state",
+                f"Save WireGuard state to ~/.wg/nodeforge/{spec.host.name}/",
+                L,
+                StepKind.LOCAL_COMMAND,
+                command="save_wireguard_state",
+                tags=["local", "wireguard"],
+            )
+        )
+
+    # Inventory DB
     if spec.local.inventory.enabled:
         steps.append(
             _s(

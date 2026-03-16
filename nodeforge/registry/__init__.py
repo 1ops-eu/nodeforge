@@ -22,6 +22,7 @@ External addons register via Python entry_points:
 
 load_addons() is idempotent — subsequent calls are no-ops.
 """
+
 from __future__ import annotations
 
 from nodeforge.registry.specs import register_spec_kind, get_spec_model, list_spec_kinds
@@ -30,6 +31,11 @@ from nodeforge.registry.normalizers import register_normalizer, get_normalizer
 from nodeforge.registry.validators import register_validator, get_validator
 from nodeforge.registry.executors import register_step_handler, get_step_handler
 from nodeforge.registry.hooks import register_kind_hooks, get_kind_hooks, KindHooks
+from nodeforge.registry.local_paths import (
+    register_local_paths,
+    get_local_paths,
+    LocalPathsConfig,
+)
 
 __all__ = [
     # Spec kinds
@@ -52,6 +58,10 @@ __all__ = [
     "register_kind_hooks",
     "get_kind_hooks",
     "KindHooks",
+    # Local filesystem paths (addon-overridable)
+    "register_local_paths",
+    "get_local_paths",
+    "LocalPathsConfig",
     # Addon loader
     "load_addons",
 ]
@@ -73,11 +83,13 @@ def load_addons() -> None:
 
     # Register built-in core kinds (bootstrap, service)
     from nodeforge.registry._builtins import _register_builtins
+
     _register_builtins()
 
     # Discover and load external addons registered via entry_points
     try:
         import importlib.metadata
+
         entry_points = importlib.metadata.entry_points(group="nodeforge.addons")
         for ep in entry_points:
             try:
@@ -85,6 +97,7 @@ def load_addons() -> None:
                 addon_register()
             except Exception as exc:
                 import warnings
+
                 warnings.warn(
                     f"Failed to load nodeforge addon '{ep.name}': {exc}",
                     stacklevel=2,

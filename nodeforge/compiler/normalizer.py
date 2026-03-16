@@ -1,6 +1,8 @@
 """Phase 2: Fill defaults and resolve computed values from spec."""
+
 from __future__ import annotations
 
+import base64
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,11 +18,14 @@ AnySpec = Union[BootstrapSpec, ServiceSpec]
 @dataclass
 class NormalizedContext:
     """Resolved values derived from the spec during normalization."""
+
     spec: AnySpec
 
     # Bootstrap-specific resolved values
     pubkey_contents: list[str] = field(default_factory=list)
     wireguard_private_key: str = ""
+    wireguard_public_key: str = ""  # derived via PyNaCl from private key
+    wireguard_conf_content: str = ""  # populated by planner; stored here for executor
     ssh_conf_d_path: Path | None = None
     db_path: Path | None = None
     login_key_path: Path | None = None
@@ -32,6 +37,7 @@ def normalize(spec) -> NormalizedContext:
     """Resolve all paths, read key files, compute derived values."""
     # Ensure built-in and addon kinds are registered (idempotent).
     from nodeforge.registry import load_addons, get_normalizer
+
     load_addons()
 
     ctx = NormalizedContext(spec=spec)
@@ -42,6 +48,23 @@ def normalize(spec) -> NormalizedContext:
     normalizer(spec, ctx)
 
     return ctx
+
+
+def _derive_wg_public_key(private_key_b64: str) -> str:
+    """Derive a WireGuard public key from a base64 Curve25519 private key.
+
+    Uses PyNaCl (libsodium) which is already a transitive dependency via
+    Fabric/Paramiko and is now an explicit dependency in pyproject.toml.
+    Returns an empty string if the key is invalid or PyNaCl is unavailable.
+    """
+    try:
+        import nacl.public
+
+        key_bytes = base64.b64decode(private_key_b64)
+        priv = nacl.public.PrivateKey(key_bytes)
+        return base64.b64encode(bytes(priv.public_key)).decode()
+    except Exception:
+        return ""
 
 
 def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
@@ -66,23 +89,27 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
         else:
             ctx.pubkey_contents.append(f"<key not found: {pk_path}>")
 
-    # Read WireGuard private key
+    # Read WireGuard private key and derive public key via PyNaCl (Curve25519)
     if spec.wireguard.enabled and spec.wireguard.private_key_file:
         wg_key_path = expand_path(spec.wireguard.private_key_file)
         if wg_key_path.exists():
             ctx.wireguard_private_key = wg_key_path.read_text(encoding="utf-8").strip()
+            ctx.wireguard_public_key = _derive_wg_public_key(ctx.wireguard_private_key)
         else:
             ctx.wireguard_private_key = f"<key not found: {wg_key_path}>"
+            ctx.wireguard_public_key = ""
 
-    # Compute SSH conf.d path
-    ssh_conf_d_base = Path("~/.ssh/conf.d").expanduser()
+    # Compute SSH conf.d path using the addon-overridable base directory
+    from nodeforge.registry.local_paths import get_local_paths
+
+    ssh_conf_d_base = get_local_paths().ssh_conf_d_base
     ctx.ssh_conf_d_path = ssh_conf_d_base / f"{spec.host.name}.conf"
 
     # If host_alias not set, default to host name
     if not spec.local.ssh_config.host_alias:
         spec.local.ssh_config.host_alias = spec.host.name
 
-    # Resolve inventory db path and key
+    # Resolve inventory db path
     inv = spec.local.inventory
     ctx.db_path = expand_path(inv.db_path)
 

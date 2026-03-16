@@ -1,11 +1,23 @@
 """Local SSH conf.d management.
 
-Adapted from vm_wizard/fab_infra/tasks/user/bootstrap_admin_user/bootstrap_admin_user.py
-lines 218-246.
+SSH config fragments are written to:
 
-Pattern: write individual .conf files to ~/.ssh/conf.d/ and maintain
-Include directives in ~/.ssh/config.
+    {ssh_conf_d_base}/{host_name}.conf
+
+where ``ssh_conf_d_base`` defaults to ``~/.ssh/conf.d/nodeforge/`` but is
+addon-overridable via ``register_local_paths()``.  A single glob Include:
+
+    Include {ssh_conf_d_base}/*
+
+is written once to ``~/.ssh/config`` and covers all fragments in the
+directory — no per-file Include management needed.
+
+Commercial clones that want a deeper folder structure (e.g.
+``~/.ssh/conf.d/mycompany/project1/env/``) only need to call
+``register_local_paths()`` in their addon's ``register()`` function; this
+module never needs to be modified.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -13,13 +25,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-_CONF_D_BASE = Path("~/.ssh/conf.d").expanduser()
-_SSH_CONFIG = Path("~/.ssh/config").expanduser()
+def _conf_d_base() -> Path:
+    """Return the active SSH conf.d base directory (addon-overridable)."""
+    from nodeforge.registry.local_paths import get_local_paths
 
-
-def _conf_d_path(host_name: str, base: Path | None = None) -> Path:
-    base = base or _CONF_D_BASE
-    return base / f"{host_name}.conf"
+    return get_local_paths().ssh_conf_d_base
 
 
 def write_ssh_conf_d(
@@ -28,13 +38,12 @@ def write_ssh_conf_d(
     user: str,
     port: int,
     identity_file: str | None = None,
-    conf_d_base: Path | None = None,
 ) -> Path:
-    """Write ~/.ssh/conf.d/{host_name}.conf and return the path.
+    """Write {ssh_conf_d_base}/{host_name}.conf and return the path.
 
     Idempotent: overwrites own file on re-run.
     """
-    base = (conf_d_base or _CONF_D_BASE).expanduser()
+    base = _conf_d_base()
     base.mkdir(parents=True, exist_ok=True)
     base.chmod(0o700)
 
@@ -58,36 +67,34 @@ def write_ssh_conf_d(
     return conf_file
 
 
-def remove_ssh_conf_d(host_name: str, conf_d_base: Path | None = None) -> None:
+def remove_ssh_conf_d(host_name: str) -> None:
     """Remove the conf.d file for a host."""
-    conf_file = _conf_d_path(host_name, conf_d_base)
+    conf_file = _conf_d_base() / f"{host_name}.conf"
     if conf_file.exists():
         conf_file.unlink()
 
 
-def ensure_include(
-    conf_d_file: Path,
-    config_path: Path | None = None,
-) -> None:
-    """Ensure 'Include {conf_d_file}' exists in ~/.ssh/config.
+def ensure_include(config_path: Path) -> None:
+    """Ensure 'Include {ssh_conf_d_base}/*' exists in ~/.ssh/config.
 
-    Identical pattern to vm_wizard bootstrap_admin_user.py lines 237-246.
+    Writes a single glob Include that covers all fragments in the nodeforge
+    conf.d directory.  Written once, never removed — safe to call repeatedly.
     """
-    config = (config_path or _SSH_CONFIG).expanduser()
+    config = config_path.expanduser()
     config.parent.mkdir(parents=True, exist_ok=True)
     config.touch()
     config.chmod(0o600)
 
-    include_line = f"Include {conf_d_file}"
+    include_line = f"Include {_conf_d_base()}/*"
     existing_lines = config.read_text(encoding="utf-8").splitlines()
     if include_line not in existing_lines:
         with open(config, "a", encoding="utf-8") as f:
             f.write(f"{include_line}\n")
 
 
-def backup_ssh_config(config_path: Path | None = None) -> Path | None:
+def backup_ssh_config(config_path: Path) -> Path | None:
     """Create a timestamped backup of ~/.ssh/config if it exists."""
-    config = (config_path or _SSH_CONFIG).expanduser()
+    config = config_path.expanduser()
     if not config.exists():
         return None
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")

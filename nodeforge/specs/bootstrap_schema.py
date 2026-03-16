@@ -1,4 +1,5 @@
 """Pydantic v2 models for kind: bootstrap YAML specs (RFC section 7)."""
+
 from __future__ import annotations
 
 from typing import Literal, Optional
@@ -56,7 +57,6 @@ class SSHConfigBlock(BaseModel):
     enabled: bool = True
     host_alias: str = ""
     config_path: str = "~/.ssh/config"
-    preserve_legacy_entry: bool = False
 
 
 class InventoryBlock(BaseModel):

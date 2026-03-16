@@ -5,6 +5,7 @@ Critical invariants enforced here:
 - Steps in depends_on that failed cause the dependent step to be skipped
 - Local steps run only after all remote critical steps succeed
 """
+
 from __future__ import annotations
 
 import time
@@ -80,13 +81,15 @@ class Executor:
 
             if aborted_at is not None:
                 # Plan aborted — skip all remaining steps
-                step_results.append(StepResult(
-                    step_index=step.index,
-                    step_id=step.id,
-                    scope=step.scope.value,
-                    status="skipped",
-                    error="Plan aborted",
-                ))
+                step_results.append(
+                    StepResult(
+                        step_index=step.index,
+                        step_id=step.id,
+                        scope=step.scope.value,
+                        status="skipped",
+                        error="Plan aborted",
+                    )
+                )
                 continue
 
             result = self._execute_step(step, dry_run)
@@ -111,7 +114,9 @@ class Executor:
                         f"\n[bold red]⛔ GATE FAILED at step {step.index}: {step.id}[/bold red]"
                     )
                     if step.rollback_hint:
-                        self._console.print(f"[yellow]Recovery:[/yellow] {step.rollback_hint}")
+                        self._console.print(
+                            f"[yellow]Recovery:[/yellow] {step.rollback_hint}"
+                        )
                     break
                 elif step.scope == StepScope.LOCAL:
                     local_warnings = True
@@ -160,6 +165,7 @@ class Executor:
 
         try:
             from nodeforge.registry.executors import get_step_handler
+
             handler = get_step_handler(step.kind)
             if handler is not None:
                 result = handler(self, step)
@@ -245,9 +251,15 @@ class Executor:
                 if user == admin_name and self._ctx.admin_key_path:
                     key_path = str(self._ctx.admin_key_path)
                 else:
-                    key_path = str(self._ctx.login_key_path) if self._ctx.login_key_path else None
+                    key_path = (
+                        str(self._ctx.login_key_path)
+                        if self._ctx.login_key_path
+                        else None
+                    )
                     password = self._ctx.login_password
-            check = check_ssh_reachable(host, int(port_str), user, key_path=key_path, password=password)
+            check = check_ssh_reachable(
+                host, int(port_str), user, key_path=key_path, password=password
+            )
             return StepResult(
                 step_index=step.index,
                 step_id=step.id,
@@ -373,17 +385,16 @@ class Executor:
             scope=step.scope.value,
             status=status,
             output=output,
-            error="" if goss_result["exit_ok"] else f"{summary.get('failed-count', '?')} check(s) failed",
+            error=""
+            if goss_result["exit_ok"]
+            else f"{summary.get('failed-count', '?')} check(s) failed",
         )
 
     def _execute_local_file_write(self, step: Step) -> StepResult:
-        from pathlib import Path
-        from nodeforge.local.ssh_config import write_ssh_conf_d, ensure_include
-        from nodeforge.utils.files import expand_path
+        from nodeforge.local.ssh_config import write_ssh_conf_d
 
         if step.id == "write_local_ssh_conf_d" and self._spec and self._ctx:
             spec = self._spec
-            ctx = self._ctx
             conf_file = write_ssh_conf_d(
                 host_name=spec.host.name,
                 address=spec.host.address,
@@ -407,21 +418,25 @@ class Executor:
         )
 
     def _execute_local_command(self, step: Step) -> StepResult:
+        from pathlib import Path
         from nodeforge.local.ssh_config import backup_ssh_config, ensure_include
 
-        if step.command == "backup_ssh_config":
-            backup = backup_ssh_config()
+        if step.command == "backup_ssh_config" and self._spec:
+            config_path = Path(self._spec.local.ssh_config.config_path).expanduser()
+            backup = backup_ssh_config(config_path)
             return StepResult(
                 step_index=step.index,
                 step_id=step.id,
                 scope=step.scope.value,
                 status="success",
-                output=f"Backup: {backup}" if backup else "No existing config to backup",
+                output=f"Backup: {backup}"
+                if backup
+                else "No existing config to backup",
             )
-        elif step.command == "ensure_include" and self._ctx:
-            from pathlib import Path
-            if self._ctx.ssh_conf_d_path:
-                ensure_include(self._ctx.ssh_conf_d_path)
+
+        elif step.command == "ensure_include" and self._spec:
+            config_path = Path(self._spec.local.ssh_config.config_path).expanduser()
+            ensure_include(config_path)
             return StepResult(
                 step_index=step.index,
                 step_id=step.id,
@@ -429,6 +444,32 @@ class Executor:
                 status="success",
                 output="Include directive ensured",
             )
+
+        elif step.command == "save_wireguard_state" and self._spec and self._ctx:
+            from nodeforge.local.wireguard_store import save_wireguard_state
+
+            spec = self._spec
+            ctx = self._ctx
+            host_dir = save_wireguard_state(
+                host_name=spec.host.name,
+                spec_name=spec.meta.name,
+                private_key=ctx.wireguard_private_key,
+                public_key=ctx.wireguard_public_key,
+                wg_conf_content=ctx.wireguard_conf_content,
+                interface=spec.wireguard.interface,
+                address=spec.wireguard.address,
+                endpoint=spec.wireguard.endpoint,
+                allowed_ips=spec.wireguard.allowed_ips,
+                persistent_keepalive=spec.wireguard.persistent_keepalive,
+            )
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="success",
+                output=f"WireGuard state saved to: {host_dir}",
+            )
+
         return StepResult(
             step_index=step.index,
             step_id=step.id,
@@ -459,6 +500,7 @@ class Executor:
             )
         elif step.command == "upsert_server" and self._spec and self._ctx:
             from nodeforge.local.inventory import record_bootstrap
+
             # Will be called after apply completes with full result
             return StepResult(
                 step_index=step.index,
