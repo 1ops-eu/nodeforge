@@ -46,7 +46,13 @@ def _startup() -> None:
     load_addons()
 
 
-def _build_pipeline(spec_path: Path, ensure_keys: bool = False):
+def _build_pipeline(
+    spec_path: Path,
+    ensure_keys: bool = False,
+    *,
+    strict_env: bool = True,
+    env_file: Path | None = None,
+):
     """Run Parse → Validate → (KeyGen) → Normalize → Plan. Returns (spec, ctx, plan, issues)."""
     from nodeforge.compiler.parser import parse
     from nodeforge.compiler.normalizer import normalize
@@ -54,7 +60,7 @@ def _build_pipeline(spec_path: Path, ensure_keys: bool = False):
     from nodeforge.specs.validators import validate_spec
     from nodeforge.registry import get_kind_hooks
 
-    spec = parse(spec_path)
+    spec = parse(spec_path, strict_env=strict_env, env_file=env_file)
     issues = validate_spec(spec)
 
     # Ensure admin SSH key pairs exist before normalization reads pubkey content.
@@ -91,6 +97,14 @@ def _print_issues(issues, stop_on_error: bool = True) -> None:
 @app.command()
 def validate(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
+    env_file: Optional[Path] = typer.Option(
+        None, "--env-file", help="Load environment variables from a .env file"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
 ) -> None:
     """Validate a YAML spec file against its schema."""
     from nodeforge.compiler.parser import parse
@@ -98,7 +112,7 @@ def validate(
 
     console.print(f"[bold]Validating:[/bold] {spec}")
     try:
-        parsed = parse(spec)
+        parsed = parse(spec, strict_env=not passthrough, env_file=env_file)
     except Exception as e:
         console.print(f"[bold red]Parse error:[/bold red] {e}")
         raise typer.Exit(1)
@@ -121,12 +135,22 @@ def validate(
 @app.command()
 def plan(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
+    env_file: Optional[Path] = typer.Option(
+        None, "--env-file", help="Load environment variables from a .env file"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
 ) -> None:
     """Show the execution plan for a spec without applying it."""
     from nodeforge.plan.render_text import render_plan
 
     try:
-        _, _, p, issues = _build_pipeline(spec)
+        _, _, p, issues = _build_pipeline(
+            spec, strict_env=not passthrough, env_file=env_file
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1)
@@ -152,12 +176,22 @@ def docs(
     mode: str = typer.Option(
         "guide", "--mode", "-m", help="Output mode: guide or commands"
     ),
+    env_file: Optional[Path] = typer.Option(
+        None, "--env-file", help="Load environment variables from a .env file"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
 ) -> None:
     """Generate Markdown documentation from a spec's execution plan."""
     from nodeforge.plan.render_markdown import render_markdown
 
     try:
-        _, _, p, issues = _build_pipeline(spec)
+        _, _, p, issues = _build_pipeline(
+            spec, strict_env=not passthrough, env_file=env_file
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1)
@@ -185,6 +219,14 @@ def apply(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be done without executing"
     ),
+    env_file: Optional[Path] = typer.Option(
+        None, "--env-file", help="Load environment variables from a .env file"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
 ) -> None:
     """Apply a spec to provision infrastructure."""
     from nodeforge.runtime.ssh import SSHSession
@@ -194,7 +236,9 @@ def apply(
     from nodeforge.registry import get_kind_hooks
 
     try:
-        parsed_spec, ctx, p, issues = _build_pipeline(spec, ensure_keys=True)
+        parsed_spec, ctx, p, issues = _build_pipeline(
+            spec, ensure_keys=True, strict_env=not passthrough, env_file=env_file
+        )
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1)
