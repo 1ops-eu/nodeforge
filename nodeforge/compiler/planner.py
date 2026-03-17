@@ -162,6 +162,30 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         )
     )
 
+    # 3b: grant passwordless sudo so the admin can run sudo without a password
+    steps.append(
+        _s(
+            "configure_nopasswd_sudo",
+            f"Grant {spec.admin_user.name} passwordless sudo",
+            R,
+            StepKind.SSH_COMMAND,
+            command=bs.nopasswd_sudoers(spec.admin_user.name),
+            sudo=True,
+            tags=["user"],
+        )
+    )
+    steps.append(
+        _s(
+            "secure_sudoers_file",
+            f"Secure /etc/sudoers.d/{spec.admin_user.name} (chmod 440)",
+            R,
+            StepKind.SSH_COMMAND,
+            command=bs.secure_sudoers(spec.admin_user.name),
+            sudo=True,
+            tags=["user"],
+        )
+    )
+
     # 4: install authorized keys
     if pubkey_content:
         steps.append(
@@ -376,36 +400,51 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
 
     # 14-18: WireGuard (remote steps + local state save)
     if spec.wireguard.enabled:
-        wg_conf = wg.generate_wireguard_config(
+        import ipaddress as _ip
+
+        wg_port = (
+            int(spec.wireguard.endpoint.split(":")[-1])
+            if ":" in spec.wireguard.endpoint
+            else 51820
+        )
+        # VPN subnet derived from the server's interface address (e.g. 10.10.0.0/24)
+        vpn_subnet = str(_ip.ip_interface(spec.wireguard.address).network)
+
+        # Server config: [Interface] with ListenPort + [Peer] with client public key
+        server_conf = wg.generate_server_config(
             interface=spec.wireguard.interface,
             address=spec.wireguard.address,
             private_key=ctx.wireguard_private_key,
-            server_public_key=spec.wireguard.server_public_key,
+            listen_port=wg_port,
+            client_public_key=ctx.wg_client_public_key,
+            peer_address=spec.wireguard.peer_address,
+        )
+        # Client config: saved locally to ~/.wg/nodeforge/{host}/client.conf
+        client_conf = wg.generate_client_config(
+            client_private_key=ctx.wg_client_private_key,
+            peer_address=spec.wireguard.peer_address,
+            server_public_key=ctx.wireguard_public_key,
             endpoint=spec.wireguard.endpoint,
-            allowed_ips=spec.wireguard.allowed_ips,
+            vpn_subnet=vpn_subnet,
             persistent_keepalive=spec.wireguard.persistent_keepalive,
         )
-        # Store on ctx so the executor can persist it locally after apply
-        ctx.wireguard_conf_content = wg_conf
+        # Store both on ctx so the executor can persist them after apply
+        ctx.wireguard_conf_content = server_conf
+        ctx.wg_client_conf_content = client_conf
 
         steps.append(
             _s(
                 "write_wireguard_config",
-                f"Write WireGuard config: /etc/wireguard/{spec.wireguard.interface}.conf",
+                f"Write WireGuard server config: /etc/wireguard/{spec.wireguard.interface}.conf",
                 R,
                 StepKind.SSH_UPLOAD,
-                file_content=wg_conf,
+                file_content=server_conf,
                 target_path=f"/etc/wireguard/{spec.wireguard.interface}.conf",
                 sudo=True,
                 tags=["wireguard"],
             )
         )
         # Open the WireGuard UDP port in the firewall before starting the interface
-        wg_port = (
-            int(spec.wireguard.endpoint.split(":")[-1])
-            if ":" in spec.wireguard.endpoint
-            else 51820
-        )
         steps.append(
             _s(
                 "open_wireguard_port_in_firewall",
@@ -502,6 +541,38 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
                 StepKind.VERIFY,
                 command="goss_unavailable",
                 tags=["goss", "warning"],
+            )
+        )
+
+    # ------------------------------------------------------------------ #
+    # WireGuard SSH restriction — MUST be the absolute last remote step.
+    # Atomically replaces the open-to-all SSH rule with a WireGuard-only rule.
+    # After this executes, direct SSH to spec.host.address stops working.
+    # ------------------------------------------------------------------ #
+    if spec.wireguard.enabled:
+        peer_ip = (
+            spec.wireguard.peer_address.split("/")[0]
+            if spec.firewall.registered_peers_only
+            else None
+        )
+        label = (
+            f"Restrict SSH port {spec.ssh.port} to WireGuard peer {peer_ip} only"
+            if peer_ip
+            else f"Restrict SSH port {spec.ssh.port} to WireGuard interface {spec.wireguard.interface} only"
+        )
+        steps.append(
+            _s(
+                "restrict_ssh_to_wireguard",
+                label,
+                R,
+                StepKind.SSH_COMMAND,
+                command=bs.restrict_ssh_to_wireguard(
+                    spec.ssh.port,
+                    spec.wireguard.interface,
+                    peer_ip,
+                ),
+                sudo=True,
+                tags=["ssh", "firewall", "wireguard"],
             )
         )
 

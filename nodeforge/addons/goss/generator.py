@@ -130,10 +130,26 @@ def generate_goss_yaml(spec: "BootstrapSpec") -> str:
         ufw_stdout = [
             "/Status:\\s+active/",
             "/Default:\\s+deny\\s+\\(incoming\\)/",
-            f"/{spec.ssh.port}\\/tcp\\s+ALLOW\\s+IN/",
         ]
+
         if spec.wireguard.enabled:
-            ufw_stdout.append("/51820\\/udp\\s+ALLOW\\s+IN/")
+            iface = spec.wireguard.interface
+            wg_port = (
+                int(spec.wireguard.endpoint.split(":")[-1])
+                if ":" in spec.wireguard.endpoint
+                else 51820
+            )
+            # WireGuard UDP port is open to all (needed to establish the tunnel)
+            ufw_stdout.append(f"/{wg_port}\\/udp\\s+ALLOW\\s+IN/")
+
+            # NOTE: The SSH-on-WireGuard-interface restriction rule is applied by
+            # restrict_ssh_to_wireguard AFTER goss runs, so we cannot check for it
+            # here. At goss validation time the open SSH rule is still in effect.
+            ufw_stdout.append(f"/{spec.ssh.port}\\/tcp\\s+ALLOW\\s+IN/")
+        else:
+            # No WireGuard — SSH is open to all
+            ufw_stdout.append(f"/{spec.ssh.port}\\/tcp\\s+ALLOW\\s+IN/")
+
         commands["ufw status verbose"] = {
             "exit-status": 0,
             "stdout": ufw_stdout,

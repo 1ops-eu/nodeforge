@@ -40,16 +40,21 @@ class SSHBlock(BaseModel):
 class FirewallBlock(BaseModel):
     provider: str = "ufw"
     ssh_only: bool = True
+    registered_peers_only: bool = False
+    # When wireguard.enabled=true and registered_peers_only=true:
+    #   SSH is restricted to the declared peer IP only (in on wg0 from {peer_ip} to any port {ssh_port})
+    # When wireguard.enabled=true and registered_peers_only=false (default):
+    #   SSH is restricted to the WireGuard interface only (in on wg0 to any port {ssh_port})
+    # Has no effect when wireguard.enabled=false.
 
 
 class WireGuardBlock(BaseModel):
     enabled: bool = False
     interface: str = "wg0"
-    address: str = ""
-    private_key_file: str = ""
-    server_public_key: str = ""
-    endpoint: str = ""
-    allowed_ips: list[str] = Field(default_factory=list)
+    address: str = ""  # server VPN interface CIDR, e.g. 10.10.0.1/24
+    private_key_file: str = ""  # path to server's Curve25519 private key file
+    endpoint: str = ""  # server's public endpoint, e.g. 192.168.56.10:51820
+    peer_address: str = ""  # client/peer VPN IP CIDR, e.g. 10.10.0.2/32
     persistent_keepalive: int = 25
 
 

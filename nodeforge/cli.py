@@ -7,6 +7,7 @@ apply     <spec.yaml> [--dry-run]
 inspect   run <run-id>
 inventory list | show <server-id>
 """
+
 from __future__ import annotations
 
 import os
@@ -41,6 +42,7 @@ console = Console()
 def _startup() -> None:
     """Load built-in kinds and any installed addons before running a command."""
     from nodeforge.registry import load_addons
+
     load_addons()
 
 
@@ -59,9 +61,10 @@ def _build_pipeline(spec_path: Path, ensure_keys: bool = False):
     # Determined by the kind's registered hooks, not by a hardcoded isinstance check.
     if ensure_keys and get_kind_hooks(spec.kind).needs_key_generation:
         from nodeforge.local.keys import ensure_admin_keys
+
         ensure_admin_keys(spec, console=console)
 
-    ctx = normalize(spec)
+    ctx = normalize(spec, spec_dir=spec_path.resolve().parent)
     p = make_plan(ctx)
     return spec, ctx, p, issues
 
@@ -74,13 +77,16 @@ def _print_issues(issues, stop_on_error: bool = True) -> None:
         console.print(f"  [{color}]{issue}[/{color}]")
 
     if stop_on_error and has_errors(issues):
-        console.print("\n[bold red]Validation errors found. Fix before applying.[/bold red]")
+        console.print(
+            "\n[bold red]Validation errors found. Fix before applying.[/bold red]"
+        )
         raise typer.Exit(1)
 
 
 # ------------------------------------------------------------------ #
 # validate
 # ------------------------------------------------------------------ #
+
 
 @app.command()
 def validate(
@@ -111,6 +117,7 @@ def validate(
 # plan
 # ------------------------------------------------------------------ #
 
+
 @app.command()
 def plan(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
@@ -135,11 +142,16 @@ def plan(
 # docs
 # ------------------------------------------------------------------ #
 
+
 @app.command()
 def docs(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
-    mode: str = typer.Option("guide", "--mode", "-m", help="Output mode: guide or commands"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output file (default: stdout)"
+    ),
+    mode: str = typer.Option(
+        "guide", "--mode", "-m", help="Output mode: guide or commands"
+    ),
 ) -> None:
     """Generate Markdown documentation from a spec's execution plan."""
     from nodeforge.plan.render_markdown import render_markdown
@@ -166,10 +178,13 @@ def docs(
 # apply
 # ------------------------------------------------------------------ #
 
+
 @app.command()
 def apply(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be done without executing"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be done without executing"
+    ),
 ) -> None:
     """Apply a spec to provision infrastructure."""
     from nodeforge.runtime.ssh import SSHSession
@@ -187,14 +202,16 @@ def apply(
     if issues:
         _print_issues(issues, stop_on_error=True)
 
-    console.print(Panel(
-        f"[bold]Applying:[/bold] {parsed_spec.meta.name}\n"
-        f"[bold]Target:[/bold]  {parsed_spec.host.address}\n"
-        f"[bold]Steps:[/bold]   {len(p.steps)}"
-        + (" [yellow](DRY RUN)[/yellow]" if dry_run else ""),
-        title="nodeforge apply",
-        border_style="bright_blue",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Applying:[/bold] {parsed_spec.meta.name}\n"
+            f"[bold]Target:[/bold]  {parsed_spec.host.address}\n"
+            f"[bold]Steps:[/bold]   {len(p.steps)}"
+            + (" [yellow](DRY RUN)[/yellow]" if dry_run else ""),
+            title="nodeforge apply",
+            border_style="bright_blue",
+        )
+    )
 
     # Build SSH session
     ssh_session = None
@@ -209,16 +226,24 @@ def apply(
                 return False
 
         login = parsed_spec.login
-        key_path = str(ctx.login_key_path) if ctx.login_key_path and ctx.login_key_path.exists() else None
+        key_path = (
+            str(ctx.login_key_path)
+            if ctx.login_key_path and ctx.login_key_path.exists()
+            else None
+        )
 
         # For specs that declare ssh_port_fallback (e.g. bootstrap), if login.port is
         # unreachable try ssh.port as fallback. This allows clean re-runs after a
         # partial apply that already moved SSH to the new port.
         effective_port = login.port
         hooks = get_kind_hooks(parsed_spec.kind)
-        if hooks.ssh_port_fallback and not _tcp_reachable(parsed_spec.host.address, login.port):
+        if hooks.ssh_port_fallback and not _tcp_reachable(
+            parsed_spec.host.address, login.port
+        ):
             fallback_port = parsed_spec.ssh.port
-            if fallback_port != login.port and _tcp_reachable(parsed_spec.host.address, fallback_port):
+            if fallback_port != login.port and _tcp_reachable(
+                parsed_spec.host.address, fallback_port
+            ):
                 console.print(
                     f"[yellow]⚠ login.port {login.port} unreachable — "
                     f"reconnecting on ssh.port {fallback_port}[/yellow]"
@@ -287,7 +312,9 @@ def apply(
         "failed": "red",
     }.get(result.status, "white")
 
-    console.print(f"\n[bold {status_color}]Status: {result.status}[/bold {status_color}]")
+    console.print(
+        f"\n[bold {status_color}]Status: {result.status}[/bold {status_color}]"
+    )
 
     if result.status == "failed":
         raise typer.Exit(1)
@@ -296,6 +323,7 @@ def apply(
 # ------------------------------------------------------------------ #
 # inspect run <run-id>
 # ------------------------------------------------------------------ #
+
 
 @inspect_app.command("run")
 def inspect_run(
@@ -311,14 +339,16 @@ def inspect_run(
 
     data = read_log(log_path)
 
-    console.print(Panel(
-        f"[bold]Spec:[/bold]   {data.get('spec_name')} ({data.get('spec_kind')})\n"
-        f"[bold]Target:[/bold] {data.get('target_host')}\n"
-        f"[bold]Status:[/bold] {data.get('status')}\n"
-        f"[bold]Started:[/bold] {data.get('started_at')}\n"
-        f"[bold]Finished:[/bold] {data.get('finished_at')}",
-        title=f"Run: {data.get('run_id')}",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Spec:[/bold]   {data.get('spec_name')} ({data.get('spec_kind')})\n"
+            f"[bold]Target:[/bold] {data.get('target_host')}\n"
+            f"[bold]Status:[/bold] {data.get('status')}\n"
+            f"[bold]Started:[/bold] {data.get('started_at')}\n"
+            f"[bold]Finished:[/bold] {data.get('finished_at')}",
+            title=f"Run: {data.get('run_id')}",
+        )
+    )
 
     table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
     table.add_column("#", width=4)
@@ -329,7 +359,9 @@ def inspect_run(
 
     for step in data.get("steps", []):
         status = step["status"]
-        color = {"success": "green", "failed": "red", "skipped": "dim"}.get(status, "white")
+        color = {"success": "green", "failed": "red", "skipped": "dim"}.get(
+            status, "white"
+        )
         table.add_row(
             str(step["index"]),
             step["id"],
@@ -344,6 +376,7 @@ def inspect_run(
 # ------------------------------------------------------------------ #
 # inventory list | show
 # ------------------------------------------------------------------ #
+
 
 def _get_db() -> "InventoryDB":
     from nodeforge.local.inventory_db import InventoryDB
@@ -377,7 +410,9 @@ def inventory_list() -> None:
     for s in servers:
         ssh_info = f"{s.get('ssh_user', '')}@{s.get('ssh_alias', s.get('name', ''))}:{s.get('ssh_port', '')}"
         wg = "yes" if s.get("wireguard_enabled") else "no"
-        status_color = "green" if s.get("bootstrap_status") == "bootstrapped" else "yellow"
+        status_color = (
+            "green" if s.get("bootstrap_status") == "bootstrapped" else "yellow"
+        )
         table.add_row(
             s.get("name", ""),
             s.get("address", ""),
@@ -416,7 +451,9 @@ def inventory_show(
     if services:
         console.print("\n[bold]Services:[/bold]")
         for svc in services:
-            console.print(f"  • {svc.get('service_type')}: {svc.get('service_name')} [{svc.get('status')}]")
+            console.print(
+                f"  • {svc.get('service_type')}: {svc.get('service_name')} [{svc.get('status')}]"
+            )
     else:
         console.print("[dim]No services recorded.[/dim]")
 

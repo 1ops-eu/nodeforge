@@ -3,6 +3,7 @@
 Adapted from vm_wizard/fab_infra/tasks/user/bootstrap_admin_user/bootstrap_admin_user.py.
 All functions return shell command strings consumed by the executor.
 """
+
 from __future__ import annotations
 
 
@@ -117,7 +118,30 @@ def open_firewall_port(port: int) -> str:
 
 def finalize_firewall() -> str:
     return (
-        "ufw default deny incoming && "
-        "ufw default allow outgoing && "
-        "ufw --force enable"
+        "ufw default deny incoming && ufw default allow outgoing && ufw --force enable"
+    )
+
+
+def restrict_ssh_to_wireguard(
+    ssh_port: int,
+    wg_interface: str,
+    peer_ip: str | None = None,
+) -> str:
+    """Atomically switch the SSH firewall rule from open-to-all to WireGuard-only.
+
+    Adds a WireGuard-restricted SSH allow rule, then removes the temporary
+    open-to-all rule that was created during apply setup.
+
+    When peer_ip is set (firewall.registered_peers_only=true):
+        ufw allow in on {wg_interface} from {peer_ip} to any port {ssh_port} proto tcp
+    When peer_ip is None (registered_peers_only=false, default):
+        ufw allow in on {wg_interface} to any port {ssh_port} proto tcp
+
+    MUST be the last remote SSH step — after this executes, direct SSH to
+    spec.host.address stops working. All subsequent steps must be LOCAL.
+    """
+    from_clause = f"from {peer_ip} " if peer_ip else ""
+    return (
+        f"ufw allow in on {wg_interface} {from_clause}to any port {ssh_port} proto tcp && "
+        f"ufw delete allow {ssh_port}/tcp"
     )

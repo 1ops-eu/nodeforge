@@ -10,7 +10,7 @@ from typing import Union
 
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
 from nodeforge.specs.service_schema import ServiceSpec
-from nodeforge.utils.files import expand_path
+from nodeforge.utils.files import expand_path, resolve_path
 
 AnySpec = Union[BootstrapSpec, ServiceSpec]
 
@@ -20,12 +20,22 @@ class NormalizedContext:
     """Resolved values derived from the spec during normalization."""
 
     spec: AnySpec
+    spec_dir: Path | None = (
+        None  # directory containing the spec file; used for relative path resolution
+    )
 
     # Bootstrap-specific resolved values
     pubkey_contents: list[str] = field(default_factory=list)
     wireguard_private_key: str = ""
-    wireguard_public_key: str = ""  # derived via PyNaCl from private key
-    wireguard_conf_content: str = ""  # populated by planner; stored here for executor
+    wireguard_public_key: str = ""  # derived via PyNaCl from server private key
+    wireguard_conf_content: str = (
+        ""  # server config; populated by planner, used by executor
+    )
+    wg_client_private_key: str = ""  # auto-generated client Curve25519 private key
+    wg_client_public_key: str = ""  # derived via PyNaCl from client private key
+    wg_client_conf_content: str = (
+        ""  # client wg-quick config; populated by planner, saved locally
+    )
     ssh_conf_d_path: Path | None = None
     db_path: Path | None = None
     login_key_path: Path | None = None
@@ -33,14 +43,20 @@ class NormalizedContext:
     admin_key_path: Path | None = None
 
 
-def normalize(spec) -> NormalizedContext:
-    """Resolve all paths, read key files, compute derived values."""
+def normalize(spec, spec_dir: Path | None = None) -> NormalizedContext:
+    """Resolve all paths, read key files, compute derived values.
+
+    Args:
+        spec: Parsed spec object.
+        spec_dir: Directory of the spec file. Relative paths in the spec are
+            resolved against this directory first. Falls back to CWD if None.
+    """
     # Ensure built-in and addon kinds are registered (idempotent).
     from nodeforge.registry import load_addons, get_normalizer
 
     load_addons()
 
-    ctx = NormalizedContext(spec=spec)
+    ctx = NormalizedContext(spec=spec, spec_dir=spec_dir)
 
     normalizer = get_normalizer(spec.kind)
     if normalizer is None:
@@ -48,6 +64,14 @@ def normalize(spec) -> NormalizedContext:
     normalizer(spec, ctx)
 
     return ctx
+
+
+def _generate_wg_private_key() -> str:
+    """Generate a fresh Curve25519 private key encoded as WireGuard base64."""
+    import nacl.public
+
+    priv = nacl.public.PrivateKey.generate()
+    return base64.b64encode(bytes(priv)).decode()
 
 
 def _derive_wg_public_key(private_key_b64: str) -> str:
@@ -68,13 +92,19 @@ def _derive_wg_public_key(private_key_b64: str) -> str:
 
 
 def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
+    spec_dir = ctx.spec_dir
+
     # Resolve login private key path
-    ctx.login_key_path = expand_path(spec.login.private_key)
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir)
+        if spec.login.private_key
+        else None
+    )
     ctx.login_password = spec.login.password or None
 
     # Derive admin private key path from the first .pub entry in pubkeys
     for pk_str in spec.admin_user.pubkeys:
-        pk_path = expand_path(pk_str)
+        pk_path = resolve_path(pk_str, spec_dir)
         if pk_path.suffix == ".pub":
             candidate = pk_path.with_suffix("")
             if candidate.exists():
@@ -83,15 +113,15 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
 
     # Read pubkey file contents (missing files are stored as placeholder for plan/docs)
     for pk_path_str in spec.admin_user.pubkeys:
-        pk_path = expand_path(pk_path_str)
+        pk_path = resolve_path(pk_path_str, spec_dir)
         if pk_path.exists():
             ctx.pubkey_contents.append(pk_path.read_text(encoding="utf-8").strip())
         else:
             ctx.pubkey_contents.append(f"<key not found: {pk_path}>")
 
-    # Read WireGuard private key and derive public key via PyNaCl (Curve25519)
+    # Read WireGuard server private key and derive public key via PyNaCl (Curve25519)
     if spec.wireguard.enabled and spec.wireguard.private_key_file:
-        wg_key_path = expand_path(spec.wireguard.private_key_file)
+        wg_key_path = resolve_path(spec.wireguard.private_key_file, spec_dir)
         if wg_key_path.exists():
             ctx.wireguard_private_key = wg_key_path.read_text(encoding="utf-8").strip()
             ctx.wireguard_public_key = _derive_wg_public_key(ctx.wireguard_private_key)
@@ -99,7 +129,27 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
             ctx.wireguard_private_key = f"<key not found: {wg_key_path}>"
             ctx.wireguard_public_key = ""
 
-    # Compute SSH conf.d path using the addon-overridable base directory
+    # Auto-generate (or reuse) WireGuard client key pair.
+    # The client private key is persisted to ~/.wg/nodeforge/{host}/client.key after
+    # a successful apply so that re-runs reuse the same key (stable peer identity).
+    # On first run the file won't exist yet — we generate it in memory here and the
+    # executor's save_wireguard_state step writes it to disk.
+    if spec.wireguard.enabled:
+        from nodeforge.registry.local_paths import get_local_paths
+        from nodeforge.utils.files import ensure_dir
+
+        client_key_path = (
+            get_local_paths().wg_state_base / spec.host.name / "client.key"
+        )
+        if client_key_path.exists():
+            ctx.wg_client_private_key = client_key_path.read_text(
+                encoding="utf-8"
+            ).strip()
+        else:
+            ctx.wg_client_private_key = _generate_wg_private_key()
+        ctx.wg_client_public_key = _derive_wg_public_key(ctx.wg_client_private_key)
+
+    # Compute SSH conf.d path   using the addon-overridable base directory
     from nodeforge.registry.local_paths import get_local_paths
 
     ssh_conf_d_base = get_local_paths().ssh_conf_d_base
@@ -115,8 +165,14 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
 
 
 def _normalize_service(spec: ServiceSpec, ctx: NormalizedContext) -> None:
+    spec_dir = ctx.spec_dir
+
     # Resolve login key
-    ctx.login_key_path = expand_path(spec.login.private_key)
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir)
+        if spec.login.private_key
+        else None
+    )
     ctx.login_password = spec.login.password or None
 
     # Resolve inventory

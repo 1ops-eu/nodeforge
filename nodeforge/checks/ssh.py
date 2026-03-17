@@ -1,6 +1,8 @@
 """SSH connectivity check — used by the GATE step."""
 from __future__ import annotations
 
+import time
+
 from pydantic import BaseModel
 
 
@@ -18,36 +20,45 @@ def check_ssh_reachable(
     key_path: str | None = None,
     password: str | None = None,
     timeout: int = 10,
+    retries: int = 5,
+    retry_delay: float = 1.0,
 ) -> CheckResult:
-    """Test SSH connectivity. This is what GATE step 'verify_admin_login_on_new_port' calls."""
+    """Test SSH connectivity. This is what GATE step 'verify_admin_login_on_new_port' calls.
+
+    Retries up to ``retries`` times with ``retry_delay`` seconds between attempts.
+    This handles the brief window after ``systemctl reload ssh`` where the daemon
+    has acknowledged the reload but has not yet re-bound to its port.
+    """
     from nodeforge.runtime.ssh import SSHSession
 
-    session = SSHSession(
-        host=host,
-        user=user,
-        port=port,
-        password=password,
-        key_path=key_path,
-    )
-    try:
-        ok = session.test_connection()
-        if ok:
-            return CheckResult(
-                passed=True,
-                check_type="ssh_reachable",
-                message=f"SSH login succeeded: {user}@{host}:{port}",
-            )
-        else:
-            return CheckResult(
-                passed=False,
-                check_type="ssh_reachable",
-                message=f"SSH login failed: {user}@{host}:{port}",
-            )
-    except Exception as e:
-        return CheckResult(
-            passed=False,
-            check_type="ssh_reachable",
-            message=f"SSH connection error: {e}",
+    last_message = f"SSH login failed: {user}@{host}:{port}"
+    for attempt in range(retries):
+        session = SSHSession(
+            host=host,
+            user=user,
+            port=port,
+            password=password,
+            key_path=key_path,
         )
-    finally:
-        session.close()
+        try:
+            ok = session.test_connection()
+            if ok:
+                return CheckResult(
+                    passed=True,
+                    check_type="ssh_reachable",
+                    message=f"SSH login succeeded: {user}@{host}:{port}",
+                )
+            last_message = f"SSH login failed: {user}@{host}:{port}"
+        except Exception as e:
+            last_message = f"SSH connection error: {e}"
+        finally:
+            session.close()
+
+        if attempt < retries - 1:
+            time.sleep(retry_delay)
+
+    return CheckResult(
+        passed=False,
+        check_type="ssh_reachable",
+        message=last_message,
+    )

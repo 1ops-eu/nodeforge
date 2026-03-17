@@ -81,10 +81,8 @@ def test_normalize_derives_wireguard_public_key(tmp_path):
           interface: wg0
           address: 10.0.0.1/24
           private_key_file: "{key_file}"
-          server_public_key: "{expected_pub}"
           endpoint: "192.168.1.1:51820"
-          allowed_ips:
-            - 10.0.0.2/32
+          peer_address: "10.0.0.2/32"
     """)
     )
 
@@ -93,3 +91,10 @@ def test_normalize_derives_wireguard_public_key(tmp_path):
 
     assert ctx.wireguard_private_key == priv
     assert ctx.wireguard_public_key == expected_pub
+    # Client key pair must be auto-generated (non-empty, valid base64)
+    import base64
+
+    assert ctx.wg_client_private_key
+    assert ctx.wg_client_public_key
+    base64.b64decode(ctx.wg_client_private_key)  # must be valid base64
+    base64.b64decode(ctx.wg_client_public_key)

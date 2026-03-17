@@ -18,6 +18,7 @@ dependencies = [
     "rich>=13.0",
     "requests>=2.31",
     "pynacl>=1.5",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]

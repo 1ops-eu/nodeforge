@@ -456,10 +456,13 @@ class Executor:
                 private_key=ctx.wireguard_private_key,
                 public_key=ctx.wireguard_public_key,
                 wg_conf_content=ctx.wireguard_conf_content,
+                client_private_key=ctx.wg_client_private_key,
+                client_public_key=ctx.wg_client_public_key,
+                client_conf_content=ctx.wg_client_conf_content,
                 interface=spec.wireguard.interface,
                 address=spec.wireguard.address,
                 endpoint=spec.wireguard.endpoint,
-                allowed_ips=spec.wireguard.allowed_ips,
+                peer_address=spec.wireguard.peer_address,
                 persistent_keepalive=spec.wireguard.persistent_keepalive,
             )
             return StepResult(

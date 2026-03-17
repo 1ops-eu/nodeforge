@@ -9,17 +9,29 @@ from nodeforge.registry.local_paths import LocalPathsConfig, register_local_path
 
 
 # Known WireGuard test key pair (Curve25519, base64)
-_PRIVATE_KEY = "8IReoXMQH73MyHqq0PKq7jl1md08E5Cd4wfQf31qXHw="
-_PUBLIC_KEY = "rka+MruYoGYyPaDsjem2kHWxBl59PKUFspMef8GSQng="
-_WG_CONF = """\
+_SERVER_PRIVATE_KEY = "8IReoXMQH73MyHqq0PKq7jl1md08E5Cd4wfQf31qXHw="
+_SERVER_PUBLIC_KEY = "rka+MruYoGYyPaDsjem2kHWxBl59PKUFspMef8GSQng="
+_CLIENT_PRIVATE_KEY = "YBpTFhe3OaFHJgqKetv3mCFrHRNSAMTXFIe2wEq1LWE="
+_CLIENT_PUBLIC_KEY = "ABC123clientpubkeyABC123=="
+_SERVER_CONF = """\
 [Interface]
 Address = 10.10.0.1/24
+ListenPort = 51820
 PrivateKey = 8IReoXMQH73MyHqq0PKq7jl1md08E5Cd4wfQf31qXHw=
+
+[Peer]
+PublicKey = ABC123clientpubkeyABC123==
+AllowedIPs = 10.10.0.2/32
+"""
+_CLIENT_CONF = """\
+[Interface]
+PrivateKey = YBpTFhe3OaFHJgqKetv3mCFrHRNSAMTXFIe2wEq1LWE=
+Address = 10.10.0.2/32
 
 [Peer]
 PublicKey = rka+MruYoGYyPaDsjem2kHWxBl59PKUFspMef8GSQng=
 Endpoint = 192.168.56.10:51820
-AllowedIPs = 10.10.0.2/32
+AllowedIPs = 10.10.0.0/24
 PersistentKeepalive = 25
 """
 
@@ -40,13 +52,16 @@ def _save(tmp_path, host_name="ubuntu-node-1"):
     return save_wireguard_state(
         host_name=host_name,
         spec_name="ubuntu-05-wireguard",
-        private_key=_PRIVATE_KEY,
-        public_key=_PUBLIC_KEY,
-        wg_conf_content=_WG_CONF,
+        private_key=_SERVER_PRIVATE_KEY,
+        public_key=_SERVER_PUBLIC_KEY,
+        wg_conf_content=_SERVER_CONF,
+        client_private_key=_CLIENT_PRIVATE_KEY,
+        client_public_key=_CLIENT_PUBLIC_KEY,
+        client_conf_content=_CLIENT_CONF,
         interface="wg0",
         address="10.10.0.1/24",
         endpoint="192.168.56.10:51820",
-        allowed_ips=["10.10.0.2/32"],
+        peer_address="10.10.0.2/32",
         persistent_keepalive=25,
     )
 
@@ -64,29 +79,52 @@ def test_host_dir_under_wg_state_base(tmp_path):
     assert host_dir.parent == get_local_paths().wg_state_base
 
 
-def test_private_key_file(tmp_path):
+def test_server_private_key_file(tmp_path):
     host_dir = _save(tmp_path)
     key_file = host_dir / "private.key"
     assert key_file.exists()
-    assert _PRIVATE_KEY in key_file.read_text()
+    assert _SERVER_PRIVATE_KEY in key_file.read_text()
     assert oct(key_file.stat().st_mode)[-3:] == "600"
 
 
-def test_public_key_file(tmp_path):
+def test_server_public_key_file(tmp_path):
     host_dir = _save(tmp_path)
     key_file = host_dir / "public.key"
     assert key_file.exists()
-    assert _PUBLIC_KEY in key_file.read_text()
+    assert _SERVER_PUBLIC_KEY in key_file.read_text()
     assert oct(key_file.stat().st_mode)[-3:] == "644"
 
 
-def test_wg_conf_file(tmp_path):
+def test_server_conf_file(tmp_path):
     host_dir = _save(tmp_path)
     conf_file = host_dir / "wg0.conf"
     assert conf_file.exists()
-    assert "[Interface]" in conf_file.read_text()
+    assert "ListenPort" in conf_file.read_text()
     assert "10.10.0.1/24" in conf_file.read_text()
     assert oct(conf_file.stat().st_mode)[-3:] == "600"
+
+
+def test_client_key_file(tmp_path):
+    host_dir = _save(tmp_path)
+    key_file = host_dir / "client.key"
+    assert key_file.exists()
+    assert _CLIENT_PRIVATE_KEY in key_file.read_text()
+    assert oct(key_file.stat().st_mode)[-3:] == "600"
+
+
+def test_client_conf_file(tmp_path):
+    host_dir = _save(tmp_path)
+    conf_file = host_dir / "client.conf"
+    assert conf_file.exists()
+    assert "10.10.0.2/32" in conf_file.read_text()
+    assert oct(conf_file.stat().st_mode)[-3:] == "600"
+
+
+def test_client_key_not_overwritten_on_rerun(tmp_path):
+    """client.key must survive re-runs (stable peer identity)."""
+    _save(tmp_path)
+    host_dir = _save(tmp_path)  # second call
+    assert _CLIENT_PRIVATE_KEY in (host_dir / "client.key").read_text()
 
 
 def test_metadata_json_fields(tmp_path):
@@ -98,9 +136,10 @@ def test_metadata_json_fields(tmp_path):
     assert meta["interface"] == "wg0"
     assert meta["address"] == "10.10.0.1/24"
     assert meta["endpoint"] == "192.168.56.10:51820"
-    assert meta["allowed_ips"] == ["10.10.0.2/32"]
+    assert meta["peer_address"] == "10.10.0.2/32"
     assert meta["persistent_keepalive"] == 25
-    assert meta["public_key"] == _PUBLIC_KEY
+    assert meta["server_public_key"] == _SERVER_PUBLIC_KEY
+    assert meta["client_public_key"] == _CLIENT_PUBLIC_KEY
     assert "deployed_at" in meta
     # deployed_at must be a valid ISO8601 timestamp
     from datetime import datetime

@@ -1,4 +1,5 @@
 """Tests for cross-field validation logic."""
+
 import pytest
 from nodeforge.specs.bootstrap_schema import BootstrapSpec, SSHBlock
 from nodeforge.specs.validators import validate_bootstrap, has_errors
@@ -36,8 +37,9 @@ def test_wireguard_enabled_requires_config():
     assert has_errors(issues)
     error_fields = [i.field for i in issues if i.severity == "error"]
     assert "wireguard.private_key_file" in error_fields
-    assert "wireguard.server_public_key" in error_fields
     assert "wireguard.endpoint" in error_fields
+    assert "wireguard.address" in error_fields
+    assert "wireguard.peer_address" in error_fields
 
 
 def test_wireguard_disabled_no_errors():

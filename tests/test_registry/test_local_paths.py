@@ -97,10 +97,13 @@ def test_wireguard_store_uses_active_paths(tmp_path):
         private_key="8IReoXMQH73MyHqq0PKq7jl1md08E5Cd4wfQf31qXHw=",
         public_key="rka+MruYoGYyPaDsjem2kHWxBl59PKUFspMef8GSQng=",
         wg_conf_content="[Interface]\nAddress = 10.0.0.1/24\n",
+        client_private_key="YBpTFhe3OaFHJgqKetv3mCFrHRNSAMTXFIe2wEq1LWE=",
+        client_public_key="ABC123clientpubkey==",
+        client_conf_content="[Interface]\nPrivateKey = test\n",
         interface="wg0",
         address="10.0.0.1/24",
         endpoint="1.2.3.4:51820",
-        allowed_ips=["10.0.0.2/32"],
+        peer_address="10.0.0.2/32",
         persistent_keepalive=25,
     )
 
