@@ -95,17 +95,6 @@ def validate_bootstrap(spec: BootstrapSpec) -> list[ValidationIssue]:
             )
         )
 
-    # Inventory key env completeness
-    inv = spec.local.inventory
-    if inv.enabled and inv.key_source == "env" and not inv.key_env:
-        issues.append(
-            ValidationIssue(
-                "error",
-                "local.inventory.key_env",
-                "inventory.key_source=env requires key_env to be set",
-            )
-        )
-
     return issues
 
 

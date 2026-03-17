@@ -1,4 +1,5 @@
 """Pydantic v2 models for kind: service YAML specs (RFC section 8)."""
+
 from __future__ import annotations
 
 from typing import Literal, Optional
@@ -59,6 +60,7 @@ class ContainerBlock(BaseModel):
 
 
 class ServiceLocalBlock(BaseModel):
+    state_dir: str = ""
     inventory: InventoryBlock = Field(default_factory=InventoryBlock)
 
 

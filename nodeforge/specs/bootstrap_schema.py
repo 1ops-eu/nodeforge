@@ -70,6 +70,7 @@ class InventoryBlock(BaseModel):
 
 
 class LocalBlock(BaseModel):
+    state_dir: str = ""
     ssh_config: SSHConfigBlock = Field(default_factory=SSHConfigBlock)
     inventory: InventoryBlock = Field(default_factory=InventoryBlock)
 

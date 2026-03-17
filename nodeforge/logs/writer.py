@@ -1,4 +1,9 @@
-"""Write structured apply logs to ~/.nodeforge/runs/."""
+"""Write structured apply logs.
+
+The default log directory is determined by ``get_local_paths().log_dir``
+which respects the ``NODEFORGE_STATE_DIR`` environment variable.
+"""
+
 from __future__ import annotations
 
 import json
@@ -9,12 +14,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nodeforge.runtime.executor import ApplyResult
 
-_LOG_DIR = Path("~/.nodeforge/runs").expanduser()
+
+def _default_log_dir() -> Path:
+    from nodeforge.registry.local_paths import get_local_paths
+
+    return get_local_paths().log_dir
 
 
 def write_log(result: "ApplyResult", log_dir: Path | None = None) -> Path:
     """Write JSON log of apply result. Returns path to the log file."""
-    d = (log_dir or _LOG_DIR).expanduser()
+    d = (log_dir or _default_log_dir()).expanduser()
     d.mkdir(parents=True, exist_ok=True)
 
     ts = result.started_at.replace(":", "-").replace("+", "Z")[:19]

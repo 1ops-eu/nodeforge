@@ -91,8 +91,51 @@ def _derive_wg_public_key(private_key_b64: str) -> str:
         return ""
 
 
+def _apply_state_dir(spec) -> None:
+    """Apply state_dir override from env var or spec field.
+
+    Priority (highest to lowest):
+    1. NODEFORGE_STATE_DIR environment variable
+    2. local.state_dir spec field
+    3. Built-in defaults (no action needed)
+
+    When a state_dir is active, re-registers LocalPathsConfig so all
+    downstream code (ssh_config, wireguard_store, etc.) picks it up.
+    """
+    from nodeforge.registry.local_paths import register_local_paths, LocalPathsConfig
+
+    env_state_dir = os.environ.get("NODEFORGE_STATE_DIR")
+    spec_state_dir = spec.local.state_dir if spec.local.state_dir else None
+
+    effective = env_state_dir or spec_state_dir
+    if effective:
+        register_local_paths(LocalPathsConfig(state_dir=Path(effective)))
+
+
+def _resolve_db_path(spec) -> Path:
+    """Resolve inventory database path respecting the priority order.
+
+    Priority (highest to lowest):
+    1. Explicit spec field (local.inventory.db_path) if non-default
+    2. state_dir-derived path (via get_local_paths())
+    3. Built-in default (~/.nodeforge/inventory.db)
+    """
+    from nodeforge.registry.local_paths import get_local_paths
+
+    inv = spec.local.inventory
+    default_db = "~/.nodeforge/inventory.db"
+    if inv.db_path and inv.db_path != default_db:
+        # Explicit per-resource override in spec
+        return expand_path(inv.db_path)
+    # Use the centrally-resolved path (state_dir-aware)
+    return get_local_paths().inventory_db_path
+
+
 def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
     spec_dir = ctx.spec_dir
+
+    # Apply state_dir override before resolving any local paths
+    _apply_state_dir(spec)
 
     # Resolve login private key path
     ctx.login_key_path = (
@@ -159,13 +202,15 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
     if not spec.local.ssh_config.host_alias:
         spec.local.ssh_config.host_alias = spec.host.name
 
-    # Resolve inventory db path
-    inv = spec.local.inventory
-    ctx.db_path = expand_path(inv.db_path)
+    # Resolve inventory db path (state_dir-aware)
+    ctx.db_path = _resolve_db_path(spec)
 
 
 def _normalize_service(spec: ServiceSpec, ctx: NormalizedContext) -> None:
     spec_dir = ctx.spec_dir
+
+    # Apply state_dir override before resolving any local paths
+    _apply_state_dir(spec)
 
     # Resolve login key
     ctx.login_key_path = (
@@ -175,9 +220,8 @@ def _normalize_service(spec: ServiceSpec, ctx: NormalizedContext) -> None:
     )
     ctx.login_password = spec.login.password or None
 
-    # Resolve inventory
-    inv = spec.local.inventory
-    ctx.db_path = expand_path(inv.db_path)
+    # Resolve inventory (state_dir-aware)
+    ctx.db_path = _resolve_db_path(spec)
 
     # Resolve postgres role password from env
     if spec.postgres and spec.postgres.create_role:
