@@ -334,7 +334,10 @@ def inspect_run(
 
     log_path = find_log(run_id)
     if not log_path:
-        console.print(f"[red]Run '{run_id}' not found in ~/.nodeforge/runs/[/red]")
+        from nodeforge.registry.local_paths import get_local_paths
+
+        log_dir = get_local_paths().log_dir
+        console.print(f"[red]Run '{run_id}' not found in {log_dir}[/red]")
         raise typer.Exit(1)
 
     data = read_log(log_path)
@@ -380,8 +383,13 @@ def inspect_run(
 
 def _get_db() -> "InventoryDB":
     from nodeforge.local.inventory_db import InventoryDB
+    from nodeforge.registry.local_paths import get_local_paths
 
-    db_path = os.environ.get("NODEFORGE_DB_PATH", "~/.nodeforge/inventory.db")
+    # Explicit NODEFORGE_DB_PATH takes priority (backward compat),
+    # then fall back to get_local_paths() which respects NODEFORGE_STATE_DIR.
+    db_path = os.environ.get("NODEFORGE_DB_PATH") or str(
+        get_local_paths().inventory_db_path
+    )
     db = InventoryDB(db_path=db_path)
     db.open()
     return db
