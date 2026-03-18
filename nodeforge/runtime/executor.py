@@ -9,13 +9,13 @@ Critical invariants enforced here:
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel
 from rich.console import Console
 
-from nodeforge.plan.models import Plan, Step, StepKind, StepScope
+from nodeforge.plan.models import Plan, Step, StepScope
 
 
 class StepResult(BaseModel):
@@ -56,7 +56,7 @@ class Executor:
 
     def apply(self, dry_run: bool = False) -> ApplyResult:
         """Execute all steps in order, respecting gates and dependencies."""
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = datetime.now(UTC).isoformat()
         step_results: list[StepResult] = []
         aborted_at: int | None = None
         remote_failed = False
@@ -114,16 +114,14 @@ class Executor:
                         f"\n[bold red]⛔ GATE FAILED at step {step.index}: {step.id}[/bold red]"
                     )
                     if step.rollback_hint:
-                        self._console.print(
-                            f"[yellow]Recovery:[/yellow] {step.rollback_hint}"
-                        )
+                        self._console.print(f"[yellow]Recovery:[/yellow] {step.rollback_hint}")
                     break
                 elif step.scope == StepScope.LOCAL:
                     local_warnings = True
                 else:
                     remote_failed = True
 
-        finished_at = datetime.now(timezone.utc).isoformat()
+        finished_at = datetime.now(UTC).isoformat()
 
         if aborted_at is not None or remote_failed:
             final_status = "failed"
@@ -176,8 +174,7 @@ class Executor:
                     scope=step.scope.value,
                     status="failed",
                     error=(
-                        f"Unknown step kind: '{step.kind}'. "
-                        "Is the required addon installed?"
+                        f"Unknown step kind: '{step.kind}'. " "Is the required addon installed?"
                     ),
                 )
         except Exception as e:
@@ -251,11 +248,7 @@ class Executor:
                 if user == admin_name and self._ctx.admin_key_path:
                     key_path = str(self._ctx.admin_key_path)
                 else:
-                    key_path = (
-                        str(self._ctx.login_key_path)
-                        if self._ctx.login_key_path
-                        else None
-                    )
+                    key_path = str(self._ctx.login_key_path) if self._ctx.login_key_path else None
                     password = self._ctx.login_password
             check = check_ssh_reachable(
                 host, int(port_str), user, key_path=key_path, password=password
@@ -312,8 +305,8 @@ class Executor:
 
     def _execute_goss_validate(self, step: Step) -> StepResult:
         """Install goss on the remote, update the master gossfile, run validate."""
-        from nodeforge.addons.goss.shipper import ship_and_run
         from nodeforge.addons.goss.renderer import render_goss_results
+        from nodeforge.addons.goss.shipper import ship_and_run
 
         if self._session is None:
             return StepResult(
@@ -385,9 +378,11 @@ class Executor:
             scope=step.scope.value,
             status=status,
             output=output,
-            error=""
-            if goss_result["exit_ok"]
-            else f"{summary.get('failed-count', '?')} check(s) failed",
+            error=(
+                ""
+                if goss_result["exit_ok"]
+                else f"{summary.get('failed-count', '?')} check(s) failed"
+            ),
         )
 
     def _execute_local_file_write(self, step: Step) -> StepResult:
@@ -419,6 +414,7 @@ class Executor:
 
     def _execute_local_command(self, step: Step) -> StepResult:
         from pathlib import Path
+
         from nodeforge.local.ssh_config import backup_ssh_config, ensure_include
 
         if step.command == "backup_ssh_config" and self._spec:
@@ -429,9 +425,7 @@ class Executor:
                 step_id=step.id,
                 scope=step.scope.value,
                 status="success",
-                output=f"Backup: {backup}"
-                if backup
-                else "No existing config to backup",
+                output=f"Backup: {backup}" if backup else "No existing config to backup",
             )
 
         elif step.command == "ensure_include" and self._spec:
@@ -502,7 +496,6 @@ class Executor:
                 output="Inventory database initialized",
             )
         elif step.command == "upsert_server" and self._spec and self._ctx:
-            from nodeforge.local.inventory import record_bootstrap
 
             # Will be called after apply completes with full result
             return StepResult(

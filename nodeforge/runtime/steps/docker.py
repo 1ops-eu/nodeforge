@@ -1,11 +1,10 @@
 """Docker installation commands."""
+
 from __future__ import annotations
 
 
 def install_docker() -> str:
-    return (
-        "curl -fsSL https://get.docker.com | sh"
-    )
+    return "curl -fsSL https://get.docker.com | sh"
 
 
 def enable_docker() -> str:

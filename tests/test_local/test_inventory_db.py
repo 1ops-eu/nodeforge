@@ -1,4 +1,5 @@
 """Tests for the SQLite inventory database."""
+
 from __future__ import annotations
 
 import pytest

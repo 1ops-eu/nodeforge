@@ -12,6 +12,7 @@ This package provides check functions used by the executor during plan execution
 | `container.py` | Docker container running check — verifies a container is in `Running` state via `docker inspect`. |
 | `http.py` | HTTP health check — verifies an endpoint returns the expected status code (uses `requests`). |
 | `postgres.py` | PostgreSQL readiness check — runs `pg_isready` on the remote host. |
+| `nginx.py` | Nginx readiness check — verifies config validity via `nginx -t` and that the service is active. |
 | `wireguard.py` | WireGuard interface check — verifies the interface is up via `wg show`. |
 | `ports.py` | TCP port connectivity check — attempts a socket connection to verify a port is open. |
 | `__init__.py` | Empty package marker |

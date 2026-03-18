@@ -19,7 +19,9 @@ Download the pre-built binary for your platform from the [Releases](../../releas
 | Platform | File |
 |---|---|
 | Linux (x86-64) | `nodeforge-linux-amd64` |
-| macOS | `nodeforge-macos-amd64` |
+| Linux (ARM64) | `nodeforge-linux-arm64` |
+| macOS (Intel) | `nodeforge-macos-amd64` |
+| macOS (Apple Silicon) | `nodeforge-macos-arm64` |
 
 ```bash
 chmod +x nodeforge-linux-amd64
@@ -432,10 +434,11 @@ See [examples/bootstrap.yaml](examples/bootstrap.yaml)
 
 Installs services on an already-bootstrapped server:
 - PostgreSQL (with optional role/database creation)
+- Nginx (with site configuration and reverse proxy support)
 - Docker
 - Docker containers (with health checks)
 
-See [examples/postgres.yaml](examples/postgres.yaml) and [examples/app-container.yaml](examples/app-container.yaml)
+See [examples/postgres.yaml](examples/postgres.yaml), [examples/nginx-reverse-proxy/](examples/nginx-reverse-proxy/), and [examples/app-container.yaml](examples/app-container.yaml)
 
 ### Postflight Checks
 
@@ -619,13 +622,14 @@ make dev
 
 # Run tests
 make test            # unit + integration (no live host needed)
+make smoke           # smoke tests against all example specs
 make test-local      # local integration tests
 
 # Lint and format
-make lint
-make fmt
+make lint            # ruff check + black --check
+make fmt             # ruff fix + black format
 
-# Smoke tests against example specs
+# Smoke tests against example specs (one at a time)
 make validate-example
 make plan-example
 make docs-example
@@ -661,10 +665,11 @@ git push origin v0.2.0
 ```
 
 GitHub Actions will automatically:
-1. Build binaries for Linux and macOS
+1. Build binaries for Linux (amd64, arm64) and macOS (Intel, Apple Silicon)
 2. Generate `checksums.txt`
 3. Create a GitHub Release with all assets
 4. Build and push the Docker image to `ghcr.io/1ops-eu/nodeforge`
+5. Publish the wheel to PyPI
 
 ---
 
@@ -675,7 +680,7 @@ GitHub Actions will automatically:
 - Not a UI/SaaS product
 - Not an agent framework
 
-**V1 scope:** Single host, Debian/Ubuntu only, PostgreSQL + Docker as the only add-ons.
+**V1 scope:** Single host, Debian/Ubuntu only, PostgreSQL + Nginx + Docker as the built-in service kinds.
 
 ---
 

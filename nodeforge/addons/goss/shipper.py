@@ -32,13 +32,12 @@ GOSS_MASTER_FILE = f"{GOSS_REMOTE_DIR}/goss.yaml"
 # Install command: idempotent — only runs curl if goss is not already on PATH.
 # Installs to /usr/local/bin so it is available system-wide.
 _GOSS_INSTALL_CMD = (
-    "command -v goss >/dev/null 2>&1 || "
-    "(curl -fsSL https://goss.rocks/install | sudo sh)"
+    "command -v goss >/dev/null 2>&1 || " "(curl -fsSL https://goss.rocks/install | sudo sh)"
 )
 
 
 def ship_and_run(
-    session: "SSHSession",
+    session: SSHSession,
     spec_name: str,
     goss_yaml_content: str,
     admin_user: str,
@@ -88,9 +87,7 @@ def ship_and_run(
     except yaml.YAMLError:
         existing_master = {}
 
-    if "gossfile" not in existing_master or not isinstance(
-        existing_master["gossfile"], dict
-    ):
+    if "gossfile" not in existing_master or not isinstance(existing_master["gossfile"], dict):
         existing_master["gossfile"] = {}
 
     # Register this spec in the master; key is the remote path

@@ -1,12 +1,13 @@
 """Tests for the addon-overridable local paths registry."""
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from nodeforge.registry.local_paths import (
     LocalPathsConfig,
-    register_local_paths,
     get_local_paths,
+    register_local_paths,
 )
 
 

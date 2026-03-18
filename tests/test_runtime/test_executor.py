@@ -1,7 +1,6 @@
 """Tests for the plan executor — gate semantics, dependency skipping, dry run."""
-from __future__ import annotations
 
-import pytest
+from __future__ import annotations
 
 from nodeforge.plan.models import Plan, Step, StepKind, StepScope
 from nodeforge.runtime.executor import Executor, StepResult
@@ -21,11 +20,23 @@ def _make_plan(steps: list[Step]) -> Plan:
     )
 
 
-def _step(id, kind=StepKind.SSH_COMMAND, scope=StepScope.REMOTE, gate=False,
-          depends_on=None, command="echo ok") -> Step:
+def _step(
+    id,
+    kind=StepKind.SSH_COMMAND,
+    scope=StepScope.REMOTE,
+    gate=False,
+    depends_on=None,
+    command="echo ok",
+) -> Step:
     return Step(
-        id=id, index=0, description=id, scope=scope, kind=kind,
-        command=command, gate=gate, depends_on=depends_on or [],
+        id=id,
+        index=0,
+        description=id,
+        scope=scope,
+        kind=kind,
+        command=command,
+        gate=gate,
+        depends_on=depends_on or [],
     )
 
 
@@ -46,7 +57,9 @@ def test_dry_run_all_steps_succeed(mock_ssh_session):
 
 def test_gate_failure_aborts_plan(mock_ssh_session, mocker):
     """When a gate step fails, subsequent steps must be skipped."""
-    mock_ssh_session.run.return_value = mocker.MagicMock(ok=False, stdout="", stderr="timeout", return_code=1)
+    mock_ssh_session.run.return_value = mocker.MagicMock(
+        ok=False, stdout="", stderr="timeout", return_code=1
+    )
 
     gate_step = _step("gate", kind=StepKind.GATE, gate=True, command="ssh_check:1.2.3.4:2222:admin")
     after_gate = _step("after_gate", depends_on=[0])
@@ -72,12 +85,17 @@ def test_gate_failure_aborts_plan(mock_ssh_session, mocker):
 def test_dependency_failure_skips_dependent(mock_ssh_session, mocker):
     """If step A fails, step B with depends_on=[A] should be skipped."""
     from nodeforge.runtime.ssh import CommandResult
-    mock_ssh_session.run.return_value = CommandResult(ok=False, stdout="", stderr="err", return_code=1)
 
-    step_a = _step("step_a")
-    step_b = _step("step_b", depends_on=[0])  # depends on step_a (index 0)
+    # Step 0 succeeds (preflight), step 1 fails, step 2 depends on step 1 → skipped
+    ok = CommandResult(ok=True, stdout="ok", stderr="", return_code=0)
+    fail = CommandResult(ok=False, stdout="", stderr="err", return_code=1)
+    mock_ssh_session.run.side_effect = [ok, fail]
 
-    p = _make_plan([step_a, step_b])
+    preflight = _step("preflight")  # index 0 — succeeds
+    step_a = _step("step_a")  # index 1 — fails
+    step_b = _step("step_b", depends_on=[1])  # depends on step_a (index 1)
+
+    p = _make_plan([preflight, step_a, step_b])
     executor = Executor(plan=p, ssh_session=mock_ssh_session)
     result = executor.apply(dry_run=False)
 
@@ -88,17 +106,27 @@ def test_dependency_failure_skips_dependent(mock_ssh_session, mocker):
 def test_local_step_failure_gives_warning_status(mock_ssh_session):
     """If a LOCAL step fails, status should be success_with_local_warnings (not failed)."""
     remote_step = _step("remote", scope=StepScope.REMOTE)
-    local_step = _step("local", scope=StepScope.LOCAL, kind=StepKind.LOCAL_COMMAND, command="fail_command")
+    local_step = _step(
+        "local",
+        scope=StepScope.LOCAL,
+        kind=StepKind.LOCAL_COMMAND,
+        command="fail_command",
+    )
 
     p = _make_plan([remote_step, local_step])
 
     executor = Executor(plan=p, ssh_session=mock_ssh_session)
     # Make local command raise an exception
-    original = executor._execute_local_command
 
     def fail_local(step):
-        from nodeforge.runtime.executor import StepResult
-        return StepResult(step_index=step.index, step_id=step.id, scope="local", status="failed", error="local fail")
+
+        return StepResult(
+            step_index=step.index,
+            step_id=step.id,
+            scope="local",
+            status="failed",
+            error="local fail",
+        )
 
     executor._execute_local_command = fail_local
     result = executor.apply(dry_run=False)

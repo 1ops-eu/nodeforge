@@ -1,5 +1,5 @@
 .PHONY: help venv install dev test test-local test-all lint fmt \
-        validate-example plan-example docs-example \
+        validate-example plan-example docs-example smoke \
         build-binary build-docker test-goss clean
 
 VENV      := .venv
@@ -30,9 +30,10 @@ help:
 	@echo "    make fmt             Auto-format with black"
 	@echo ""
 	@echo "  Smoke tests (no remote host needed)"
-	@echo "    make validate-example"
-	@echo "    make plan-example"
-	@echo "    make docs-example"
+	@echo "    make validate-example   Validate all example specs"
+	@echo "    make plan-example       Plan all example specs"
+	@echo "    make docs-example       Generate docs for all example specs"
+	@echo "    make smoke              Run all smoke tests"
 	@echo ""
 	@echo "  Distribution"
 	@echo "    make build-binary    Build standalone CLI binary via PyInstaller"
@@ -92,14 +93,46 @@ fmt:
 # ── Smoke tests (no remote needed) ────────────────────────────────────────────
 
 validate-example:
-	nodeforge validate examples/bootstrap.yaml
+	@failed=0; \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	  name=$$(basename "$$spec"); \
+	  case "$$name" in \
+	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
+	    *) flags="" ;; \
+	  esac; \
+	  echo ">>> Validating $$spec"; \
+	  nodeforge validate "$$spec" $$flags || failed=1; \
+	done; \
+	[ "$$failed" -eq 0 ]
 
 plan-example:
-	nodeforge plan examples/bootstrap.yaml
+	@failed=0; \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	  name=$$(basename "$$spec"); \
+	  case "$$name" in \
+	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
+	    *) flags="" ;; \
+	  esac; \
+	  echo ">>> Planning $$spec"; \
+	  nodeforge plan "$$spec" $$flags || failed=1; \
+	done; \
+	[ "$$failed" -eq 0 ]
 
 docs-example:
-	nodeforge docs examples/bootstrap.yaml -o BOOTSTRAP.md
-	@echo "Docs written to BOOTSTRAP.md"
+	@failed=0; \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	  name=$$(basename "$$spec"); \
+	  case "$$name" in \
+	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
+	    *) flags="" ;; \
+	  esac; \
+	  echo ">>> Generating docs for $$spec"; \
+	  nodeforge docs "$$spec" $$flags || failed=1; \
+	done; \
+	[ "$$failed" -eq 0 ]
+
+smoke: validate-example plan-example docs-example
+	@echo "All smoke tests passed."
 
 # ── Distribution ──────────────────────────────────────────────────────────────
 

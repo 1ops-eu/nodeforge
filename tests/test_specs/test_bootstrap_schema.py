@@ -1,10 +1,9 @@
 """Tests for bootstrap YAML spec loading and validation."""
-from pathlib import Path
 
 import pytest
 
-from nodeforge.specs.loader import load_spec, SpecLoadError
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
+from nodeforge.specs.loader import SpecLoadError, load_spec
 
 
 def test_load_valid_bootstrap(bootstrap_yaml):
@@ -58,9 +57,7 @@ def test_missing_env_var_raises(tmp_path, monkeypatch):
     monkeypatch.delenv("MISSING_VAR", raising=False)
     f = tmp_path / "missing_env.yaml"
     f.write_text(
-        "kind: bootstrap\n"
-        "meta:\n  name: t\n"
-        "host:\n  name: n\n  address: ${MISSING_VAR}\n"
+        "kind: bootstrap\n" "meta:\n  name: t\n" "host:\n  name: n\n  address: ${MISSING_VAR}\n"
     )
     with pytest.raises(SpecLoadError, match="MISSING_VAR"):
         load_spec(f)

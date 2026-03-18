@@ -29,8 +29,8 @@ def _register_specs() -> None:
 
 
 def _register_normalizers() -> None:
-    from nodeforge.registry.normalizers import register_normalizer
     from nodeforge.compiler.normalizer import _normalize_bootstrap, _normalize_service
+    from nodeforge.registry.normalizers import register_normalizer
 
     register_normalizer("bootstrap", _normalize_bootstrap)
     register_normalizer("service", _normalize_service)
@@ -45,41 +45,35 @@ def _register_validators() -> None:
 
 
 def _register_planners() -> None:
-    from nodeforge.registry.planners import register_planner
     from nodeforge.compiler.planner import _plan_bootstrap, _plan_service
+    from nodeforge.registry.planners import register_planner
 
     register_planner("bootstrap", _plan_bootstrap)
     register_planner("service", _plan_service)
 
 
 def _register_step_handlers() -> None:
-    from nodeforge.registry.executors import register_step_handler
     from nodeforge.plan.models import StepKind
+    from nodeforge.registry.executors import register_step_handler
 
     # Wrap Executor instance methods: handler(executor, step) -> StepResult.
     # The executor's private _execute_* methods are left entirely unchanged.
     register_step_handler(StepKind.GATE, lambda ex, step: ex._execute_gate(step))
-    register_step_handler(
-        StepKind.SSH_COMMAND, lambda ex, step: ex._execute_ssh_command(step)
-    )
-    register_step_handler(
-        StepKind.SSH_UPLOAD, lambda ex, step: ex._execute_ssh_upload(step)
-    )
+    register_step_handler(StepKind.SSH_COMMAND, lambda ex, step: ex._execute_ssh_command(step))
+    register_step_handler(StepKind.SSH_UPLOAD, lambda ex, step: ex._execute_ssh_upload(step))
     register_step_handler(
         StepKind.LOCAL_FILE_WRITE, lambda ex, step: ex._execute_local_file_write(step)
     )
     register_step_handler(
         StepKind.LOCAL_DB_WRITE, lambda ex, step: ex._execute_local_db_write(step)
     )
-    register_step_handler(
-        StepKind.LOCAL_COMMAND, lambda ex, step: ex._execute_local_command(step)
-    )
+    register_step_handler(StepKind.LOCAL_COMMAND, lambda ex, step: ex._execute_local_command(step))
     register_step_handler(StepKind.VERIFY, lambda ex, step: ex._execute_verify(step))
 
 
 def _register_hooks() -> None:
-    from nodeforge.registry.hooks import register_kind_hooks, KindHooks
     from nodeforge.local.inventory import record_bootstrap, record_service_apply
+    from nodeforge.registry.hooks import KindHooks, register_kind_hooks
 
     register_kind_hooks(
         "bootstrap",
@@ -103,6 +97,7 @@ def _register_resolvers() -> None:
     """Register the built-in value resolvers: 'env' and 'file'."""
     import os
     from pathlib import Path
+
     from nodeforge.registry.resolvers import register_resolver
 
     def _resolve_env(key: str) -> str | None:

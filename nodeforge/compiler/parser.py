@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
 
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
-from nodeforge.specs.service_schema import ServiceSpec
 from nodeforge.specs.loader import load_spec
+from nodeforge.specs.service_schema import ServiceSpec
 
-AnySpec = Union[BootstrapSpec, ServiceSpec]
+AnySpec = BootstrapSpec | ServiceSpec
 
 
 def parse(

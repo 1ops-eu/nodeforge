@@ -1,8 +1,9 @@
 """Tests for Markdown docs rendering."""
-from nodeforge.specs.loader import load_spec
+
 from nodeforge.compiler.normalizer import normalize
 from nodeforge.compiler.planner import plan
 from nodeforge.plan.render_markdown import render_markdown
+from nodeforge.specs.loader import load_spec
 
 
 def test_render_markdown_has_required_sections(bootstrap_yaml):

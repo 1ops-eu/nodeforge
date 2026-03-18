@@ -2,42 +2,54 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MetaBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     description: str = ""
 
 
 class HostBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     address: str
     os_family: str = "debian"
 
 
 class LoginBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     user: str = "root"
     private_key: str = "~/.ssh/id_ed25519"
-    password: Optional[str] = None
+    password: str | None = None
     port: int = 22
 
 
 class AdminUserBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = "admin"
     groups: list[str] = Field(default_factory=lambda: ["sudo"])
     pubkeys: list[str] = Field(default_factory=list)
 
 
 class SSHBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     port: int = 2222
     disable_root_login: bool = True
     disable_password_auth: bool = False
 
 
 class FirewallBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     provider: str = "ufw"
     ssh_only: bool = True
     registered_peers_only: bool = False
@@ -49,6 +61,8 @@ class FirewallBlock(BaseModel):
 
 
 class WireGuardBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = False
     interface: str = "wg0"
     address: str = ""  # server VPN interface CIDR, e.g. 10.10.0.1/24
@@ -59,31 +73,45 @@ class WireGuardBlock(BaseModel):
 
 
 class SSHConfigBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = True
     host_alias: str = ""
     config_path: str = "~/.ssh/config"
+    preserve_legacy_entry: bool = False  # keep any pre-existing Host entry in main config
 
 
 class InventoryBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool = True
     db_path: str = "~/.nodeforge/inventory.db"
 
 
 class LocalBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     state_dir: str = ""
     ssh_config: SSHConfigBlock = Field(default_factory=SSHConfigBlock)
     inventory: InventoryBlock = Field(default_factory=InventoryBlock)
 
 
 class CheckBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     type: str
     port: int | None = None
     user: str | None = None
     interface: str | None = None
     host: str | None = None
+    name: str | None = None  # container name for container_running checks
+    url: str | None = None  # URL for http checks
+    expect_status: int | None = None  # expected HTTP status code
 
 
 class BootstrapSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     kind: Literal["bootstrap"]
     meta: MetaBlock
     host: HostBlock

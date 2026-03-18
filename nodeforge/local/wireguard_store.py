@@ -23,7 +23,7 @@ commercial clones can use a deeper nested structure without touching this file:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from nodeforge.utils.files import ensure_dir
@@ -112,7 +112,7 @@ def save_wireguard_state(
     metadata = {
         "host_name": host_name,
         "spec_name": spec_name,
-        "deployed_at": datetime.now(timezone.utc).isoformat(),
+        "deployed_at": datetime.now(UTC).isoformat(),
         "interface": interface,
         "address": address,
         "endpoint": endpoint,

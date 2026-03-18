@@ -1,8 +1,8 @@
 """Local SSH key management — ensure admin key pairs exist before applying."""
+
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 
 from nodeforge.utils.files import expand_path
 
@@ -38,11 +38,8 @@ def ensure_admin_keys(spec, console=None) -> None:
             )
         except subprocess.CalledProcessError as e:
             raise RuntimeError(
-                f"Failed to generate SSH key pair at {priv_path}: "
-                f"{e.stderr.decode().strip()}"
+                f"Failed to generate SSH key pair at {priv_path}: " f"{e.stderr.decode().strip()}"
             ) from e
 
         if console:
-            console.print(
-                f"[green]✓ Generated SSH key pair:[/green] {priv_path}"
-            )
+            console.print(f"[green]✓ Generated SSH key pair:[/green] {priv_path}")

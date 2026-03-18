@@ -1,4 +1,5 @@
 """PostgreSQL installation and configuration commands."""
+
 from __future__ import annotations
 
 
@@ -10,7 +11,6 @@ def install_postgres(version: str) -> str:
 
 
 def configure_listen(addresses: list[str]) -> str:
-    listen_str = ", ".join(f"'{a}'" for a in addresses)
     addr_value = ", ".join(addresses)
     return (
         f"sed -i \"s/^#\\?listen_addresses.*/listen_addresses = '{addr_value}'/\" "

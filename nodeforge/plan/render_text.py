@@ -1,4 +1,5 @@
 """Rich console output for the 'nodeforge plan' command."""
+
 from __future__ import annotations
 
 from rich.console import Console
@@ -7,7 +8,6 @@ from rich.table import Table
 from rich.text import Text
 
 from nodeforge.plan.models import Plan, StepKind, StepScope
-
 
 _SCOPE_COLORS = {
     StepScope.REMOTE: "cyan",
@@ -40,7 +40,9 @@ def render_plan(plan: Plan, console: Console | None = None) -> None:
         f"[green]{len(plan.local_steps())} local[/green])",
         f"[bold]Hash:[/bold]   {plan.plan_hash[:16]}…",
     ]
-    console.print(Panel("\n".join(summary_lines), title="nodeforge plan", border_style="bright_blue"))
+    console.print(
+        Panel("\n".join(summary_lines), title="nodeforge plan", border_style="bright_blue")
+    )
 
     # Steps table
     table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
@@ -58,7 +60,9 @@ def render_plan(plan: Plan, console: Console | None = None) -> None:
         kind_label = _KIND_LABELS.get(step.kind, step.kind)
 
         gate_text = Text("YES", style="bold yellow") if step.gate else Text("")
-        depends_text = Text(", ".join(str(d) for d in step.depends_on)) if step.depends_on else Text("")
+        depends_text = (
+            Text(", ".join(str(d) for d in step.depends_on)) if step.depends_on else Text("")
+        )
 
         desc = step.description
         if step.gate:

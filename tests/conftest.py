@@ -1,10 +1,19 @@
 """Shared pytest fixtures."""
+
 from __future__ import annotations
 
 import textwrap
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _load_nodeforge_addons():
+    """Ensure all built-in registries (step handlers, etc.) are loaded for tests."""
+    from nodeforge.registry import load_addons
+
+    load_addons()
 
 
 @pytest.fixture
@@ -86,5 +95,6 @@ def mock_ssh_session(mocker):
     session = mocker.MagicMock()
     session.test_connection.return_value = True
     from nodeforge.runtime.ssh import CommandResult
+
     session.run.return_value = CommandResult(ok=True, stdout="ok", stderr="", return_code=0)
     return session

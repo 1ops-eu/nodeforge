@@ -9,8 +9,7 @@ CRITICAL INVARIANT (SSH lockout prevention):
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Union
+from datetime import UTC, datetime
 
 from nodeforge.compiler.normalizer import NormalizedContext
 from nodeforge.plan.models import Plan, Step, StepKind, StepScope
@@ -18,12 +17,12 @@ from nodeforge.specs.bootstrap_schema import BootstrapSpec
 from nodeforge.specs.service_schema import ServiceSpec
 from nodeforge.utils.hashing import sha256_string
 
-AnySpec = Union[BootstrapSpec, ServiceSpec]
+AnySpec = BootstrapSpec | ServiceSpec
 
 
 def plan(ctx: NormalizedContext) -> Plan:
     """Convert a NormalizedContext into an executable Plan."""
-    from nodeforge.registry import load_addons, get_planner
+    from nodeforge.registry import get_planner, load_addons
 
     load_addons()
 
@@ -45,7 +44,7 @@ def plan(ctx: NormalizedContext) -> Plan:
         spec_hash=spec_hash,
         plan_hash="",
         steps=steps,
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
     )
     plan_obj.plan_hash = sha256_string("".join(s.id + (s.command or "") for s in steps))
     return plan_obj
@@ -108,7 +107,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             f"Verify root SSH access to {spec.host.address}:{spec.login.port}",
             R,
             StepKind.VERIFY,
-            command=f"echo 'preflight ok'",
+            command="echo 'preflight ok'",
             rollback_hint="Check SSH credentials and network connectivity.",
             tags=["preflight"],
         )
@@ -194,9 +193,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
                 f"Install SSH authorized keys for {spec.admin_user.name}",
                 R,
                 StepKind.SSH_COMMAND,
-                command=bs.install_authorized_keys(
-                    spec.admin_user.name, pubkey_content
-                ),
+                command=bs.install_authorized_keys(spec.admin_user.name, pubkey_content),
                 sudo=True,
                 tags=["ssh", "keys"],
             )
@@ -205,7 +202,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         steps.append(
             _s(
                 "install_authorized_keys",
-                f"No pubkeys configured — skipping authorized_keys install",
+                "No pubkeys configured — skipping authorized_keys install",
                 R,
                 StepKind.VERIFY,
                 command="echo 'no pubkeys configured'",
@@ -232,7 +229,6 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
     # This is the critical safety gate: if admin key login doesn't work yet,
     # we must NOT change the SSH port — the server would become unrecoverable.
     if pubkey_content:
-        idx_pre_gate = len(steps)
         steps.append(
             _s(
                 "verify_admin_login_before_port_change",
@@ -309,7 +305,6 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
     # 9: GATE — verify admin login on new port
     # This is the SSH lockout prevention gate.
     # Steps that disable root login and password auth MUST depend on this index.
-    idx_before_gate = len(steps)
     steps.append(
         _s(
             "verify_admin_login_on_new_port",
@@ -319,8 +314,8 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             command=f"ssh_check:{spec.host.address}:{spec.ssh.port}:{spec.admin_user.name}",
             rollback_hint=(
                 "Admin login failed. Do NOT disable root login or password auth. "
-                f"Restore sshd_config: cp /etc/ssh/sshd_config.bak /etc/ssh/sshd_config && "
-                f"systemctl reload ssh"
+                "Restore sshd_config: cp /etc/ssh/sshd_config.bak /etc/ssh/sshd_config && "
+                "systemctl reload ssh"
             ),
             gate=True,
             tags=["gate", "ssh", "lockout-prevention"],
@@ -403,9 +398,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         import ipaddress as _ip
 
         wg_port = (
-            int(spec.wireguard.endpoint.split(":")[-1])
-            if ":" in spec.wireguard.endpoint
-            else 51820
+            int(spec.wireguard.endpoint.split(":")[-1]) if ":" in spec.wireguard.endpoint else 51820
         )
         # VPN subnet derived from the server's interface address (e.g. 10.10.0.0/24)
         vpn_subnet = str(_ip.ip_interface(spec.wireguard.address).network)
@@ -579,7 +572,6 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
     # ------------------------------------------------------------------ #
     # LOCAL: only after remote success
     # ------------------------------------------------------------------ #
-    remote_indices = list(range(len(steps)))  # all remote steps must succeed
 
     # SSH conf.d entry — only when local.ssh_config.enabled (default: true)
     if spec.local.ssh_config.enabled:
@@ -668,9 +660,10 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
 
 
 def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
-    from nodeforge.runtime.steps import postgres as pg
-    from nodeforge.runtime.steps import docker as dk
     from nodeforge.runtime.steps import container as ct
+    from nodeforge.runtime.steps import docker as dk
+    from nodeforge.runtime.steps import nginx as nx
+    from nodeforge.runtime.steps import postgres as pg
 
     steps: list[Step] = []
     R = StepScope.REMOTE
@@ -716,7 +709,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
         steps.append(
             _s(
                 "configure_postgres_listen",
-                f"Configure PostgreSQL listen_addresses",
+                "Configure PostgreSQL listen_addresses",
                 R,
                 StepKind.SSH_COMMAND,
                 command=pg.configure_listen(spec.postgres.listen_addresses),
@@ -773,6 +766,76 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 StepKind.VERIFY,
                 command="pg_isready",
                 tags=["postgres", "verify"],
+            )
+        )
+
+    # Nginx
+    if spec.nginx and spec.nginx.enabled:
+        steps.append(
+            _s(
+                "install_nginx",
+                "Install nginx",
+                R,
+                StepKind.SSH_COMMAND,
+                command=nx.install_nginx(),
+                sudo=True,
+                tags=["nginx"],
+            )
+        )
+        steps.append(
+            _s(
+                "enable_nginx",
+                "Enable and start nginx service",
+                R,
+                StepKind.SSH_COMMAND,
+                command=nx.enable_nginx(),
+                sudo=True,
+                tags=["nginx"],
+            )
+        )
+        steps.append(
+            _s(
+                "remove_nginx_default_site",
+                "Remove default nginx site",
+                R,
+                StepKind.SSH_COMMAND,
+                command=nx.remove_default_site(),
+                sudo=True,
+                tags=["nginx"],
+            )
+        )
+        for site in spec.nginx.sites:
+            safe_name = site.domain.replace(".", "_")
+            steps.append(
+                _s(
+                    f"write_nginx_site_{safe_name}",
+                    f"Write nginx site config for {site.domain}",
+                    R,
+                    StepKind.SSH_COMMAND,
+                    command=nx.write_site_config(site),
+                    sudo=True,
+                    tags=["nginx", site.domain],
+                )
+            )
+        steps.append(
+            _s(
+                "reload_nginx",
+                "Validate config and reload nginx",
+                R,
+                StepKind.SSH_COMMAND,
+                command=nx.reload_nginx(),
+                sudo=True,
+                tags=["nginx"],
+            )
+        )
+        steps.append(
+            _s(
+                "nginx_config_check",
+                "Verify nginx configuration is valid",
+                V,
+                StepKind.VERIFY,
+                command="nginx -t",
+                tags=["nginx", "verify"],
             )
         )
 

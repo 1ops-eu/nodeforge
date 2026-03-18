@@ -1,7 +1,7 @@
 """CLI tests for the validate command."""
-from pathlib import Path
-import pytest
+
 from typer.testing import CliRunner
+
 from nodeforge.cli import app
 
 runner = CliRunner()

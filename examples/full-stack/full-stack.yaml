@@ -1,0 +1,66 @@
+kind: service
+
+meta:
+  name: full-stack-production
+  description: Full production stack with PostgreSQL, Docker app container, and nginx reverse proxy
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: deploy
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+postgres:
+  enabled: true
+  version: "16"
+  listen_addresses:
+    - 127.0.0.1
+  create_role:
+    name: appuser
+    password_env: APP_DB_PASSWORD
+  create_database:
+    name: appdb
+    owner: appuser
+
+docker:
+  enabled: true
+
+containers:
+  - name: webapp
+    image: ghcr.io/acme/webapp:latest
+    ports:
+      - "8080:8080"
+    env:
+      DATABASE_URL: postgresql://appuser@localhost:5432/appdb
+      APP_ENV: production
+    restart: unless-stopped
+    healthcheck:
+      type: http
+      url: http://localhost:8080/health
+      expect_status: 200
+
+nginx:
+  enabled: true
+  sites:
+    - domain: app.example.com
+      upstream_port: 8080
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+
+checks:
+  - type: postgres_ready
+
+  - type: container_running
+    name: webapp
+
+  - type: http
+    url: http://localhost:8080/health
+
+  - type: nginx_ready

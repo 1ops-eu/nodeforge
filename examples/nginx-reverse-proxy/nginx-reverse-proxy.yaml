@@ -1,0 +1,29 @@
+kind: service
+
+meta:
+  name: nginx-proxy
+  description: Install nginx as a reverse proxy for a backend application
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: deploy
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+nginx:
+  enabled: true
+  sites:
+    - domain: app.example.com
+      upstream_port: 8080
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+
+checks:
+  - type: nginx_ready

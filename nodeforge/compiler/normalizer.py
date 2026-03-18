@@ -6,13 +6,12 @@ import base64
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union
 
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
 from nodeforge.specs.service_schema import ServiceSpec
 from nodeforge.utils.files import expand_path, resolve_path
 
-AnySpec = Union[BootstrapSpec, ServiceSpec]
+AnySpec = BootstrapSpec | ServiceSpec
 
 
 @dataclass
@@ -28,14 +27,10 @@ class NormalizedContext:
     pubkey_contents: list[str] = field(default_factory=list)
     wireguard_private_key: str = ""
     wireguard_public_key: str = ""  # derived via PyNaCl from server private key
-    wireguard_conf_content: str = (
-        ""  # server config; populated by planner, used by executor
-    )
+    wireguard_conf_content: str = ""  # server config; populated by planner, used by executor
     wg_client_private_key: str = ""  # auto-generated client Curve25519 private key
     wg_client_public_key: str = ""  # derived via PyNaCl from client private key
-    wg_client_conf_content: str = (
-        ""  # client wg-quick config; populated by planner, saved locally
-    )
+    wg_client_conf_content: str = ""  # client wg-quick config; populated by planner, saved locally
     ssh_conf_d_path: Path | None = None
     db_path: Path | None = None
     login_key_path: Path | None = None
@@ -52,7 +47,7 @@ def normalize(spec, spec_dir: Path | None = None) -> NormalizedContext:
             resolved against this directory first. Falls back to CWD if None.
     """
     # Ensure built-in and addon kinds are registered (idempotent).
-    from nodeforge.registry import load_addons, get_normalizer
+    from nodeforge.registry import get_normalizer, load_addons
 
     load_addons()
 
@@ -102,7 +97,7 @@ def _apply_state_dir(spec) -> None:
     When a state_dir is active, re-registers LocalPathsConfig so all
     downstream code (ssh_config, wireguard_store, etc.) picks it up.
     """
-    from nodeforge.registry.local_paths import register_local_paths, LocalPathsConfig
+    from nodeforge.registry.local_paths import LocalPathsConfig, register_local_paths
 
     env_state_dir = os.environ.get("NODEFORGE_STATE_DIR")
     spec_state_dir = spec.local.state_dir if spec.local.state_dir else None
@@ -139,9 +134,7 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
 
     # Resolve login private key path
     ctx.login_key_path = (
-        resolve_path(spec.login.private_key, spec_dir)
-        if spec.login.private_key
-        else None
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
     )
     ctx.login_password = spec.login.password or None
 
@@ -179,15 +172,10 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
     # executor's save_wireguard_state step writes it to disk.
     if spec.wireguard.enabled:
         from nodeforge.registry.local_paths import get_local_paths
-        from nodeforge.utils.files import ensure_dir
 
-        client_key_path = (
-            get_local_paths().wg_state_base / spec.host.name / "client.key"
-        )
+        client_key_path = get_local_paths().wg_state_base / spec.host.name / "client.key"
         if client_key_path.exists():
-            ctx.wg_client_private_key = client_key_path.read_text(
-                encoding="utf-8"
-            ).strip()
+            ctx.wg_client_private_key = client_key_path.read_text(encoding="utf-8").strip()
         else:
             ctx.wg_client_private_key = _generate_wg_private_key()
         ctx.wg_client_public_key = _derive_wg_public_key(ctx.wg_client_private_key)
@@ -214,9 +202,7 @@ def _normalize_service(spec: ServiceSpec, ctx: NormalizedContext) -> None:
 
     # Resolve login key
     ctx.login_key_path = (
-        resolve_path(spec.login.private_key, spec_dir)
-        if spec.login.private_key
-        else None
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
     )
     ctx.login_password = spec.login.password or None
 

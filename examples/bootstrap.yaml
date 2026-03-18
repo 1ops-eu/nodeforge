@@ -33,12 +33,10 @@ firewall:
 wireguard:
   enabled: true
   interface: wg0
-  address: 10.10.0.2/24
+  address: 10.10.0.1/24
   private_key_file: .secrets/wg.key
-  server_public_key: ABC123DEF456
   endpoint: vpn.example.com:51820
-  allowed_ips:
-    - 10.10.0.0/24
+  peer_address: 10.10.0.2/32
   persistent_keepalive: 25
 
 local:

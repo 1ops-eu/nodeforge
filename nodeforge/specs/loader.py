@@ -30,7 +30,7 @@ def load_env_file(path: Path) -> dict[str, str]:
     """
     env: dict[str, str] = {}
     text = path.read_text(encoding="utf-8")
-    for lineno, raw_line in enumerate(text.splitlines(), 1):
+    for _lineno, raw_line in enumerate(text.splitlines(), 1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
@@ -151,9 +151,7 @@ def _resolve_values(obj: Any, *, strict: bool = True, _path: str = "") -> Any:
 _resolve_env_vars = _resolve_values
 
 
-def load_spec(
-    path: Path, *, strict_env: bool = True, env_file: Path | None = None
-) -> Any:
+def load_spec(path: Path, *, strict_env: bool = True, env_file: Path | None = None) -> Any:
     """Load and parse a YAML spec file into a typed model.
 
     Parameters
@@ -170,7 +168,7 @@ def load_spec(
         precedence).
     """
     # Ensure built-in and addon kinds are registered (idempotent).
-    from nodeforge.registry import load_addons, get_spec_model, list_spec_kinds
+    from nodeforge.registry import get_spec_model, list_spec_kinds, load_addons
 
     load_addons()
 
@@ -190,9 +188,7 @@ def load_spec(
         raise SpecLoadError(f"YAML parse error in {path}: {e}") from e
 
     if not isinstance(raw, dict):
-        raise SpecLoadError(
-            f"Spec file must be a YAML mapping, got {type(raw).__name__}"
-        )
+        raise SpecLoadError(f"Spec file must be a YAML mapping, got {type(raw).__name__}")
 
     kind = raw.get("kind")
     model_class = get_spec_model(kind)

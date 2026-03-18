@@ -1,9 +1,10 @@
 """Jinja2-based Markdown rendering for the 'nodeforge docs' command."""
+
 from __future__ import annotations
 
 from jinja2 import Environment
 
-from nodeforge.plan.models import Plan, StepKind, StepScope
+from nodeforge.plan.models import Plan, StepScope
 
 # ---------------------------------------------------------------------------
 # Templates stored as inline string constants — no external .j2 files needed.

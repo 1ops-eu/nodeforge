@@ -1,8 +1,7 @@
 """Tests for cross-field validation logic."""
 
-import pytest
-from nodeforge.specs.bootstrap_schema import BootstrapSpec, SSHBlock
-from nodeforge.specs.validators import validate_bootstrap, has_errors
+from nodeforge.specs.bootstrap_schema import BootstrapSpec
+from nodeforge.specs.validators import has_errors, validate_bootstrap
 
 
 def _make_spec(**overrides) -> BootstrapSpec:

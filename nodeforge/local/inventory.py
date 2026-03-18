@@ -1,8 +1,9 @@
 """High-level inventory operations built on InventoryDB."""
+
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,16 +14,15 @@ if TYPE_CHECKING:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def record_bootstrap(
-    db: "InventoryDB",
-    spec: "BootstrapSpec",
-    apply_result: "ApplyResult",
+    db: InventoryDB,
+    spec: BootstrapSpec,
+    apply_result: ApplyResult,
 ) -> None:
     """After a successful bootstrap apply, record server + run in inventory."""
-    from nodeforge.plan.models import StepKind
 
     status = apply_result.status
     finished = apply_result.finished_at
@@ -62,9 +62,9 @@ def record_bootstrap(
 
 
 def record_service_apply(
-    db: "InventoryDB",
-    spec: "ServiceSpec",
-    apply_result: "ApplyResult",
+    db: InventoryDB,
+    spec: ServiceSpec,
+    apply_result: ApplyResult,
 ) -> None:
     """After a service apply, record services + run in inventory."""
     import json
@@ -79,6 +79,16 @@ def record_service_apply(
             service_name=f"postgresql-{spec.postgres.version}",
             status="active" if "success" in status else "failed",
             metadata_json=json.dumps({"version": spec.postgres.version}),
+        )
+
+    if spec.nginx and spec.nginx.enabled:
+        sites = [s.domain for s in spec.nginx.sites]
+        db.upsert_service(
+            server_id=server_id,
+            service_type="nginx",
+            service_name="nginx",
+            status="active" if "success" in status else "failed",
+            metadata_json=json.dumps({"sites": sites}),
         )
 
     if spec.docker and spec.docker.enabled:
@@ -110,7 +120,7 @@ def record_service_apply(
     )
 
 
-def show_server(db: "InventoryDB", server_id: str) -> dict | None:
+def show_server(db: InventoryDB, server_id: str) -> dict | None:
     """Return server record with its services."""
     server = db.get_server(server_id)
     if server is None:
@@ -119,6 +129,6 @@ def show_server(db: "InventoryDB", server_id: str) -> dict | None:
     return server
 
 
-def list_inventory(db: "InventoryDB") -> list[dict]:
+def list_inventory(db: InventoryDB) -> list[dict]:
     """Return all active server records."""
     return db.list_servers()

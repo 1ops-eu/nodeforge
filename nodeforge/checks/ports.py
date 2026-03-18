@@ -1,4 +1,5 @@
 """TCP port connectivity check."""
+
 from __future__ import annotations
 
 import socket
@@ -15,7 +16,7 @@ def check_port_open(host: str, port: int, timeout: int = 5) -> CheckResult:
                 check_type="port_open",
                 message=f"Port {host}:{port} is open",
             )
-    except (socket.timeout, ConnectionRefusedError, OSError) as e:
+    except (TimeoutError, ConnectionRefusedError, OSError) as e:
         return CheckResult(
             passed=False,
             check_type="port_open",

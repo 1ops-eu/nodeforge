@@ -3,9 +3,10 @@
 A normalizer callable has the signature:
     (spec: AnySpec, ctx: NormalizedContext) -> None
 """
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 _NORMALIZER_REGISTRY: dict[str, Callable] = {}
 

@@ -11,15 +11,17 @@ inventory list | show <server-id>
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+
+if TYPE_CHECKING:
+    from nodeforge.local.inventory_db import InventoryDB
 
 app = typer.Typer(
     name="nodeforge",
@@ -54,11 +56,11 @@ def _build_pipeline(
     env_file: Path | None = None,
 ):
     """Run Parse → Validate → (KeyGen) → Normalize → Plan. Returns (spec, ctx, plan, issues)."""
-    from nodeforge.compiler.parser import parse
     from nodeforge.compiler.normalizer import normalize
+    from nodeforge.compiler.parser import parse
     from nodeforge.compiler.planner import plan as make_plan
-    from nodeforge.specs.validators import validate_spec
     from nodeforge.registry import get_kind_hooks
+    from nodeforge.specs.validators import validate_spec
 
     spec = parse(spec_path, strict_env=strict_env, env_file=env_file)
     issues = validate_spec(spec)
@@ -83,9 +85,7 @@ def _print_issues(issues, stop_on_error: bool = True) -> None:
         console.print(f"  [{color}]{issue}[/{color}]")
 
     if stop_on_error and has_errors(issues):
-        console.print(
-            "\n[bold red]Validation errors found. Fix before applying.[/bold red]"
-        )
+        console.print("\n[bold red]Validation errors found. Fix before applying.[/bold red]")
         raise typer.Exit(1)
 
 
@@ -97,7 +97,7 @@ def _print_issues(issues, stop_on_error: bool = True) -> None:
 @app.command()
 def validate(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    env_file: Optional[Path] = typer.Option(
+    env_file: Path | None = typer.Option(
         None, "--env-file", help="Load environment variables from a .env file"
     ),
     passthrough: bool = typer.Option(
@@ -108,14 +108,14 @@ def validate(
 ) -> None:
     """Validate a YAML spec file against its schema."""
     from nodeforge.compiler.parser import parse
-    from nodeforge.specs.validators import validate_spec, has_errors
+    from nodeforge.specs.validators import has_errors, validate_spec
 
     console.print(f"[bold]Validating:[/bold] {spec}")
     try:
         parsed = parse(spec, strict_env=not passthrough, env_file=env_file)
     except Exception as e:
         console.print(f"[bold red]Parse error:[/bold red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     issues = validate_spec(parsed)
 
@@ -135,7 +135,7 @@ def validate(
 @app.command()
 def plan(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    env_file: Optional[Path] = typer.Option(
+    env_file: Path | None = typer.Option(
         None, "--env-file", help="Load environment variables from a .env file"
     ),
     passthrough: bool = typer.Option(
@@ -148,12 +148,10 @@ def plan(
     from nodeforge.plan.render_text import render_plan
 
     try:
-        _, _, p, issues = _build_pipeline(
-            spec, strict_env=not passthrough, env_file=env_file
-        )
+        _, _, p, issues = _build_pipeline(spec, strict_env=not passthrough, env_file=env_file)
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     if issues:
         console.print("[bold yellow]Validation warnings:[/bold yellow]")
@@ -170,13 +168,11 @@ def plan(
 @app.command()
 def docs(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(
         None, "--output", "-o", help="Output file (default: stdout)"
     ),
-    mode: str = typer.Option(
-        "guide", "--mode", "-m", help="Output mode: guide or commands"
-    ),
-    env_file: Optional[Path] = typer.Option(
+    mode: str = typer.Option("guide", "--mode", "-m", help="Output mode: guide or commands"),
+    env_file: Path | None = typer.Option(
         None, "--env-file", help="Load environment variables from a .env file"
     ),
     passthrough: bool = typer.Option(
@@ -189,12 +185,10 @@ def docs(
     from nodeforge.plan.render_markdown import render_markdown
 
     try:
-        _, _, p, issues = _build_pipeline(
-            spec, strict_env=not passthrough, env_file=env_file
-        )
+        _, _, p, issues = _build_pipeline(spec, strict_env=not passthrough, env_file=env_file)
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     if issues:
         _print_issues(issues, stop_on_error=True)
@@ -219,7 +213,7 @@ def apply(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be done without executing"
     ),
-    env_file: Optional[Path] = typer.Option(
+    env_file: Path | None = typer.Option(
         None, "--env-file", help="Load environment variables from a .env file"
     ),
     passthrough: bool = typer.Option(
@@ -229,11 +223,11 @@ def apply(
     ),
 ) -> None:
     """Apply a spec to provision infrastructure."""
-    from nodeforge.runtime.ssh import SSHSession
-    from nodeforge.runtime.executor import Executor
     from nodeforge.local.inventory_db import InventoryDB
     from nodeforge.logs.writer import write_log
     from nodeforge.registry import get_kind_hooks
+    from nodeforge.runtime.executor import Executor
+    from nodeforge.runtime.ssh import SSHSession
 
     try:
         parsed_spec, ctx, p, issues = _build_pipeline(
@@ -241,7 +235,7 @@ def apply(
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     if issues:
         _print_issues(issues, stop_on_error=True)
@@ -271,9 +265,7 @@ def apply(
 
         login = parsed_spec.login
         key_path = (
-            str(ctx.login_key_path)
-            if ctx.login_key_path and ctx.login_key_path.exists()
-            else None
+            str(ctx.login_key_path) if ctx.login_key_path and ctx.login_key_path.exists() else None
         )
 
         # For specs that declare ssh_port_fallback (e.g. bootstrap), if login.port is
@@ -281,9 +273,7 @@ def apply(
         # partial apply that already moved SSH to the new port.
         effective_port = login.port
         hooks = get_kind_hooks(parsed_spec.kind)
-        if hooks.ssh_port_fallback and not _tcp_reachable(
-            parsed_spec.host.address, login.port
-        ):
+        if hooks.ssh_port_fallback and not _tcp_reachable(parsed_spec.host.address, login.port):
             fallback_port = parsed_spec.ssh.port
             if fallback_port != login.port and _tcp_reachable(
                 parsed_spec.host.address, fallback_port
@@ -356,9 +346,7 @@ def apply(
         "failed": "red",
     }.get(result.status, "white")
 
-    console.print(
-        f"\n[bold {status_color}]Status: {result.status}[/bold {status_color}]"
-    )
+    console.print(f"\n[bold {status_color}]Status: {result.status}[/bold {status_color}]")
 
     if result.status == "failed":
         raise typer.Exit(1)
@@ -406,9 +394,7 @@ def inspect_run(
 
     for step in data.get("steps", []):
         status = step["status"]
-        color = {"success": "green", "failed": "red", "skipped": "dim"}.get(
-            status, "white"
-        )
+        color = {"success": "green", "failed": "red", "skipped": "dim"}.get(status, "white")
         table.add_row(
             str(step["index"]),
             step["id"],
@@ -425,15 +411,13 @@ def inspect_run(
 # ------------------------------------------------------------------ #
 
 
-def _get_db() -> "InventoryDB":
+def _get_db() -> InventoryDB:
     from nodeforge.local.inventory_db import InventoryDB
     from nodeforge.registry.local_paths import get_local_paths
 
     # Explicit NODEFORGE_DB_PATH takes priority (backward compat),
     # then fall back to get_local_paths() which respects NODEFORGE_STATE_DIR.
-    db_path = os.environ.get("NODEFORGE_DB_PATH") or str(
-        get_local_paths().inventory_db_path
-    )
+    db_path = os.environ.get("NODEFORGE_DB_PATH") or str(get_local_paths().inventory_db_path)
     db = InventoryDB(db_path=db_path)
     db.open()
     return db
@@ -462,9 +446,7 @@ def inventory_list() -> None:
     for s in servers:
         ssh_info = f"{s.get('ssh_user', '')}@{s.get('ssh_alias', s.get('name', ''))}:{s.get('ssh_port', '')}"
         wg = "yes" if s.get("wireguard_enabled") else "no"
-        status_color = (
-            "green" if s.get("bootstrap_status") == "bootstrapped" else "yellow"
-        )
+        status_color = "green" if s.get("bootstrap_status") == "bootstrapped" else "yellow"
         table.add_row(
             s.get("name", ""),
             s.get("address", ""),

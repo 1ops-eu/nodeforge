@@ -21,7 +21,7 @@ module never needs to be modified.
 from __future__ import annotations
 
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -97,7 +97,7 @@ def backup_ssh_config(config_path: Path) -> Path | None:
     config = config_path.expanduser()
     if not config.exists():
         return None
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     backup = config.parent / f"config.{ts}.bak"
     shutil.copy2(config, backup)
     backup.chmod(0o600)

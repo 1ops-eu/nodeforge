@@ -1,12 +1,11 @@
 """Tests for WireGuard local state storage."""
 
 import json
+
 import pytest
-from pathlib import Path
 
 from nodeforge.local.wireguard_store import save_wireguard_state
 from nodeforge.registry.local_paths import LocalPathsConfig, register_local_paths
-
 
 # Known WireGuard test key pair (Curve25519, base64)
 _SERVER_PRIVATE_KEY = "8IReoXMQH73MyHqq0PKq7jl1md08E5Cd4wfQf31qXHw="

@@ -7,19 +7,17 @@ requiring pydantic (they operate on raw dicts/strings).
 
 from __future__ import annotations
 
-import os
 import textwrap
 
 import pytest
 
 from nodeforge.specs.loader import (
+    SpecLoadError,
     _resolve_env_vars,
     _resolve_values,
     load_env_file,
     load_spec,
-    SpecLoadError,
 )
-
 
 # ------------------------------------------------------------------ #
 # _resolve_env_vars — strict mode (default)
@@ -204,8 +202,7 @@ class TestLoadSpecEnvFile:
         env_f.write_text("MY_ADDR=10.0.0.99\n")
 
         spec_f = tmp_path / "spec.yaml"
-        spec_f.write_text(
-            textwrap.dedent("""\
+        spec_f.write_text(textwrap.dedent("""\
             kind: service
             meta:
               name: test-svc
@@ -222,8 +219,7 @@ class TestLoadSpecEnvFile:
               inventory:
                 enabled: false
             checks: []
-        """)
-        )
+        """))
 
         # Ensure the var is NOT in the process env
         monkeypatch.delenv("MY_ADDR", raising=False)
@@ -239,8 +235,7 @@ class TestLoadSpecEnvFile:
         monkeypatch.setenv("MY_ADDR", "from-env")
 
         spec_f = tmp_path / "spec.yaml"
-        spec_f.write_text(
-            textwrap.dedent("""\
+        spec_f.write_text(textwrap.dedent("""\
             kind: service
             meta:
               name: test-svc
@@ -257,8 +252,7 @@ class TestLoadSpecEnvFile:
               inventory:
                 enabled: false
             checks: []
-        """)
-        )
+        """))
 
         spec = load_spec(spec_f, env_file=env_f)
         assert spec.host.address == "from-env"
@@ -274,8 +268,7 @@ class TestLoadSpecEnvFile:
         monkeypatch.delenv("UNSET_VAR", raising=False)
 
         spec_f = tmp_path / "spec.yaml"
-        spec_f.write_text(
-            textwrap.dedent("""\
+        spec_f.write_text(textwrap.dedent("""\
             kind: service
             meta:
               name: test-svc
@@ -292,8 +285,7 @@ class TestLoadSpecEnvFile:
               inventory:
                 enabled: false
             checks: []
-        """)
-        )
+        """))
 
         # Passthrough mode should NOT raise during env var resolution
         spec = load_spec(spec_f, strict_env=False)

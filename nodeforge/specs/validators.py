@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Literal, Union
+from dataclasses import dataclass
+from typing import Literal
 
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
 from nodeforge.specs.service_schema import ServiceSpec
 
-AnySpec = Union[BootstrapSpec, ServiceSpec]
+AnySpec = BootstrapSpec | ServiceSpec
 
 
 @dataclass
@@ -134,21 +134,56 @@ def validate_service(spec: ServiceSpec) -> list[ValidationIssue]:
             )
         )
 
+    # Nginx validations
+    if spec.nginx and spec.nginx.enabled:
+        if not spec.nginx.sites:
+            issues.append(
+                ValidationIssue(
+                    "warning",
+                    "nginx.sites",
+                    "nginx.enabled=true but no sites defined",
+                )
+            )
+        for i, site in enumerate(spec.nginx.sites):
+            if not site.domain:
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        f"nginx.sites[{i}].domain",
+                        "Each nginx site requires a domain",
+                    )
+                )
+            if site.ssl and (not site.ssl_certificate or not site.ssl_certificate_key):
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        f"nginx.sites[{i}].ssl",
+                        f"Site '{site.domain}' has ssl=true but missing "
+                        "ssl_certificate or ssl_certificate_key",
+                    )
+                )
+            if not (1 <= site.listen_port <= 65535):
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        f"nginx.sites[{i}].listen_port",
+                        f"Port {site.listen_port} is out of valid range 1-65535",
+                    )
+                )
+
     return issues
 
 
 def validate_spec(spec) -> list[ValidationIssue]:
     # Ensure built-in and addon kinds are registered (idempotent).
-    from nodeforge.registry import load_addons, get_validator
+    from nodeforge.registry import get_validator, load_addons
 
     load_addons()
 
     validator = get_validator(spec.kind)
     if validator is None:
         return [
-            ValidationIssue(
-                "error", "kind", f"No validator registered for spec kind '{spec.kind}'"
-            )
+            ValidationIssue("error", "kind", f"No validator registered for spec kind '{spec.kind}'")
         ]
     return validator(spec)
 

@@ -2,18 +2,18 @@
 
 from nodeforge.runtime.steps.bootstrap import (
     create_admin_user,
-    install_authorized_keys,
-    disable_root_login,
     disable_password_auth,
-    write_sshd_config_candidate,
+    disable_root_login,
     finalize_firewall,
+    install_authorized_keys,
     reload_sshd,
     restrict_ssh_to_wireguard,
+    write_sshd_config_candidate,
 )
 from nodeforge.runtime.steps.wireguard import (
-    generate_server_config,
-    generate_client_config,
     enable_wireguard,
+    generate_client_config,
+    generate_server_config,
 )
 
 

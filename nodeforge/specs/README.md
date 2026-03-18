@@ -101,6 +101,7 @@ After YAML parsing and env var resolution, the `kind` field is looked up in `SPE
 | `host` | `HostBlock` | Target hostname and address |
 | `login` | `ServiceLoginBlock` | Admin login (defaults to port 2222) |
 | `postgres` | `PostgresBlock` | PostgreSQL version, listen addresses, role/db creation |
+| `nginx` | `NginxBlock` | Nginx reverse proxy: enabled flag, site definitions |
 | `docker` | `DockerBlock` | Docker enabled flag |
 | `containers` | `list[ContainerBlock]` | Container definitions with image, ports, env, healthcheck |
 | `local` | `ServiceLocalBlock` | state_dir, inventory settings |
@@ -126,6 +127,10 @@ Performs semantic validation beyond what Pydantic schema checks can enforce:
 - Postgres role without `password_env` warning
 - Container without image error
 - Containers defined but Docker not enabled warning
+- Nginx enabled with no sites warning
+- Nginx site without domain error
+- Nginx SSL without certificate paths error
+- Nginx site listen port range check
 
 Each issue is a `ValidationIssue` with severity (`error` or `warning`), field path, and message.
 

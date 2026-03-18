@@ -19,13 +19,21 @@ jobs:
           - os: ubuntu-latest
             artifact_name: nodeforge-linux-amd64
             binary_path: dist/nodeforge
-            # sqlcipher3 system dep: libsqlcipher-dev
             setup_cmd: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
 
-          - os: macos-latest
+          - os: ubuntu-24.04-arm
+            artifact_name: nodeforge-linux-arm64
+            binary_path: dist/nodeforge
+            setup_cmd: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
+
+          - os: macos-13
             artifact_name: nodeforge-macos-amd64
             binary_path: dist/nodeforge
-            # sqlcipher3 system dep: sqlcipher via homebrew
+            setup_cmd: brew install sqlcipher
+
+          - os: macos-latest
+            artifact_name: nodeforge-macos-arm64
+            binary_path: dist/nodeforge
             setup_cmd: brew install sqlcipher
 
     runs-on: ${{ matrix.os }}
@@ -39,7 +47,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install system dependencies (Linux / macOS)
+      - name: Install system dependencies
         if: matrix.setup_cmd != ''
         run: ${{ matrix.setup_cmd }}
         shell: bash

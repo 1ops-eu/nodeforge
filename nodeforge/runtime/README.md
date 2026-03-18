@@ -10,7 +10,7 @@ This package contains the SSH transport layer and the plan execution engine. It 
 |---|---|
 | `executor.py` | Plan execution engine: walks the step list, dispatches to registered handlers, enforces gates and dependencies, tracks results |
 | `ssh.py` | Fabric SSH session wrapper: command execution, file upload, connection testing |
-| `steps/` | Shell command builders for each domain (bootstrap, wireguard, postgres, docker, container) |
+| `steps/` | Shell command builders for each domain (bootstrap, wireguard, postgres, nginx, docker, container) |
 | `__init__.py` | Empty package marker |
 
 ---
@@ -74,6 +74,7 @@ Shell command builder modules that generate the exact commands executed on remot
 | `bootstrap.py` | Server hardening | `create_admin_user()`, `install_authorized_keys()`, `write_sshd_config_candidate()`, `disable_root_login()`, `disable_password_auth()`, `finalize_firewall()`, `restrict_ssh_to_wireguard()` |
 | `wireguard.py` | WireGuard VPN | `generate_server_config()`, `generate_client_config()`, `enable_wireguard()` |
 | `postgres.py` | PostgreSQL | `install_postgres()`, `configure_listen()`, `enable_postgres()`, `create_role()`, `create_database()` |
+| `nginx.py` | Nginx reverse proxy | `install_nginx()`, `enable_nginx()`, `reload_nginx()`, `remove_default_site()`, `write_site_config()`, `site_config_content()` |
 | `docker.py` | Docker | `install_docker()`, `enable_docker()` |
 | `container.py` | Docker containers | `pull_image()`, `stop_container()`, `remove_container()`, `run_container()` |
 

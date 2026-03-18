@@ -6,12 +6,12 @@ former SQLCipher implementation; the commercial edition can swap in encryption
 by replacing `import sqlite3` with `from sqlcipher3 import dbapi2 as sqlite3`
 and adding the two PRAGMA key/cipher_compatibility calls in open().
 """
+
 from __future__ import annotations
 
+import contextlib
 import sqlite3
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from nodeforge.local.ddl.bootstrap_tables import DOMAIN_TABLES
 from nodeforge.local.ddl.versionize_system import VERSIONIZE_SYSTEM_DDLS
@@ -40,14 +40,12 @@ class InventoryDB:
     def close(self) -> None:
         """Close the database connection."""
         if self._conn:
-            try:
+            with contextlib.suppress(Exception):
                 self._conn.close()
-            except Exception:
-                pass
             self._conn = None
             self._cursor = None
 
-    def __enter__(self) -> "InventoryDB":
+    def __enter__(self) -> InventoryDB:
         self.open()
         return self
 
@@ -136,29 +134,36 @@ class InventoryDB:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                id, name, address, os_family, bootstrap_status,
-                ssh_alias, ssh_host, ssh_user, ssh_port, ssh_identity_file,
+                id,
+                name,
+                address,
+                os_family,
+                bootstrap_status,
+                ssh_alias,
+                ssh_host,
+                ssh_user,
+                ssh_port,
+                ssh_identity_file,
                 1 if wireguard_enabled else 0,
-                wireguard_interface, wireguard_address,
+                wireguard_interface,
+                wireguard_address,
                 changed_by,
             ),
         )
         self._conn.commit()
 
     def get_server(self, server_id: str) -> dict | None:
-        result = self._conn.execute(
-            "SELECT * FROM vv_server WHERE id = ?", (server_id,)
-        )
+        result = self._conn.execute("SELECT * FROM vv_server WHERE id = ?", (server_id,))
         row = result.fetchone()
         if row is None:
             return None
         cols = [d[0] for d in result.description]
-        return dict(zip(cols, row))
+        return dict(zip(cols, row, strict=False))
 
     def list_servers(self) -> list[dict]:
         result = self._conn.execute("SELECT * FROM vv_server ORDER BY name")
         cols = [d[0] for d in result.description]
-        return [dict(zip(cols, row)) for row in result.fetchall()]
+        return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
 
     # ------------------------------------------------------------------ #
     # Service CRUD (via vv_server_service view)
@@ -189,7 +194,7 @@ class InventoryDB:
             "SELECT * FROM vv_server_service WHERE server_id = ?", (server_id,)
         )
         cols = [d[0] for d in result.description]
-        return [dict(zip(cols, row)) for row in result.fetchall()]
+        return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
 
     # ------------------------------------------------------------------ #
     # Run metadata (via vv_run view)
@@ -216,21 +221,27 @@ class InventoryDB:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                id, server_id, spec_hash, plan_hash, kind, status,
-                started_at, finished_at, metadata_json, changed_by,
+                id,
+                server_id,
+                spec_hash,
+                plan_hash,
+                kind,
+                status,
+                started_at,
+                finished_at,
+                metadata_json,
+                changed_by,
             ),
         )
         self._conn.commit()
 
     def get_run(self, run_id: str) -> dict | None:
-        result = self._conn.execute(
-            "SELECT * FROM vv_run WHERE id = ?", (run_id,)
-        )
+        result = self._conn.execute("SELECT * FROM vv_run WHERE id = ?", (run_id,))
         row = result.fetchone()
         if row is None:
             return None
         cols = [d[0] for d in result.description]
-        return dict(zip(cols, row))
+        return dict(zip(cols, row, strict=False))
 
     def list_runs(self, server_id: str | None = None) -> list[dict]:
         if server_id:
@@ -239,8 +250,6 @@ class InventoryDB:
                 (server_id,),
             )
         else:
-            result = self._conn.execute(
-                "SELECT * FROM vv_run ORDER BY started_at DESC"
-            )
+            result = self._conn.execute("SELECT * FROM vv_run ORDER BY started_at DESC")
         cols = [d[0] for d in result.description]
-        return [dict(zip(cols, row)) for row in result.fetchall()]
+        return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]

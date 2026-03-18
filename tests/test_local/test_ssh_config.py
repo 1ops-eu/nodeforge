@@ -1,13 +1,12 @@
 """Tests for SSH conf.d management."""
 
 import pytest
-from pathlib import Path
 
 from nodeforge.local.ssh_config import (
-    write_ssh_conf_d,
-    remove_ssh_conf_d,
-    ensure_include,
     backup_ssh_config,
+    ensure_include,
+    remove_ssh_conf_d,
+    write_ssh_conf_d,
 )
 from nodeforge.registry.local_paths import LocalPathsConfig, register_local_paths
 

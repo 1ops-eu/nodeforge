@@ -1,0 +1,63 @@
+kind: service
+
+meta:
+  name: multi-container-deploy
+  description: Deploy multiple Docker containers with env_file support
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: deploy
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+docker:
+  enabled: true
+
+containers:
+  - name: api
+    image: ghcr.io/acme/api:2.1.0
+    ports:
+      - "3000:3000"
+    env:
+      NODE_ENV: production
+    env_file: .env.api
+    restart: unless-stopped
+    healthcheck:
+      type: http
+      url: http://localhost:3000/health
+      expect_status: 200
+
+  - name: worker
+    image: ghcr.io/acme/worker:2.1.0
+    env:
+      QUEUE_URL: redis://localhost:6379
+    env_file: .env.worker
+    restart: unless-stopped
+
+  - name: redis
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+
+checks:
+  - type: container_running
+    name: api
+
+  - type: container_running
+    name: worker
+
+  - type: container_running
+    name: redis
+
+  - type: http
+    url: http://localhost:3000/health

@@ -109,7 +109,9 @@ def disable_root_login() -> str:
 
 def disable_password_auth() -> str:
     """Disable password auth. MUST only run after gate (verify_admin_login_on_new_port)."""
-    return r"sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"
+    return (
+        r"sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config"
+    )
 
 
 def open_firewall_port(port: int) -> str:
@@ -117,9 +119,7 @@ def open_firewall_port(port: int) -> str:
 
 
 def finalize_firewall() -> str:
-    return (
-        "ufw default deny incoming && ufw default allow outgoing && ufw --force enable"
-    )
+    return "ufw default deny incoming && ufw default allow outgoing && ufw --force enable"
 
 
 def restrict_ssh_to_wireguard(

@@ -1,4 +1,5 @@
 """SSH connectivity check — used by the GATE step."""
+
 from __future__ import annotations
 
 import time

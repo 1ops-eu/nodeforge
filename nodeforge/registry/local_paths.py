@@ -116,9 +116,7 @@ class LocalPathsConfig:
             )
         if self.wg_state_base is _UNSET:
             self.wg_state_base = (
-                (self.state_dir / "wg")
-                if self.state_dir
-                else Path("~/.wg/nodeforge").expanduser()
+                (self.state_dir / "wg") if self.state_dir else Path("~/.wg/nodeforge").expanduser()
             )
         if self.inventory_db_path is _UNSET:
             self.inventory_db_path = (

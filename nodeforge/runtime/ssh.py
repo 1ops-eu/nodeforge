@@ -6,6 +6,7 @@ Fabric is transport only — business logic lives in plan/executor layers.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import paramiko
@@ -99,12 +100,10 @@ class SSHSession:
         """Upload a local file to the remote host."""
         self._conn.put(str(local_path), remote=remote_path)
 
-    def upload_content(
-        self, content: str, remote_path: str, sudo: bool = False
-    ) -> None:
+    def upload_content(self, content: str, remote_path: str, sudo: bool = False) -> None:
         """Write string content to a remote file via /tmp."""
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".tmp", delete=False) as f:
             f.write(content)
@@ -128,7 +127,5 @@ class SSHSession:
 
     def close(self) -> None:
         """Close the Fabric connection."""
-        try:
+        with contextlib.suppress(Exception):
             self._conn.close()
-        except Exception:
-            pass

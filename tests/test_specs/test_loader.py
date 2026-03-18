@@ -1,8 +1,8 @@
 """Tests for YAML spec loading."""
 
-from pathlib import Path
 import pytest
-from nodeforge.specs.loader import load_spec, SpecLoadError
+
+from nodeforge.specs.loader import SpecLoadError, load_spec
 
 
 def test_load_service_spec(service_yaml):

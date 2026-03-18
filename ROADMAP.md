@@ -18,39 +18,48 @@ The product evolves in three deliberate stages:
 
 ---
 
-## Current State -- v0.1 (baseline)
+## Current State -- v0.2 (baseline)
 
 | Area | Status |
 |---|---|
 | `pip install` distribution | Done |
 | Bootstrap spec (harden fresh Debian/Ubuntu) | Done |
-| Service specs (PostgreSQL, Docker, containers) | Done |
+| Service specs (PostgreSQL, Docker, containers, Nginx) | Done |
 | Local inventory (SQLite) | Done |
 | SSH lockout prevention gate | Done |
 | Goss server verification | Done |
 | Run logs | Done |
-| Standalone binary builds (Linux, macOS) | Infrastructure ready (RFC 001/002) |
-| Docker image | Infrastructure ready (RFC 001/002) |
-| GitHub Actions release pipeline | Infrastructure ready (RFC 001/002) |
+| Standalone binary builds (Linux amd64/arm64, macOS amd64/arm64) | Done |
+| Docker image | Done |
+| GitHub Actions release pipeline | Done |
+| Smoke test suite (45 tests across 15 example specs) | Done |
+| `ruff` + `black` CI enforcement | Done |
+| PyPI publish workflow | Done |
+| Pydantic `extra='forbid'` on all spec models | Done |
 
 ---
 
-## v0.2 -- Hardening + CI Validation
+## v0.2 -- Hardening + CI Validation ✅
 
 **Goal:** Make the existing tool stable enough to serve as the foundation for the next architectural steps.
 
-| Item | Description |
-|---|---|
-| Smoke test suite | Validate `validate`, `plan`, `docs` commands against all example specs in CI -- no live host needed |
-| Linux ARM64 binary | Add ARM runner to `release.yml` matrix |
-| macOS Intel + Apple Silicon split | Separate matrix entries for `macos-13` (Intel) and `macos-latest` (ARM) |
-| PyPI publish | `pypi.yml` workflow to publish the wheel on tag |
-| `ruff` + `black` CI enforcement | `lint.yml` workflow on every push/PR |
+| Item | Description | Status |
+|---|---|---|
+| Smoke test suite | Parametrized pytest suite (`tests/test_smoke/`) validates `validate`, `plan`, `docs` for all 15 example specs (45 tests) | Done |
+| Linux ARM64 binary | `ubuntu-24.04-arm` runner in `release.yml` matrix | Done |
+| macOS Intel + Apple Silicon split | Separate matrix entries for `macos-13` (Intel/amd64) and `macos-latest` (ARM/arm64) | Done |
+| PyPI publish | `pypi.yml` workflow publishes the wheel on tag push | Done |
+| `ruff` + `black` CI enforcement | `lint.yml` workflow runs on every push/PR to `main` and `feature/**` | Done |
+| CI test workflow | `ci.yml` runs full pytest suite on Python 3.11 + 3.12 | Done |
+| Pydantic strict mode | `extra='forbid'` on all spec models — catches typos and removed fields | Done |
+| Nginx service kind | Native nginx support under `kind: service` (install, site config, checks) | Done |
+
+**Beyond original scope:** v0.2 also delivered Pydantic strict mode enforcement across all spec models (which caught multiple schema drift issues in existing examples) and a full nginx service kind with schema, validation, planning, execution steps, health checks, inventory recording, 28 unit tests, and 2 example specs.
 
 **Acceptance criteria:**
-- All example specs validate and generate docs in CI
-- Release assets are reliably produced for all target platforms
-- PyPI release on tag
+- All example specs validate and generate docs in CI -- **met** (45 smoke tests pass)
+- Release assets are reliably produced for all target platforms -- **met** (4 binaries: linux-amd64, linux-arm64, macos-amd64, macos-arm64)
+- PyPI release on tag -- **met** (`pypi.yml` workflow)
 
 ---
 
@@ -217,7 +226,7 @@ The product evolves in three deliberate stages:
 | RFC 001 | Distribution and Release Strategy | Adopted | v0.1 |
 | RFC 002 | Concrete Implementation Blueprint | Adopted | v0.1 |
 | RFC 003 | Release Signing and Artifact Integrity | Planned | v1.0 |
-| RFC 006 | Cross-Platform Smoke Testing and QA Gates | Planned | v0.2 |
+| RFC 006 | Cross-Platform Smoke Testing and QA Gates | Adopted | v0.2 |
 | RFC 007 | Single-Host Stack Runtime Model | Planned | v0.4--v0.6 |
 | RFC 008 | Overlay / Env-File Layering for Value Resolution | Planned | v0.4 |
 | RFC 012 | Light Blueprints and Stack Composition | Planned | v0.7 |

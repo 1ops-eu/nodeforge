@@ -35,7 +35,7 @@ declared as a ``nodeforge.addons`` entry point:
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 _RESOLVER_REGISTRY: dict[str, Callable[[str], str | None]] = {}
 

@@ -1,13 +1,13 @@
 """Central Plan data structures. All downstream modules consume these."""
+
 from __future__ import annotations
 
-from enum import Enum
-from typing import Literal
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class StepScope(str, Enum):
+class StepScope(StrEnum):
     REMOTE = "remote"
     LOCAL = "local"
     VERIFY = "verify"
@@ -36,13 +36,13 @@ class StepKind:
 
 
 class Step(BaseModel):
-    id: str                         # e.g. "create_admin_user", "verify_admin_login"
+    id: str  # e.g. "create_admin_user", "verify_admin_login"
     index: int
     description: str
     scope: StepScope
-    kind: str                       # StepKind constant or addon-defined string
-    command: str | None = None      # shell command for SSH/local
-    file_content: str | None = None # for file writes/uploads
+    kind: str  # StepKind constant or addon-defined string
+    command: str | None = None  # shell command for SSH/local
+    file_content: str | None = None  # for file writes/uploads
     target_path: str | None = None  # for file operations
     sudo: bool = False
     check_command: str | None = None

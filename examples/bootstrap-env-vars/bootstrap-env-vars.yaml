@@ -1,0 +1,47 @@
+kind: bootstrap
+
+meta:
+  name: env-vars-example
+  description: Bootstrap using environment variable resolution in spec fields
+
+host:
+  name: env-node-1
+  address: ${env:SERVER_IP}
+  os_family: debian
+
+login:
+  user: root
+  private_key: ${env:SSH_KEY_PATH:-~/.ssh/id_ed25519}
+  port: 22
+
+admin_user:
+  name: ${env:ADMIN_USER:-deploy}
+  groups:
+    - sudo
+  pubkeys:
+    - ${env:ADMIN_PUBKEY:-~/.ssh/id_ed25519.pub}
+
+ssh:
+  port: 2222
+  disable_root_login: true
+  disable_password_auth: true
+
+firewall:
+  provider: ufw
+  ssh_only: true
+
+local:
+  ssh_config:
+    enabled: true
+    host_alias: env-node-1
+    config_path: ~/.ssh/config
+    preserve_legacy_entry: false
+
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+
+checks:
+  - type: ssh_reachable
+    port: 2222
+    user: deploy

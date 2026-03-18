@@ -1,5 +1,7 @@
 """CLI tests for the plan command."""
+
 from typer.testing import CliRunner
+
 from nodeforge.cli import app
 
 runner = CliRunner()

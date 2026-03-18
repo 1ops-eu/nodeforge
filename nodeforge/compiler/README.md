@@ -89,9 +89,10 @@ Steps that would lock out the operator **MUST** depend on the gate step. If the 
 
 1. **Preflight** — verify admin SSH access
 2. **PostgreSQL** (if enabled) — install, configure, create role/db
-3. **Docker** (if needed) — install, enable
-4. **Containers** — pull, stop, remove, run, health check per container
-5. **Local inventory** — upsert services, record run
+3. **Nginx** (if enabled) — install, enable, remove default site, write per-site configs, reload, verify
+4. **Docker** (if needed) — install, enable
+5. **Containers** — pull, stop, remove, run, health check per container
+6. **Local inventory** — upsert services, record run
 
 ### Per-kind planners
 

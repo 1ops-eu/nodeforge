@@ -1,7 +1,6 @@
 """Spec kind registry: maps kind strings to Pydantic model classes."""
-from __future__ import annotations
 
-from typing import Any
+from __future__ import annotations
 
 _SPEC_REGISTRY: dict[str, type] = {}
 

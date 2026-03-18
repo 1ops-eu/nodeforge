@@ -1,11 +1,13 @@
 """Tests for Rich text plan rendering."""
-from rich.console import Console
+
 from io import StringIO
 
-from nodeforge.specs.loader import load_spec
+from rich.console import Console
+
 from nodeforge.compiler.normalizer import normalize
 from nodeforge.compiler.planner import plan
 from nodeforge.plan.render_text import render_plan
+from nodeforge.specs.loader import load_spec
 
 
 def test_render_plan_produces_output(bootstrap_yaml):

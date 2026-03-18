@@ -1,4 +1,5 @@
 """WireGuard interface check."""
+
 from __future__ import annotations
 
 from nodeforge.checks.ssh import CheckResult

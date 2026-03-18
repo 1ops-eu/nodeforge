@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from nodeforge.specs.bootstrap_schema import BootstrapSpec
 
 
-def generate_goss_yaml(spec: "BootstrapSpec") -> str:
+def generate_goss_yaml(spec: BootstrapSpec) -> str:
     """Return a goss-compatible YAML string for the given BootstrapSpec.
 
     The spec drives every check: no hardcoded user names, ports, or interfaces.
@@ -182,6 +182,4 @@ def generate_goss_yaml(spec: "BootstrapSpec") -> str:
         f"# Run on the server:  goss -g ~/.goss/goss.yaml validate\n"
         f"#\n"
     )
-    return header + yaml.dump(
-        doc, default_flow_style=False, sort_keys=True, allow_unicode=True
-    )
+    return header + yaml.dump(doc, default_flow_style=False, sort_keys=True, allow_unicode=True)

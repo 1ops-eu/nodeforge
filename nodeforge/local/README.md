@@ -92,7 +92,7 @@ SQLite-based local inventory with a versionize historization pattern (similar to
 High-level functions called post-apply by the CLI via `KindHooks.on_inventory_record`:
 
 - `record_bootstrap(db, spec, result)` — upserts server record with bootstrap status, SSH config, WireGuard state
-- `record_service_apply(db, spec, result)` — upserts service metadata for the target server
+- `record_service_apply(db, spec, result)` — upserts service metadata (postgres, nginx, docker, containers) for the target server
 
 ---
 

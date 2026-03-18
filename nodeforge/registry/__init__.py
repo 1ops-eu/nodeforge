@@ -25,18 +25,18 @@ load_addons() is idempotent — subsequent calls are no-ops.
 
 from __future__ import annotations
 
-from nodeforge.registry.specs import register_spec_kind, get_spec_model, list_spec_kinds
-from nodeforge.registry.planners import register_planner, get_planner
-from nodeforge.registry.normalizers import register_normalizer, get_normalizer
-from nodeforge.registry.validators import register_validator, get_validator
-from nodeforge.registry.executors import register_step_handler, get_step_handler
-from nodeforge.registry.hooks import register_kind_hooks, get_kind_hooks, KindHooks
-from nodeforge.registry.resolvers import register_resolver, get_resolver, list_resolvers
+from nodeforge.registry.executors import get_step_handler, register_step_handler
+from nodeforge.registry.hooks import KindHooks, get_kind_hooks, register_kind_hooks
 from nodeforge.registry.local_paths import (
-    register_local_paths,
-    get_local_paths,
     LocalPathsConfig,
+    get_local_paths,
+    register_local_paths,
 )
+from nodeforge.registry.normalizers import get_normalizer, register_normalizer
+from nodeforge.registry.planners import get_planner, register_planner
+from nodeforge.registry.resolvers import get_resolver, list_resolvers, register_resolver
+from nodeforge.registry.specs import get_spec_model, list_spec_kinds, register_spec_kind
+from nodeforge.registry.validators import get_validator, register_validator
 
 __all__ = [
     # Spec kinds

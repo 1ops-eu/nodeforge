@@ -7,7 +7,6 @@ which respects the ``NODEFORGE_STATE_DIR`` environment variable.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -21,7 +20,7 @@ def _default_log_dir() -> Path:
     return get_local_paths().log_dir
 
 
-def write_log(result: "ApplyResult", log_dir: Path | None = None) -> Path:
+def write_log(result: ApplyResult, log_dir: Path | None = None) -> Path:
     """Write JSON log of apply result. Returns path to the log file."""
     d = (log_dir or _default_log_dir()).expanduser()
     d.mkdir(parents=True, exist_ok=True)

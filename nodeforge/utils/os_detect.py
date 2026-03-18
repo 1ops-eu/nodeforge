@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 SUPPORTED_OS_FAMILIES = {"debian", "ubuntu"}
 
 
@@ -26,16 +25,12 @@ def detect_os(session) -> "OSInfo":
     version = info.get("VERSION_ID", "unknown")
 
     # Determine family
-    if distro in ("ubuntu",):
-        family = "debian"
-    elif distro in ("debian",):
+    if distro in ("ubuntu",) or distro in ("debian",):
         family = "debian"
     else:
         family = distro
 
     if family not in SUPPORTED_OS_FAMILIES:
-        raise RuntimeError(
-            f"Unsupported OS '{distro}'. nodeforge V1 supports Debian/Ubuntu only."
-        )
+        raise RuntimeError(f"Unsupported OS '{distro}'. nodeforge V1 supports Debian/Ubuntu only.")
 
     return OSInfo(distro=distro, codename=codename, version=version, family=family)

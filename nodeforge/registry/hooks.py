@@ -11,12 +11,13 @@ External addons register hooks for their own spec kinds:
         on_inventory_record=_record_compose_project,
     ))
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
-_HOOKS_REGISTRY: dict[str, "KindHooks"] = {}
+_HOOKS_REGISTRY: dict[str, KindHooks] = {}
 
 
 @dataclass

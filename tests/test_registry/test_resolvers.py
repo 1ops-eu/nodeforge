@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from nodeforge.registry.resolvers import (
-    _RESOLVER_REGISTRY,
-    register_resolver,
     get_resolver,
     list_resolvers,
+    register_resolver,
 )
-
 
 # ------------------------------------------------------------------ #
 # Helpers
@@ -30,7 +26,10 @@ def _isolated_registry(monkeypatch):
 class TestRegisterAndGet:
     def test_register_and_retrieve(self, monkeypatch):
         _isolated_registry(monkeypatch)
-        fn = lambda key: "resolved"
+
+        def fn(key):
+            return "resolved"
+
         register_resolver("test", fn)
         assert get_resolver("test") is fn
 
@@ -40,8 +39,13 @@ class TestRegisterAndGet:
 
     def test_overwrite_existing_resolver(self, monkeypatch):
         _isolated_registry(monkeypatch)
-        fn1 = lambda key: "first"
-        fn2 = lambda key: "second"
+
+        def fn1(key):
+            return "first"
+
+        def fn2(key):
+            return "second"
+
         register_resolver("x", fn1)
         register_resolver("x", fn2)
         assert get_resolver("x") is fn2

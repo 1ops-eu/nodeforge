@@ -1,0 +1,27 @@
+kind: service
+
+meta:
+  name: postgres-minimal
+  description: Install PostgreSQL 16 with default settings (no role or database)
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: deploy
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+postgres:
+  enabled: true
+  version: "16"
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+
+checks:
+  - type: postgres_ready

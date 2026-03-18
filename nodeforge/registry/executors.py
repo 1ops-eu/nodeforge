@@ -13,9 +13,10 @@ register new step kinds the same way:
     from nodeforge.registry import register_step_handler
     register_step_handler("compose_up", _handle_compose_up)
 """
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 _STEP_HANDLER_REGISTRY: dict[str, Callable] = {}
 

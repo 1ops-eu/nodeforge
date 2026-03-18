@@ -3,9 +3,10 @@
 A planner callable has the signature:
     (spec: AnySpec, ctx: NormalizedContext) -> list[Step]
 """
+
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 _PLANNER_REGISTRY: dict[str, Callable] = {}
 

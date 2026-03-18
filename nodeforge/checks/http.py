@@ -1,4 +1,5 @@
 """HTTP health check."""
+
 from __future__ import annotations
 
 from nodeforge.checks.ssh import CheckResult
@@ -8,6 +9,7 @@ def check_http(url: str, expect_status: int = 200, timeout: int = 10) -> CheckRe
     """Check that an HTTP endpoint returns the expected status code."""
     try:
         import requests
+
         response = requests.get(url, timeout=timeout)
         if response.status_code == expect_status:
             return CheckResult(

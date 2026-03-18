@@ -1,10 +1,10 @@
 """Tests for the normalizer."""
 
 import pytest
-from pathlib import Path
-from nodeforge.specs.loader import load_spec
+
 from nodeforge.compiler.normalizer import normalize
 from nodeforge.registry.local_paths import LocalPathsConfig, register_local_paths
+from nodeforge.specs.loader import load_spec
 
 
 @pytest.fixture(autouse=True)
@@ -58,7 +58,7 @@ def test_normalize_resolves_login_key(bootstrap_yaml):
 
 def test_normalize_derives_wireguard_public_key(tmp_path):
     """When a valid WireGuard private key is supplied, public key is derived via PyNaCl."""
-    import textwrap, yaml
+    import textwrap
 
     # Write a real WireGuard private key to a temp file
     priv = "8IReoXMQH73MyHqq0PKq7jl1md08E5Cd4wfQf31qXHw="
@@ -67,8 +67,7 @@ def test_normalize_derives_wireguard_public_key(tmp_path):
     key_file.write_text(priv)
 
     spec_yaml = tmp_path / "spec.yaml"
-    spec_yaml.write_text(
-        textwrap.dedent(f"""
+    spec_yaml.write_text(textwrap.dedent(f"""
         kind: bootstrap
         meta:
           name: wg-test
@@ -83,8 +82,7 @@ def test_normalize_derives_wireguard_public_key(tmp_path):
           private_key_file: "{key_file}"
           endpoint: "192.168.1.1:51820"
           peer_address: "10.0.0.2/32"
-    """)
-    )
+    """))
 
     spec = load_spec(spec_yaml)
     ctx = normalize(spec)
