@@ -48,8 +48,16 @@ help:
 # ── Virtualenv ─────────────────────────────────────────────────────────────────
 
 venv:
-	python3 -m venv $(VENV)
-	@echo "Virtualenv created. Activate with: source .venv/bin/activate"
+	@if [ ! -f "$(VENV)/bin/activate" ]; then \
+		echo "Creating virtual environment..."; \
+		if ! command -v virtualenv >/dev/null 2>&1; then \
+			echo "virtualenv not found, installing via pip..."; \
+			pip install --user virtualenv || { echo "Failed to install virtualenv"; exit 1; }; \
+		fi; \
+		virtualenv $(VENV) || { echo "Failed to create virtualenv"; exit 1; }; \
+	else \
+		echo "Virtual environment already exists. Skipping..."; \
+	fi
 
 # ── Install ────────────────────────────────────────────────────────────────────
 
