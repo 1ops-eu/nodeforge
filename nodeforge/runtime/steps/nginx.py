@@ -1,4 +1,15 @@
-"""Nginx installation and configuration commands."""
+"""Nginx installation and configuration commands.
+
+IMPORTANT — Fabric sudo() compatibility:
+  See bootstrap.py module docstring for details.  Functions here follow
+  the same pattern: no shell operators (``&&``, ``|``, ``>``) in command
+  strings that will be executed via Fabric's ``sudo()``.
+
+  Site configuration files are written via ``SSH_UPLOAD`` steps (which use
+  the ``upload_content()`` method that stages through /tmp) instead of
+  shell redirects.  Config validation and reload are separate steps so
+  the plan clearly shows each operation.
+"""
 
 from __future__ import annotations
 
@@ -16,28 +27,35 @@ def enable_nginx() -> str:
     return "systemctl enable --now nginx"
 
 
-def reload_nginx() -> str:
-    return "nginx -t && systemctl reload nginx"
+def validate_nginx_config() -> str:
+    """Validate nginx configuration (nginx -t)."""
+    return "nginx -t"
+
+
+def reload_nginx_service() -> str:
+    """Reload nginx to apply configuration changes."""
+    return "systemctl reload nginx"
 
 
 def remove_default_site() -> str:
     return "rm -f /etc/nginx/sites-enabled/default"
 
 
-def write_site_config(site: NginxSiteBlock) -> str:
-    """Generate an nginx site configuration as a shell command that writes to disk."""
-    conf = _render_site_conf(site)
-    escaped = conf.replace("'", "'\\''")
+def site_config_path(site: NginxSiteBlock) -> str:
+    """Return the target path for a site's nginx configuration file."""
     filename = site.domain.replace(".", "_")
-    return (
-        f"printf '%s' '{escaped}' > /etc/nginx/sites-available/{filename} && "
-        f"ln -sf /etc/nginx/sites-available/{filename} /etc/nginx/sites-enabled/{filename}"
-    )
+    return f"/etc/nginx/sites-available/{filename}"
 
 
 def site_config_content(site: NginxSiteBlock) -> str:
-    """Return the rendered nginx site config content (for plan display)."""
+    """Return the rendered nginx site config content (for plan display and SSH_UPLOAD)."""
     return _render_site_conf(site)
+
+
+def enable_site(site: NginxSiteBlock) -> str:
+    """Create the symlink from sites-enabled to sites-available."""
+    filename = site.domain.replace(".", "_")
+    return f"ln -sf /etc/nginx/sites-available/{filename} /etc/nginx/sites-enabled/{filename}"
 
 
 def _render_site_conf(site: NginxSiteBlock) -> str:

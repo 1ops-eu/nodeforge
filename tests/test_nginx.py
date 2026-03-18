@@ -8,12 +8,14 @@ from pydantic import ValidationError
 
 from nodeforge.runtime.steps.nginx import (
     enable_nginx,
+    enable_site,
     install_nginx,
     nginx_ready_check,
-    reload_nginx,
+    reload_nginx_service,
     remove_default_site,
     site_config_content,
-    write_site_config,
+    site_config_path,
+    validate_nginx_config,
 )
 from nodeforge.specs.service_schema import (
     NginxBlock,
@@ -181,21 +183,29 @@ class TestNginxSteps:
         assert "systemctl" in cmd
         assert "nginx" in cmd
 
-    def test_reload_nginx(self):
-        cmd = reload_nginx()
+    def test_validate_nginx_config(self):
+        cmd = validate_nginx_config()
         assert "nginx -t" in cmd
+
+    def test_reload_nginx_service(self):
+        cmd = reload_nginx_service()
         assert "systemctl reload nginx" in cmd
 
     def test_remove_default_site(self):
         cmd = remove_default_site()
         assert "sites-enabled/default" in cmd
 
-    def test_write_site_config(self):
+    def test_site_config_path(self):
         site = NginxSiteBlock(domain="app.example.com", upstream_port=3000)
-        cmd = write_site_config(site)
+        path = site_config_path(site)
+        assert "sites-available/app_example_com" in path
+
+    def test_enable_site(self):
+        site = NginxSiteBlock(domain="app.example.com", upstream_port=3000)
+        cmd = enable_site(site)
+        assert "ln -sf" in cmd
         assert "sites-available/app_example_com" in cmd
         assert "sites-enabled/app_example_com" in cmd
-        assert "ln -sf" in cmd
 
     def test_site_config_content_basic(self):
         site = NginxSiteBlock(domain="app.example.com", upstream_port=3000)
@@ -304,6 +314,7 @@ class TestNginxPlanner:
         assert "install_nginx" in step_ids
         assert "enable_nginx" in step_ids
         assert "remove_nginx_default_site" in step_ids
+        assert "validate_nginx_config" in step_ids
         assert "reload_nginx" in step_ids
         assert "nginx_config_check" in step_ids
 
@@ -319,6 +330,8 @@ class TestNginxPlanner:
         step_ids = [s.id for s in p.steps]
         assert "write_nginx_site_app_example_com" in step_ids
         assert "write_nginx_site_api_example_com" in step_ids
+        assert "enable_nginx_site_app_example_com" in step_ids
+        assert "enable_nginx_site_api_example_com" in step_ids
 
     def test_nginx_steps_are_sudo(self, nginx_service_yaml):
         from nodeforge.compiler.normalizer import normalize

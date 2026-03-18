@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def install_docker() -> str:
-    return "curl -fsSL https://get.docker.com | sh"
+    return "bash -c 'curl -fsSL https://get.docker.com | sh'"
 
 
 def enable_docker() -> str:

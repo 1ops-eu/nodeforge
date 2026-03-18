@@ -82,8 +82,9 @@ Steps that would lock out the operator **MUST** depend on the gate step. If the 
 7. **SSH hardening** — port change, config candidate, firewall
 8. **Post-port-change gate** — verify admin login on new port
 9. **Lockout-gated steps** — disable root login, disable password auth
-10. **WireGuard** (if enabled) — config upload, enable, verify, SSH restriction
-11. **Goss verification** — generate, ship, and run server-state checks
+10. **Firewall finalization** — three separate steps: default deny incoming, default allow outgoing, force enable
+11. **WireGuard** (if enabled) — config upload, enable, verify, SSH restriction (allow on WG + delete open rule)
+12. **Goss verification** — generate, ship, and run server-state checks
 12. **Local finalization** — SSH conf.d, WireGuard state save, inventory DB
 
 ### Service plan structure
@@ -91,8 +92,8 @@ Steps that would lock out the operator **MUST** depend on the gate step. If the 
 1. **Preflight** — verify admin SSH access (`SSH_COMMAND` kind, not `VERIFY`)
 2. **OS detection** — detect remote OS
 3. **Apt update** — shared `apt_update` step (emitted when any service needs package installation)
-4. **PostgreSQL** (if enabled) — install, configure, create role/db, verify (`sudo=True` on verify)
-5. **Nginx** (if enabled) — install, enable, remove default site, write per-site configs, reload, verify (`sudo=True` on verify)
+4. **PostgreSQL** (if enabled) — PGDG apt repository setup (prerequisites, signing key, source list, apt update), install, configure, create role/db, verify (`sudo=True` on verify)
+5. **Nginx** (if enabled) — install, enable, remove default site, write per-site configs (`SSH_UPLOAD`), enable per-site symlinks, validate config, reload, verify (`sudo=True` on verify)
 6. **Docker** (if needed) — install, enable, verify (`sudo=True` on verify)
 7. **Containers** — pull, stop, remove, run, health check per container (all steps use `sudo=True` since the admin user is not in the docker group)
 8. **Local inventory** — upsert services, record run

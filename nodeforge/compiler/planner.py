@@ -380,14 +380,36 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             )
         )
 
-    # 12: finalize firewall
+    # 12: finalize firewall (three separate steps — no shell chaining)
     steps.append(
         _s(
-            "finalize_firewall",
-            "Finalize firewall: default deny incoming, enable ufw",
+            "ufw_default_deny_incoming",
+            "Firewall: default deny incoming",
             R,
             StepKind.SSH_COMMAND,
-            command=bs.finalize_firewall(),
+            command=bs.ufw_default_deny_incoming(),
+            sudo=True,
+            tags=["firewall"],
+        )
+    )
+    steps.append(
+        _s(
+            "ufw_default_allow_outgoing",
+            "Firewall: default allow outgoing",
+            R,
+            StepKind.SSH_COMMAND,
+            command=bs.ufw_default_allow_outgoing(),
+            sudo=True,
+            tags=["firewall"],
+        )
+    )
+    steps.append(
+        _s(
+            "ufw_force_enable",
+            "Enable firewall (ufw --force enable)",
+            R,
+            StepKind.SSH_COMMAND,
+            command=bs.ufw_force_enable(),
             sudo=True,
             tags=["firewall"],
         )
@@ -552,9 +574,10 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         )
 
     # ------------------------------------------------------------------ #
-    # WireGuard SSH restriction — MUST be the absolute last remote step.
-    # Atomically replaces the open-to-all SSH rule with a WireGuard-only rule.
-    # After this executes, direct SSH to spec.host.address stops working.
+    # WireGuard SSH restriction — MUST be the absolute last remote steps.
+    # Adds a WireGuard-restricted SSH rule, then removes the open-to-all rule.
+    # After these execute, direct SSH to spec.host.address stops working.
+    # Split into two steps (no shell chaining).
     # ------------------------------------------------------------------ #
     if spec.wireguard.enabled:
         peer_ip = (
@@ -562,22 +585,33 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             if spec.firewall.registered_peers_only
             else None
         )
-        label = (
-            f"Restrict SSH port {spec.ssh.port} to WireGuard peer {peer_ip} only"
+        label_allow = (
+            f"Allow SSH port {spec.ssh.port} on WireGuard peer {peer_ip}"
             if peer_ip
-            else f"Restrict SSH port {spec.ssh.port} to WireGuard interface {spec.wireguard.interface} only"
+            else f"Allow SSH port {spec.ssh.port} on WireGuard interface {spec.wireguard.interface}"
         )
         steps.append(
             _s(
-                "restrict_ssh_to_wireguard",
-                label,
+                "allow_ssh_on_wireguard",
+                label_allow,
                 R,
                 StepKind.SSH_COMMAND,
-                command=bs.restrict_ssh_to_wireguard(
+                command=bs.allow_ssh_on_wireguard(
                     spec.ssh.port,
                     spec.wireguard.interface,
                     peer_ip,
                 ),
+                sudo=True,
+                tags=["ssh", "firewall", "wireguard"],
+            )
+        )
+        steps.append(
+            _s(
+                "delete_open_ssh_rule",
+                f"Remove open-to-all SSH rule for port {spec.ssh.port}/tcp",
+                R,
+                StepKind.SSH_COMMAND,
+                command=bs.delete_open_ssh_rule(spec.ssh.port),
                 sudo=True,
                 tags=["ssh", "firewall", "wireguard"],
             )
@@ -729,6 +763,52 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
 
     # Postgres
     if spec.postgres and spec.postgres.enabled:
+        # PGDG repository — ensures the requested PostgreSQL version is
+        # available regardless of the distro's default packages.
+        steps.append(
+            _s(
+                "install_pgdg_prerequisites",
+                "Install PGDG repository prerequisites",
+                R,
+                StepKind.SSH_COMMAND,
+                command=pg.install_pgdg_prerequisites(),
+                sudo=True,
+                tags=["postgres", "pgdg"],
+            )
+        )
+        steps.append(
+            _s(
+                "add_pgdg_signing_key",
+                "Import PostgreSQL PGDG apt signing key",
+                R,
+                StepKind.SSH_COMMAND,
+                command=pg.add_pgdg_signing_key(),
+                sudo=True,
+                tags=["postgres", "pgdg"],
+            )
+        )
+        steps.append(
+            _s(
+                "add_pgdg_source_list",
+                "Add PGDG apt repository source list",
+                R,
+                StepKind.SSH_COMMAND,
+                command=pg.add_pgdg_source_list(),
+                sudo=True,
+                tags=["postgres", "pgdg"],
+            )
+        )
+        steps.append(
+            _s(
+                "apt_update_pgdg",
+                "Update apt package index (with PGDG repo)",
+                R,
+                StepKind.SSH_COMMAND,
+                command="apt-get update -y",
+                sudo=True,
+                tags=["postgres", "pgdg", "packages"],
+            )
+        )
         steps.append(
             _s(
                 "install_postgres",
@@ -846,19 +926,43 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                     f"write_nginx_site_{safe_name}",
                     f"Write nginx site config for {site.domain}",
                     R,
+                    StepKind.SSH_UPLOAD,
+                    file_content=nx.site_config_content(site),
+                    target_path=nx.site_config_path(site),
+                    sudo=True,
+                    tags=["nginx", site.domain],
+                )
+            )
+            steps.append(
+                _s(
+                    f"enable_nginx_site_{safe_name}",
+                    f"Enable nginx site: {site.domain}",
+                    R,
                     StepKind.SSH_COMMAND,
-                    command=nx.write_site_config(site),
+                    command=nx.enable_site(site),
                     sudo=True,
                     tags=["nginx", site.domain],
                 )
             )
         steps.append(
             _s(
-                "reload_nginx",
-                "Validate config and reload nginx",
+                "validate_nginx_config",
+                "Validate nginx configuration",
                 R,
                 StepKind.SSH_COMMAND,
-                command=nx.reload_nginx(),
+                command=nx.validate_nginx_config(),
+                sudo=True,
+                rollback_hint="Check nginx config files for syntax errors.",
+                tags=["nginx"],
+            )
+        )
+        steps.append(
+            _s(
+                "reload_nginx",
+                "Reload nginx to apply configuration",
+                R,
+                StepKind.SSH_COMMAND,
+                command=nx.reload_nginx_service(),
                 sudo=True,
                 tags=["nginx"],
             )

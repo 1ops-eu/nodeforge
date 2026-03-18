@@ -1,13 +1,16 @@
 """Tests for bootstrap step command template correctness."""
 
 from nodeforge.runtime.steps.bootstrap import (
+    allow_ssh_on_wireguard,
     create_admin_user,
+    delete_open_ssh_rule,
     disable_password_auth,
     disable_root_login,
-    finalize_firewall,
     install_authorized_keys,
     reload_sshd,
-    restrict_ssh_to_wireguard,
+    ufw_default_allow_outgoing,
+    ufw_default_deny_incoming,
+    ufw_force_enable,
     write_sshd_config_candidate,
 )
 from nodeforge.runtime.steps.wireguard import (
@@ -55,9 +58,18 @@ def test_sshd_config_candidate_includes_port():
     assert "sshd_config.bak" in cmd
 
 
-def test_finalize_firewall():
-    cmd = finalize_firewall()
+def test_ufw_default_deny_incoming():
+    cmd = ufw_default_deny_incoming()
     assert "default deny incoming" in cmd
+
+
+def test_ufw_default_allow_outgoing():
+    cmd = ufw_default_allow_outgoing()
+    assert "default allow outgoing" in cmd
+
+
+def test_ufw_force_enable():
+    cmd = ufw_force_enable()
     assert "ufw --force enable" in cmd
 
 
@@ -112,25 +124,28 @@ def test_enable_wireguard():
     assert "enable" in cmd
 
 
-def test_restrict_ssh_to_wireguard_interface_only():
+def test_allow_ssh_on_wireguard_interface_only():
     """registered_peers_only=False: restrict SSH to wg0 interface, any peer."""
-    cmd = restrict_ssh_to_wireguard(2222, "wg0", peer_ip=None)
+    cmd = allow_ssh_on_wireguard(2222, "wg0", peer_ip=None)
     assert "in on wg0" in cmd
     assert "from" not in cmd
     assert "to any port 2222 proto tcp" in cmd
+
+
+def test_delete_open_ssh_rule():
+    """Deletes the temporary open-to-all SSH rule."""
+    cmd = delete_open_ssh_rule(2222)
     assert "ufw delete allow 2222/tcp" in cmd
 
 
-def test_restrict_ssh_to_wireguard_specific_peer():
+def test_allow_ssh_on_wireguard_specific_peer():
     """registered_peers_only=True: restrict SSH to wg0 interface AND specific peer IP."""
-    cmd = restrict_ssh_to_wireguard(2222, "wg0", peer_ip="10.10.0.2")
+    cmd = allow_ssh_on_wireguard(2222, "wg0", peer_ip="10.10.0.2")
     assert "in on wg0 from 10.10.0.2" in cmd
     assert "to any port 2222 proto tcp" in cmd
-    assert "ufw delete allow 2222/tcp" in cmd
 
 
-def test_restrict_ssh_to_wireguard_custom_port():
+def test_allow_ssh_on_wireguard_custom_port():
     """Works with non-standard SSH ports."""
-    cmd = restrict_ssh_to_wireguard(2222, "wg0", peer_ip="10.10.0.2")
+    cmd = allow_ssh_on_wireguard(2222, "wg0", peer_ip="10.10.0.2")
     assert "port 2222" in cmd
-    assert "ufw delete allow 2222/tcp" in cmd

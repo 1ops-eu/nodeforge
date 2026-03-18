@@ -10,11 +10,11 @@ def pull_image(image: str) -> str:
 
 
 def stop_container(name: str) -> str:
-    return f"docker stop {name} 2>/dev/null || true"
+    return f"bash -c 'docker stop {name} 2>/dev/null || true'"
 
 
 def remove_container(name: str) -> str:
-    return f"docker rm {name} 2>/dev/null || true"
+    return f"bash -c 'docker rm {name} 2>/dev/null || true'"
 
 
 def run_container(container: ContainerBlock) -> str:
