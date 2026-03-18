@@ -17,10 +17,7 @@ def apt_upgrade() -> str:
 
 def install_packages(packages: list[str]) -> str:
     pkg_list = " ".join(packages)
-    return (
-        f"apt-get update -y 2>&1 | tail -3 && "
-        f"DEBIAN_FRONTEND=noninteractive apt-get install -y {pkg_list}"
-    )
+    return f"DEBIAN_FRONTEND=noninteractive apt-get install -y {pkg_list}"
 
 
 def delete_non_system_users(admin_username: str) -> str:

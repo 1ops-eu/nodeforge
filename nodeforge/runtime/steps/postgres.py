@@ -4,10 +4,7 @@ from __future__ import annotations
 
 
 def install_postgres(version: str) -> str:
-    return (
-        f"apt-get update -y 2>&1 | tail -3 && "
-        f"DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-{version}"
-    )
+    return f"DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql-{version}"
 
 
 def configure_listen(addresses: list[str]) -> str:

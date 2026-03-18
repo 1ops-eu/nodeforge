@@ -186,7 +186,7 @@ my_addon = "my_addon:register"
 Each spec kind can declare lifecycle hooks via `KindHooks`:
 
 - `needs_key_generation` — auto-generate SSH key pairs before normalization
-- `ssh_port_fallback` — on re-runs, try `ssh.port` if `login.port` is unreachable
+- `ssh_port_fallback` — on re-runs, try `ssh.port` if `login.port` is unreachable; also probes admin user with key auth on the fallback port to handle fully-hardened servers
 - `on_inventory_record` — post-apply callback to record results in inventory
 
 ### SSH Lockout Prevention

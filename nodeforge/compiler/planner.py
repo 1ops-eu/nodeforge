@@ -106,7 +106,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
             "preflight_connect_root",
             f"Verify root SSH access to {spec.host.address}:{spec.login.port}",
             R,
-            StepKind.VERIFY,
+            StepKind.SSH_COMMAND,
             command="echo 'preflight ok'",
             rollback_hint="Check SSH credentials and network connectivity.",
             tags=["preflight"],
@@ -127,7 +127,21 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         )
     )
 
-    # 2: install base packages
+    # 2: update apt package index
+    steps.append(
+        _s(
+            "apt_update",
+            "Update apt package index",
+            R,
+            StepKind.SSH_COMMAND,
+            command=bs.apt_update(),
+            sudo=True,
+            rollback_hint="Check apt sources and network connectivity.",
+            tags=["packages"],
+        )
+    )
+
+    # 3: install base packages
     base_packages = ["ufw"]
     if spec.wireguard.enabled:
         base_packages.append("wireguard")
@@ -135,7 +149,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
     steps.append(
         _s(
             "install_base_packages",
-            f"apt update + install base packages: {pkg_list}",
+            f"Install base packages: {pkg_list}",
             R,
             StepKind.SSH_COMMAND,
             command=bs.install_packages(base_packages),
@@ -675,8 +689,8 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
         _s(
             "preflight_connect_admin",
             f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
-            V,
-            StepKind.VERIFY,
+            R,
+            StepKind.SSH_COMMAND,
             command="echo 'preflight ok'",
             tags=["preflight"],
         )
@@ -692,6 +706,26 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
             tags=["os"],
         )
     )
+
+    # apt update — shared by all service installations that need packages
+    needs_apt = (
+        (spec.postgres and spec.postgres.enabled)
+        or (spec.nginx and spec.nginx.enabled)
+        or (spec.docker and spec.docker.enabled)
+        or bool(spec.containers)
+    )
+    if needs_apt:
+        steps.append(
+            _s(
+                "apt_update",
+                "Update apt package index",
+                R,
+                StepKind.SSH_COMMAND,
+                command="apt-get update -y",
+                sudo=True,
+                tags=["packages"],
+            )
+        )
 
     # Postgres
     if spec.postgres and spec.postgres.enabled:
@@ -765,6 +799,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 V,
                 StepKind.VERIFY,
                 command="pg_isready",
+                sudo=True,
                 tags=["postgres", "verify"],
             )
         )
@@ -835,6 +870,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 V,
                 StepKind.VERIFY,
                 command="nginx -t",
+                sudo=True,
                 tags=["nginx", "verify"],
             )
         )
@@ -871,6 +907,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 V,
                 StepKind.VERIFY,
                 command="docker --version",
+                sudo=True,
                 tags=["docker", "verify"],
             )
         )
@@ -884,6 +921,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 R,
                 StepKind.SSH_COMMAND,
                 command=ct.pull_image(c.image),
+                sudo=True,
                 tags=["container", c.name],
             )
         )
@@ -894,6 +932,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 R,
                 StepKind.SSH_COMMAND,
                 command=ct.stop_container(c.name),
+                sudo=True,
                 tags=["container", c.name],
             )
         )
@@ -904,6 +943,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 R,
                 StepKind.SSH_COMMAND,
                 command=ct.remove_container(c.name),
+                sudo=True,
                 tags=["container", c.name],
             )
         )
@@ -914,6 +954,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 R,
                 StepKind.SSH_COMMAND,
                 command=ct.run_container(c),
+                sudo=True,
                 tags=["container", c.name],
             )
         )
@@ -924,6 +965,7 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
                 V,
                 StepKind.VERIFY,
                 command=f"docker inspect --format='{{{{.State.Running}}}}' {c.name}",
+                sudo=True,
                 tags=["container", c.name, "verify"],
             )
         )

@@ -272,6 +272,9 @@ def apply(
         # unreachable try ssh.port as fallback. This allows clean re-runs after a
         # partial apply that already moved SSH to the new port.
         effective_port = login.port
+        effective_user = login.user
+        effective_key_path = key_path
+        effective_password = ctx.login_password
         hooks = get_kind_hooks(parsed_spec.kind)
         if hooks.ssh_port_fallback and not _tcp_reachable(parsed_spec.host.address, login.port):
             fallback_port = parsed_spec.ssh.port
@@ -283,6 +286,38 @@ def apply(
                     f"reconnecting on ssh.port {fallback_port}[/yellow]"
                 )
                 effective_port = fallback_port
+
+                # When the port has already changed, the server may be fully
+                # hardened (root login disabled, password auth disabled).  Try
+                # the admin user with key auth on the fallback port first.
+                admin_name = (
+                    parsed_spec.admin_user.name if hasattr(parsed_spec, "admin_user") else None
+                )
+                admin_key = (
+                    str(ctx.admin_key_path)
+                    if ctx.admin_key_path and ctx.admin_key_path.exists()
+                    else None
+                )
+                if admin_name and admin_key:
+                    try:
+                        probe = SSHSession(
+                            host=parsed_spec.host.address,
+                            user=admin_name,
+                            port=fallback_port,
+                            key_path=admin_key,
+                        )
+                        if probe.test_connection():
+                            console.print(
+                                f"[yellow]⚠ Server already bootstrapped — "
+                                f"using {admin_name}@{parsed_spec.host.address}:"
+                                f"{fallback_port} with key auth[/yellow]"
+                            )
+                            effective_user = admin_name
+                            effective_key_path = admin_key
+                            effective_password = None
+                        probe.close()
+                    except Exception:
+                        pass  # fall through to original credentials
             else:
                 console.print(
                     f"[bold red]✗ Cannot reach {parsed_spec.host.address} "
@@ -293,10 +328,10 @@ def apply(
 
         ssh_session = SSHSession(
             host=parsed_spec.host.address,
-            user=login.user,
+            user=effective_user,
             port=effective_port,
-            key_path=key_path,
-            password=ctx.login_password,
+            key_path=effective_key_path,
+            password=effective_password,
         )
 
     # Build inventory DB

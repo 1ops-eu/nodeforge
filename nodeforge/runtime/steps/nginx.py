@@ -9,10 +9,7 @@ if TYPE_CHECKING:
 
 
 def install_nginx() -> str:
-    return (
-        "apt-get update -y 2>&1 | tail -3 && "
-        "DEBIAN_FRONTEND=noninteractive apt-get install -y nginx"
-    )
+    return "DEBIAN_FRONTEND=noninteractive apt-get install -y nginx"
 
 
 def enable_nginx() -> str:

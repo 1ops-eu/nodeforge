@@ -73,26 +73,29 @@ Steps that would lock out the operator **MUST** depend on the gate step. If the 
 
 ### Bootstrap plan structure
 
-1. **Preflight** — verify root SSH access
+1. **Preflight** — verify root SSH access (`SSH_COMMAND` kind, not `VERIFY` — ensures real SSH execution for step-0 abort logic)
 2. **OS detection** — assert Debian/Ubuntu
-3. **Package install** — ufw, wireguard (if enabled)
-4. **User creation** — admin user with sudo, authorized keys
-5. **Pre-port-change gate** — verify admin login before touching sshd
-6. **SSH hardening** — port change, config candidate, firewall
-7. **Post-port-change gate** — verify admin login on new port
-8. **Lockout-gated steps** — disable root login, disable password auth
-9. **WireGuard** (if enabled) — config upload, enable, verify, SSH restriction
-10. **Goss verification** — generate, ship, and run server-state checks
-11. **Local finalization** — SSH conf.d, WireGuard state save, inventory DB
+3. **Apt update** — dedicated `apt_update` step to refresh the package index
+4. **Package install** — ufw, wireguard (if enabled) — single `apt-get install` command (no embedded `apt-get update`)
+5. **User creation** — admin user with sudo, authorized keys
+6. **Pre-port-change gate** — verify admin login before touching sshd
+7. **SSH hardening** — port change, config candidate, firewall
+8. **Post-port-change gate** — verify admin login on new port
+9. **Lockout-gated steps** — disable root login, disable password auth
+10. **WireGuard** (if enabled) — config upload, enable, verify, SSH restriction
+11. **Goss verification** — generate, ship, and run server-state checks
+12. **Local finalization** — SSH conf.d, WireGuard state save, inventory DB
 
 ### Service plan structure
 
-1. **Preflight** — verify admin SSH access
-2. **PostgreSQL** (if enabled) — install, configure, create role/db
-3. **Nginx** (if enabled) — install, enable, remove default site, write per-site configs, reload, verify
-4. **Docker** (if needed) — install, enable
-5. **Containers** — pull, stop, remove, run, health check per container
-6. **Local inventory** — upsert services, record run
+1. **Preflight** — verify admin SSH access (`SSH_COMMAND` kind, not `VERIFY`)
+2. **OS detection** — detect remote OS
+3. **Apt update** — shared `apt_update` step (emitted when any service needs package installation)
+4. **PostgreSQL** (if enabled) — install, configure, create role/db, verify (`sudo=True` on verify)
+5. **Nginx** (if enabled) — install, enable, remove default site, write per-site configs, reload, verify (`sudo=True` on verify)
+6. **Docker** (if needed) — install, enable, verify (`sudo=True` on verify)
+7. **Containers** — pull, stop, remove, run, health check per container (all steps use `sudo=True` since the admin user is not in the docker group)
+8. **Local inventory** — upsert services, record run
 
 ### Per-kind planners
 
@@ -108,3 +111,7 @@ Both are registered in `registry/_builtins.py` and dispatched via `PLANNER_REGIS
 - **Plan is the single source of truth**: both `docs` (Markdown) and `apply` (execution) consume the same `Plan` object.
 - **Steps are re-indexed after generation**: `plan()` assigns final `step.index` values, so planners don't need to track absolute indices.
 - **Hashing**: both `spec_hash` (from model JSON) and `plan_hash` (from step IDs + commands) are computed for change detection and audit.
+- **Apt update is a separate step**: step builders never embed `apt-get update` inside install commands. The planner emits a dedicated `apt_update` step before any package installation. This avoids Fabric `sudo()` breaking compound `&&` chains (only the first command runs as root).
+- **Preflight steps use `SSH_COMMAND` kind**: preflight connection checks use `StepKind.SSH_COMMAND` (not `StepKind.VERIFY`) so the executor's step-0 abort logic works correctly — the echo command actually executes over SSH rather than being intercepted by the verify handler's `startswith("echo ")` short-circuit.
+- **Container steps always use `sudo=True`**: the bootstrap process adds the admin user to the `sudo` group but not the `docker` group, so all Docker CLI commands must be elevated.
+- **Service verify steps use `sudo=True`**: verification commands like `pg_isready`, `nginx -t`, and `docker --version` may need root access depending on the system configuration.

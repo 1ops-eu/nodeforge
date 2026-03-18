@@ -92,7 +92,7 @@ def _resolve_sops(key: str) -> str | None:
 The `KindHooks` dataclass (`hooks.py`) allows spec kinds to declare CLI-level behaviours without `isinstance()` checks:
 
 - `needs_key_generation: bool` — auto-generate SSH key pairs before normalization
-- `ssh_port_fallback: bool` — try `ssh.port` if `login.port` is unreachable on re-runs
+- `ssh_port_fallback: bool` — try `ssh.port` if `login.port` is unreachable on re-runs. When port fallback activates, `cli.py` also probes the admin user with key auth on the fallback port; if the probe succeeds, credentials are switched from root+password to admin+key (handles re-runs after full bootstrap hardening).
 - `on_inventory_record: Callable | None` — post-apply callback to record results in inventory
 
 ---

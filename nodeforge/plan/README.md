@@ -87,4 +87,5 @@ Templates are stored as inline string constants — no external `.j2` files need
 
 - **Plan is the single source of truth**: the same `Plan` object produces both documentation and execution.
 - **`StepKind` is an open string, not a closed Enum**: this allows addons to register new step kinds (e.g., `compose_up`) without modifying core code.
+- **Preflight steps use `ssh_command`, not `verify`**: preflight connection checks must actually execute over SSH to trigger the executor's step-0 abort logic. Using `verify` kind would hit the `startswith("echo ")` short-circuit in `_execute_verify`, returning synthetic success without testing connectivity.
 - **Inline Jinja2 templates**: avoids filesystem dependencies for the Markdown renderer.

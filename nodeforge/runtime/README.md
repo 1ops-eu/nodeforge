@@ -71,7 +71,7 @@ Shell command builder modules that generate the exact commands executed on remot
 
 | File | Domain | Key functions |
 |---|---|---|
-| `bootstrap.py` | Server hardening | `create_admin_user()`, `install_authorized_keys()`, `write_sshd_config_candidate()`, `disable_root_login()`, `disable_password_auth()`, `finalize_firewall()`, `restrict_ssh_to_wireguard()` |
+| `bootstrap.py` | Server hardening | `apt_update()`, `install_packages()`, `create_admin_user()`, `install_authorized_keys()`, `write_sshd_config_candidate()`, `disable_root_login()`, `disable_password_auth()`, `finalize_firewall()`, `restrict_ssh_to_wireguard()` |
 | `wireguard.py` | WireGuard VPN | `generate_server_config()`, `generate_client_config()`, `enable_wireguard()` |
 | `postgres.py` | PostgreSQL | `install_postgres()`, `configure_listen()`, `enable_postgres()`, `create_role()`, `create_database()` |
 | `nginx.py` | Nginx reverse proxy | `install_nginx()`, `enable_nginx()`, `reload_nginx()`, `remove_default_site()`, `write_site_config()`, `site_config_content()` |
@@ -79,6 +79,8 @@ Shell command builder modules that generate the exact commands executed on remot
 | `container.py` | Docker containers | `pull_image()`, `stop_container()`, `remove_container()`, `run_container()` |
 
 These modules contain **no execution logic** — they only return shell command strings that the planner embeds in `Step` objects.
+
+**Important:** Step builders return **single commands only**, never compound `&&`-chained commands that mix unrelated operations (e.g., `apt-get update && apt-get install`). This is because Fabric's `sudo()` method only elevates the first command in a shell pipeline or `&&` chain — subsequent commands run as the unprivileged user. The planner is responsible for emitting separate `apt_update` and install steps.
 
 ---
 
