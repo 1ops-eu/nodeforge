@@ -20,10 +20,8 @@ Download the pre-built binary for your platform from the [Releases](../../releas
 |---|---|
 | Linux (x86-64) | `nodeforge-linux-amd64` |
 | macOS | `nodeforge-macos-amd64` |
-| Windows (x86-64) | `nodeforge-windows-amd64.exe` |
 
 ```bash
-# Linux / macOS
 chmod +x nodeforge-linux-amd64
 sudo mv nodeforge-linux-amd64 /usr/local/bin/nodeforge
 
@@ -611,11 +609,6 @@ make docs-example
 ```bash
 # Linux / macOS
 make build-binary
-
-# Windows
-python scripts/build_binary.py
-# or
-powershell -ExecutionPolicy Bypass -File scripts\build_binary.ps1
 ```
 
 ### Building the Docker image locally
@@ -641,7 +634,7 @@ git push origin v0.2.0
 ```
 
 GitHub Actions will automatically:
-1. Build binaries for Linux, macOS, and Windows
+1. Build binaries for Linux and macOS
 2. Generate `checksums.txt`
 3. Create a GitHub Release with all assets
 4. Build and push the Docker image to `ghcr.io/1ops-eu/nodeforge`

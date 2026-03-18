@@ -29,7 +29,7 @@ The product evolves in three deliberate stages:
 | SSH lockout prevention gate | Done |
 | Goss server verification | Done |
 | Run logs | Done |
-| Standalone binary builds (Linux, macOS, Windows) | Infrastructure ready (RFC 001/002) |
+| Standalone binary builds (Linux, macOS) | Infrastructure ready (RFC 001/002) |
 | Docker image | Infrastructure ready (RFC 001/002) |
 | GitHub Actions release pipeline | Infrastructure ready (RFC 001/002) |
 
@@ -44,7 +44,6 @@ The product evolves in three deliberate stages:
 | Smoke test suite | Validate `validate`, `plan`, `docs` commands against all example specs in CI -- no live host needed |
 | Linux ARM64 binary | Add ARM runner to `release.yml` matrix |
 | macOS Intel + Apple Silicon split | Separate matrix entries for `macos-13` (Intel) and `macos-latest` (ARM) |
-| Windows ZIP | Package `nodeforge.exe` + README into a `.zip` asset |
 | PyPI publish | `pypi.yml` workflow to publish the wheel on tag |
 | `ruff` + `black` CI enforcement | `lint.yml` workflow on every push/PR |
 
@@ -221,6 +220,16 @@ The product evolves in three deliberate stages:
 | RFC 007 | Single-Host Stack Runtime Model | Planned | v0.4--v0.6 |
 | RFC 012 | Light Blueprints and Stack Composition | Planned | v0.7 |
 | RFC 013 | Multi-Host Light Operations | Planned | v0.8 |
+
+---
+
+## Platform Scope
+
+nodeforge runs on **Linux and macOS only**. Windows is not a supported client platform.
+
+The target of every spec is always a remote Linux server (Debian/Ubuntu). nodeforge itself — the CLI that connects and applies changes — requires a Unix environment to manage local state correctly (SSH `conf.d`, WireGuard key material, POSIX paths).
+
+**Future consideration (post-v1.0):** A lightweight Windows client could be built on top of a nodeforge API server. The API server would run on a Linux host, expose the compile-plan-apply pipeline over HTTP, and accept spec payloads from any platform. This eliminates the local-state complexity on the Windows side entirely. This is not scheduled and not in scope for v1.0.
 
 ---
 
