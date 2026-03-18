@@ -79,13 +79,14 @@ The product evolves in three deliberate stages:
 
 | Item | Description |
 |---|---|
-| Addon registry | `nodeforge/registry/` -- open extension points for spec kinds, planners, normalizers, validators, step handlers, and lifecycle hooks |
+| Addon registry | `nodeforge/registry/` -- open extension points for spec kinds, planners, normalizers, validators, step handlers, lifecycle hooks, and value resolvers |
 | Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` |
 | `nodeforge/addons/` | Package for built-in optional components (goss ships here as reference) |
 | `kind: stack` | Group related resources into a single deployable application boundary |
 | `kind: file_template` | Render managed configuration files from templates and variables |
 | Managed directories | Deterministic runtime directory layout |
 | Apply ordering | Stack-aware dependency-ordered execution |
+| Overlay / env-file layering | Multiple `.env` file layers with explicit precedence order (deferred from resolver RFC; RFC 008) |
 
 **New capabilities:**
 - Rendered `.env` files, reverse proxy configs, helper scripts, compose files
@@ -218,6 +219,7 @@ The product evolves in three deliberate stages:
 | RFC 003 | Release Signing and Artifact Integrity | Planned | v1.0 |
 | RFC 006 | Cross-Platform Smoke Testing and QA Gates | Planned | v0.2 |
 | RFC 007 | Single-Host Stack Runtime Model | Planned | v0.4--v0.6 |
+| RFC 008 | Overlay / Env-File Layering for Value Resolution | Planned | v0.4 |
 | RFC 012 | Light Blueprints and Stack Composition | Planned | v0.7 |
 | RFC 013 | Multi-Host Light Operations | Planned | v0.8 |
 

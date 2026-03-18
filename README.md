@@ -277,7 +277,7 @@ The pipeline has six phases. Each phase uses the [registry system](#registry-sys
 1. If `--env-file` was provided, loads `KEY=VALUE` pairs into the environment (existing env vars take precedence).
 2. Reads the YAML file with `yaml.safe_load()` into a raw Python dict.
 3. Reads the `kind` field (e.g. `"bootstrap"`) and looks up the matching Pydantic model class from `SPEC_REGISTRY`.
-4. Recursively walks the dict and resolves all `${VAR}` references from environment variables. In strict mode, an unresolved variable is a fatal error with the exact field path. In passthrough mode, it is left as-is.
+4. Recursively walks the dict and resolves all `${[prefix:]key[:-default]}` tokens via the resolver registry. In strict mode, an unresolved token is a fatal error with the exact field path. In passthrough mode, it is left as-is.
 5. Hydrates the resolved dict into a typed Pydantic v2 model (e.g. `BootstrapSpec`).
 
 **Output:** A fully typed spec object.
@@ -453,7 +453,7 @@ checks:
 
 ## Environment Variable Resolution
 
-Spec files support `${VAR}` references that are resolved from environment variables at load time:
+Spec files support `${VAR}` references (and a richer prefix syntax) that are resolved at load time:
 
 ```yaml
 kind: service
@@ -467,11 +467,38 @@ postgres:
     password_env: ${DB_PASSWORD}
 ```
 
+### Token syntax
+
+| Token | Meaning |
+|---|---|
+| `${VAR}` | Bare reference — permanent shorthand for `${env:VAR}`. |
+| `${env:VAR}` | Explicit environment variable lookup. |
+| `${file:/path/to/file}` | Read file contents (trailing newline stripped). `~` is expanded. Returns `None` if the file does not exist. |
+| `${prefix:key}` | Dispatch to any addon-registered resolver (e.g. `sops`, `vault`). |
+| `${VAR:-default}` | Use *default* if the resolved value is `None`. Works with any prefix: `${env:HOST:-localhost}`, `${file:/run/secrets/key:-}`, etc. |
+
 ### Resolution behaviour
 
-- **Strict mode** (default): unresolved `${VAR}` references raise an error with the exact field path (e.g., `Unresolved variable '${DB_PASSWORD}' in field 'postgres.create_role.password_env'`).
+- **Strict mode** (default): unresolved tokens raise an error with the exact field path (e.g., `Unresolved variable '${DB_PASSWORD}' in field 'postgres.create_role.password_env'`).
 - **Passthrough mode** (`--passthrough`): unresolved references are left as-is.
 - **`.env` file support** (`--env-file .env`): loads variables from a file before resolving, with existing environment variables taking precedence.
+
+### Addon resolvers
+
+External addons can register custom resolver backends (e.g. SOPS, HashiCorp Vault, AWS SSM) by calling `register_resolver(prefix, fn)` in their `register()` function:
+
+```python
+from nodeforge.registry import register_resolver
+
+def register():
+    register_resolver("sops", _resolve_sops)
+
+def _resolve_sops(key: str) -> str | None:
+    # key format: "path/to/secrets.yaml#json.dot.path"
+    ...
+```
+
+Once registered, specs can use `${sops:secrets.yaml#db.password}` — no changes to core nodeforge required.
 
 ### `.env` file format
 

@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 
+# Matches ${...} tokens — the full token including optional prefix and default.
 _ENV_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
 
@@ -48,47 +49,106 @@ def load_env_file(path: Path) -> dict[str, str]:
     return env
 
 
-def _resolve_env_vars(obj: Any, *, strict: bool = True, _path: str = "") -> Any:
-    """Recursively resolve ``${VAR}`` patterns from environment variables.
+def _resolve_values(obj: Any, *, strict: bool = True, _path: str = "") -> Any:
+    """Recursively resolve ``${[prefix:]key[:-default]}`` tokens in a YAML structure.
+
+    Token syntax
+    ------------
+    ``${VAR}``
+        Bare reference — shorthand for ``${env:VAR}``.  Permanent backward
+        compat; will never be deprecated.
+
+    ``${env:VAR}``
+        Explicit environment variable lookup via the ``env`` resolver.
+
+    ``${file:/path/to/file}``
+        Read file contents via the built-in ``file`` resolver.
+
+    ``${prefix:key}``
+        Dispatch to an addon-registered resolver (e.g. ``sops``, ``vault``).
+
+    ``${VAR:-default}``
+        Use *default* if the resolved value is ``None`` (key not found).
+        Works with any prefix: ``${env:VAR:-fallback}``,
+        ``${file:/opt/key.pub:-}`` etc.
 
     Parameters
     ----------
     obj:
         The parsed YAML data (nested dicts, lists, scalars).
     strict:
-        When True (default), raise :class:`SpecLoadError` if a referenced
-        variable is not set.  When False ("passthrough"), leave the ``${VAR}``
-        token unchanged.
+        When ``True`` (default), raise :class:`SpecLoadError` if a token
+        cannot be resolved and has no default value.  When ``False``
+        ("passthrough"), leave the ``${...}`` token unchanged.
     _path:
         Internal — tracks the YAML field path for error messages.
     """
     if isinstance(obj, str):
+        # Import lazily so this function stays usable before load_addons() runs.
+        from nodeforge.registry.resolvers import get_resolver, list_resolvers
 
         def replace(m: re.Match) -> str:
-            var = m.group(1)
-            val = os.environ.get(var)
-            if val is None:
-                if strict:
-                    location = f" in field '{_path}'" if _path else ""
-                    raise SpecLoadError(
-                        f"Unresolved variable '${{{var}}}'{location}: "
-                        f"environment variable '{var}' is not set"
-                    )
-                return m.group(0)  # passthrough: leave ${VAR} unchanged
-            return val
+            token = m.group(1)
+            location = f" in field '{_path}'" if _path else ""
+
+            # 1. Split off default value (shell convention: :-)
+            if ":-" in token:
+                ref_part, default = token.split(":-", 1)
+            else:
+                ref_part, default = token, None
+
+            # 2. Extract prefix (first colon in ref_part).
+            #    No colon → bare ${VAR} → permanent shorthand for ${env:VAR}.
+            if ":" in ref_part:
+                prefix, key = ref_part.split(":", 1)
+            else:
+                prefix, key = "env", ref_part
+
+            # 3. Resolve via registry.
+            resolver = get_resolver(prefix)
+            if resolver is None:
+                known = ", ".join(list_resolvers()) or "none"
+                raise SpecLoadError(
+                    f"Unknown resolver '{prefix}' in '${{{token}}}'{location}. "
+                    f"Registered resolvers: {known}. "
+                    f"Is an addon missing?"
+                )
+
+            val = resolver(key)
+
+            # 4. Value found — return it.
+            if val is not None:
+                return val
+
+            # 5. Value not found — try default.
+            if default is not None:
+                return default
+
+            # 6. No default — strict vs passthrough.
+            if strict:
+                raise SpecLoadError(
+                    f"Unresolved variable '${{{token}}}'{location}: "
+                    f"resolver '{prefix}' returned no value for key '{key}'"
+                )
+            return m.group(0)  # passthrough: leave ${...} unchanged
 
         return _ENV_PATTERN.sub(replace, obj)
     elif isinstance(obj, dict):
         return {
-            k: _resolve_env_vars(v, strict=strict, _path=f"{_path}.{k}" if _path else k)
+            k: _resolve_values(v, strict=strict, _path=f"{_path}.{k}" if _path else k)
             for k, v in obj.items()
         }
     elif isinstance(obj, list):
         return [
-            _resolve_env_vars(item, strict=strict, _path=f"{_path}[{i}]")
+            _resolve_values(item, strict=strict, _path=f"{_path}[{i}]")
             for i, item in enumerate(obj)
         ]
     return obj
+
+
+# Keep the old name available so any code that imported _resolve_env_vars
+# directly (e.g. existing tests) continues to work without change.
+_resolve_env_vars = _resolve_values
 
 
 def load_spec(
@@ -101,7 +161,7 @@ def load_spec(
     path:
         Path to the YAML spec file.
     strict_env:
-        When True (default), unresolved ``${VAR}`` references raise an error.
+        When True (default), unresolved ``${...}`` references raise an error.
         When False, they are left unchanged (passthrough mode).
     env_file:
         Optional path to a ``.env`` file.  Variables defined in it are
@@ -141,7 +201,7 @@ def load_spec(
         raise SpecLoadError(f"Unknown spec kind '{kind}'. Supported: {known}")
 
     try:
-        data = _resolve_env_vars(raw, strict=strict_env)
+        data = _resolve_values(raw, strict=strict_env)
     except SpecLoadError:
         raise
 
@@ -150,7 +210,7 @@ def load_spec(
     except Exception as e:
         # Wrap pydantic ValidationError with a friendlier message.
         # Import lazily to keep module importable without pydantic installed
-        # (useful for testing _resolve_env_vars / load_env_file in isolation).
+        # (useful for testing _resolve_values / load_env_file in isolation).
         if type(e).__name__ == "ValidationError":
             raise SpecLoadError(f"Spec validation error in {path}:\n{e}") from e
         raise

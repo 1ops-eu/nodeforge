@@ -24,6 +24,7 @@ The `load_addons()` function is **idempotent** — it runs once on first call, s
 | `validators.py` | `VALIDATOR_REGISTRY`: maps `kind` -> validator function `(spec) -> list[ValidationIssue]` |
 | `executors.py` | `STEP_HANDLER_REGISTRY`: maps step kind string -> handler `(executor, step) -> StepResult` |
 | `hooks.py` | `HOOKS_REGISTRY`: maps `kind` -> `KindHooks` dataclass with lifecycle callbacks |
+| `resolvers.py` | `RESOLVER_REGISTRY`: maps prefix string -> resolver callable `(key: str) -> str \| None` |
 | `local_paths.py` | `LocalPathsConfig`: addon-overridable filesystem paths for all local state (SSH conf.d, WireGuard, inventory, logs) |
 
 ---
@@ -38,6 +39,51 @@ The `load_addons()` function is **idempotent** — it runs once on first call, s
 | `VALIDATOR_REGISTRY` | spec `kind` | validator callable | `validators.py` |
 | `STEP_HANDLER_REGISTRY` | step `kind` | executor handler | `executor.py` (apply) |
 | `HOOKS_REGISTRY` | spec `kind` | `KindHooks` dataclass | `cli.py` (lifecycle) |
+| `RESOLVER_REGISTRY` | prefix string | resolver `(key) -> str \| None` | `loader.py` (value resolution) |
+
+---
+
+## Resolver Registry
+
+The `RESOLVER_REGISTRY` (`resolvers.py`) maps prefix strings to value resolver callables. It is used by `_resolve_values()` in `specs/loader.py` to resolve `${prefix:key}` tokens in spec files.
+
+### Resolver callable signature
+
+```python
+(key: str) -> str | None
+```
+
+Return the resolved string value, or `None` if the key is not found / unset. The caller applies the default value, raises `SpecLoadError` in strict mode, or leaves the token unchanged in passthrough mode.
+
+### Built-in resolvers
+
+| Prefix | Behaviour |
+|---|---|
+| `env` | Looks up `os.environ`. Bare `${VAR}` is a permanent shorthand for `${env:VAR}`. |
+| `file` | Reads the file at the given path, strips one trailing newline. `~` is expanded. Returns `None` if the file does not exist. |
+
+### Token syntax
+
+| Token | Meaning |
+|---|---|
+| `${VAR}` | Bare reference — permanent shorthand for `${env:VAR}` |
+| `${env:VAR}` | Explicit environment variable lookup |
+| `${file:/path/to/file}` | Read file contents |
+| `${prefix:key}` | Dispatch to any addon-registered resolver |
+| `${VAR:-default}` | Use *default* if resolved value is `None`; works with any prefix |
+
+### Registering a resolver from an addon
+
+```python
+from nodeforge.registry import register_resolver
+
+def register():
+    register_resolver("sops", _resolve_sops)
+
+def _resolve_sops(key: str) -> str | None:
+    # key format: "path/to/secrets.yaml#json.dot.path"
+    ...
+```
 
 ---
 
@@ -77,9 +123,11 @@ def register():
     from nodeforge.registry import (
         register_spec_kind, register_planner, register_normalizer,
         register_validator, register_step_handler, register_kind_hooks, KindHooks,
+        register_resolver,
     )
     register_spec_kind("my_kind", MySpec)
     register_planner("my_kind", _plan_my_kind)
+    register_resolver("my_prefix", _resolve_my_prefix)
     # ... etc.
 ```
 

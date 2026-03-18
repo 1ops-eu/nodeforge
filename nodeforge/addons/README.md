@@ -63,3 +63,39 @@ An addon's `register()` function can register:
 - Step handlers (`register_step_handler`)
 - Lifecycle hooks (`register_kind_hooks`)
 - Custom local paths (`register_local_paths`)
+- Value resolvers (`register_resolver`)
+
+### Adding a custom value resolver
+
+Addons can extend the `${prefix:key}` value resolution syntax in spec files by registering a resolver callable with `register_resolver(prefix, fn)`. The callable receives the `key` string and returns a `str` value or `None` if not found.
+
+**Example: SOPS resolver skeleton**
+
+```python
+# nodeforge_sops/__init__.py
+from nodeforge.registry import register_resolver
+
+def register():
+    register_resolver("sops", _resolve_sops)
+
+def _resolve_sops(key: str) -> str | None:
+    """Resolve a value from a SOPS-encrypted file.
+
+    Key format: "path/to/secrets.yaml#json.dot.path"
+    Example:    "${sops:secrets/prod.yaml#db.password}"
+    """
+    if "#" not in key:
+        return None
+    file_path, _, json_path = key.partition("#")
+    # ... decrypt file_path with sops, traverse json_path, return value ...
+```
+
+Once installed, specs can use:
+
+```yaml
+postgres:
+  create_role:
+    password_env: ${sops:secrets/prod.yaml#db.password}
+```
+
+No changes to core nodeforge are required.

@@ -31,6 +31,7 @@ from nodeforge.registry.normalizers import register_normalizer, get_normalizer
 from nodeforge.registry.validators import register_validator, get_validator
 from nodeforge.registry.executors import register_step_handler, get_step_handler
 from nodeforge.registry.hooks import register_kind_hooks, get_kind_hooks, KindHooks
+from nodeforge.registry.resolvers import register_resolver, get_resolver, list_resolvers
 from nodeforge.registry.local_paths import (
     register_local_paths,
     get_local_paths,
@@ -58,6 +59,10 @@ __all__ = [
     "register_kind_hooks",
     "get_kind_hooks",
     "KindHooks",
+    # Value resolvers (7th registry)
+    "register_resolver",
+    "get_resolver",
+    "list_resolvers",
     # Local filesystem paths (addon-overridable)
     "register_local_paths",
     "get_local_paths",

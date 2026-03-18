@@ -8,7 +8,7 @@ This package defines the YAML spec schemas (Pydantic v2 models), the YAML loader
 
 | File | Purpose |
 |---|---|
-| `loader.py` | YAML loading, `${VAR}` environment variable resolution, `.env` file support, registry-based model dispatch |
+| `loader.py` | YAML loading, `${[prefix:]key[:-default]}` value resolution via resolver registry, `.env` file support, registry-based model dispatch |
 | `bootstrap_schema.py` | Pydantic v2 models for `kind: bootstrap` specs |
 | `service_schema.py` | Pydantic v2 models for `kind: service` specs |
 | `validators.py` | Cross-field validation beyond Pydantic schema checks (SSH port ranges, WireGuard completeness, etc.) |
@@ -20,12 +20,43 @@ This package defines the YAML spec schemas (Pydantic v2 models), the YAML loader
 
 Entry point: `load_spec(path, *, strict_env=True, env_file=None) -> AnySpec`
 
-### Environment variable resolution
+### Value resolution
 
-The `${VAR}` pattern is resolved recursively across all string values in the parsed YAML:
+All `${...}` tokens in string values are resolved recursively across the entire parsed YAML structure via the **resolver registry** (`nodeforge/registry/resolvers.py`).
 
-- **Strict mode** (default): raises `SpecLoadError` with the exact field path if a variable is not set (e.g., `"Unresolved variable '${DB_PASSWORD}' in field 'postgres.create_role.password_env'"`)
-- **Passthrough mode** (`strict_env=False`): leaves `${VAR}` unchanged in the output
+#### Token syntax
+
+| Token | Meaning |
+|---|---|
+| `${VAR}` | Bare reference — permanent shorthand for `${env:VAR}`. Never deprecated. |
+| `${env:VAR}` | Explicit environment variable lookup. |
+| `${file:/path/to/file}` | Read file contents (trailing newline stripped). `~` is expanded. |
+| `${prefix:key}` | Dispatch to any addon-registered resolver (e.g. `sops`, `vault`). |
+| `${VAR:-default}` | Use *default* if the resolved value is `None`. Works with any prefix: `${env:VAR:-fallback}`, `${file:/opt/key.pub:-}`, etc. |
+
+#### Resolution modes
+
+- **Strict mode** (default): raises `SpecLoadError` with the exact field path if a token resolves to `None` and has no default (e.g., `"Unresolved variable '${DB_PASSWORD}' in field 'postgres.create_role.password_env'"`)
+- **Passthrough mode** (`strict_env=False`): leaves unresolved `${...}` tokens unchanged in the output
+
+#### Unknown prefix
+
+If a prefix is not registered, `_resolve_values` raises `SpecLoadError` naming the unknown prefix, all registered prefixes, and a hint to check for a missing addon.
+
+#### Extending resolution via addons
+
+External addons register additional resolvers by calling `register_resolver(prefix, fn)` in their `register()` function. The resolver callable has the signature `(key: str) -> str | None`.
+
+```python
+from nodeforge.registry import register_resolver
+
+def register():
+    register_resolver("sops", _resolve_sops)
+
+def _resolve_sops(key: str) -> str | None:
+    # key format: "path/to/secrets.yaml#json.dot.path"
+    ...
+```
 
 ### `.env` file support
 
