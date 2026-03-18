@@ -251,6 +251,171 @@ All paths are overridable via `NODEFORGE_STATE_DIR` — see [Configurable State 
 
 ---
 
+## How It Works Under the Hood
+
+This section traces what happens when you run `nodeforge apply spec.yaml` — from YAML file to configured server.
+
+### Pipeline Overview
+
+```mermaid
+flowchart LR
+    A["spec.yaml"] --> B["Parse"]
+    B --> C["Validate"]
+    C --> D["Normalize"]
+    D --> E["Plan"]
+    E --> F["Execute"]
+    F --> G["Record"]
+
+    style A fill:#f9f,stroke:#333
+    style E fill:#bbf,stroke:#333
+```
+
+The pipeline has six phases. Each phase uses the [registry system](#registry-system) to dispatch by `kind`, so the same pipeline handles `bootstrap`, `service`, and any addon-defined kinds.
+
+### Phase 1: Parse
+
+**Entry:** `nodeforge/specs/loader.py` → `load_spec()`
+
+1. If `--env-file` was provided, loads `KEY=VALUE` pairs into the environment (existing env vars take precedence).
+2. Reads the YAML file with `yaml.safe_load()` into a raw Python dict.
+3. Reads the `kind` field (e.g. `"bootstrap"`) and looks up the matching Pydantic model class from `SPEC_REGISTRY`.
+4. Recursively walks the dict and resolves all `${VAR}` references from environment variables. In strict mode, an unresolved variable is a fatal error with the exact field path. In passthrough mode, it is left as-is.
+5. Hydrates the resolved dict into a typed Pydantic v2 model (e.g. `BootstrapSpec`).
+
+**Output:** A fully typed spec object.
+
+### Phase 2: Validate
+
+**Entry:** `nodeforge/specs/validators.py` → `validate_spec()`
+
+Dispatches to the kind-specific validator via `VALIDATOR_REGISTRY`. Validators check for structural and semantic errors — for example:
+
+- SSH port in valid range
+- WireGuard config completeness (all required fields when enabled)
+- Containers require Docker to be enabled
+- Password auth disable requires at least one pubkey
+
+Returns a list of issues, each tagged as `error` (fatal) or `warning` (informational).
+
+### Phase 3: Normalize
+
+**Entry:** `nodeforge/compiler/normalizer.py` → `normalize()`
+
+Resolves everything the planner will need so that plan generation is purely deterministic:
+
+- Applies `NODEFORGE_STATE_DIR` / `local.state_dir` overrides
+- Resolves relative paths against the spec file's directory
+- Reads SSH public key file contents
+- Reads WireGuard server private key, derives public key via PyNaCl
+- Generates or reuses the WireGuard client key pair
+- Resolves database secrets from environment variables
+- Computes local filesystem paths (SSH conf.d, inventory DB)
+
+**Output:** A `NormalizedContext` dataclass with all resolved values — no further I/O is needed.
+
+### Phase 4: Plan
+
+**Entry:** `nodeforge/compiler/planner.py` → `plan()`
+
+Dispatches to the kind-specific planner via `PLANNER_REGISTRY`. The planner inspects which blocks in the spec are populated and generates an ordered list of `Step` objects. Empty or absent blocks produce no steps.
+
+Each `Step` carries:
+
+| Field | Purpose |
+|---|---|
+| `scope` | `REMOTE` (SSH), `LOCAL` (this machine), or `VERIFY` (verification) |
+| `kind` | Dispatch key for the executor — `ssh_command`, `gate`, `local_file_write`, etc. |
+| `command` | Shell command string (built by pure functions in `runtime/steps/`) |
+| `depends_on` | List of step indices that must succeed before this step runs |
+| `gate` | If `true`, failure aborts the entire plan |
+
+The planner also embeds file contents directly into steps (e.g. the Goss verification spec, SSH config fragments) so that the Plan is fully self-contained.
+
+Finally, the Plan is stamped with a `spec_hash` and `plan_hash` for traceability.
+
+**Output:** A `Plan` object — the single source of truth for docs, apply, and inspection.
+
+### Phase 5: Execute
+
+**Entry:** `nodeforge/runtime/executor.py` → `Executor.apply()`
+
+The executor iterates over the Plan's steps in order. For each step:
+
+1. **Check dependencies** — if any step in `depends_on` has failed, this step is skipped.
+2. **Check abort** — if a gate has failed, all remaining steps are skipped.
+3. **Dispatch** — looks up `STEP_HANDLER_REGISTRY[step.kind]` and calls the handler.
+
+Step handlers:
+
+| Step Kind | What happens |
+|---|---|
+| `ssh_command` | Runs the command on the remote server via Fabric (Paramiko SSH) |
+| `ssh_upload` | Uploads embedded file content to a remote path |
+| `gate` | Attempts an SSH login to verify connectivity — failure aborts the plan |
+| `verify` | Runs Goss validation or other verification checks |
+| `local_file_write` | Writes a file on the local machine (e.g. SSH config) |
+| `local_command` | Runs a local operation (backup SSH config, save WireGuard state) |
+| `local_db_write` | Initializes or updates the local SQLite inventory |
+
+### Phase 6: Record
+
+After execution completes, three things happen:
+
+1. **Inventory** — the `KindHooks.on_inventory_record` callback writes server metadata and run results to the SQLite inventory (with full historization via versionize triggers).
+2. **Run log** — a JSON file is written to `~/.nodeforge/runs/` with per-step timing, status, and output.
+3. **Cleanup** — the SSH session is closed.
+
+### Bootstrap Execution Flow
+
+The bootstrap plan is the most complex, with ~25 steps including two safety gates. Here is the dependency and gate structure:
+
+```mermaid
+flowchart TD
+    A["Preflight: verify root SSH access"] --> B["Detect OS"]
+    B --> C["Install base packages"]
+    C --> D["Create admin user + SSH keys"]
+    D --> E["Configure sudo"]
+
+    E --> G1{{"GATE: verify admin login<br/>on current port"}}
+
+    G1 -->|pass| F["Change SSH port in sshd_config"]
+    G1 -->|fail| ABORT1["ABORT — root access preserved"]
+
+    F --> FW["Open new port in firewall"]
+    FW --> V["Validate sshd_config"]
+    V --> R["Reload sshd"]
+
+    R --> G2{{"GATE: verify admin login<br/>on NEW port"}}
+
+    G2 -->|pass| H["Disable root login"]
+    G2 -->|pass| I["Disable password auth"]
+    G2 -->|pass| J["Finalize firewall + reload sshd"]
+    G2 -->|fail| ABORT2["ABORT — port changed but<br/>root access preserved"]
+
+    J --> WG["WireGuard setup (if enabled)"]
+    WG --> GOSS["Goss server verification"]
+    GOSS --> WG_LOCK["Restrict SSH to WireGuard<br/>(if enabled — last remote step)"]
+
+    WG_LOCK --> L1["LOCAL: Write SSH conf.d entry"]
+    L1 --> L2["LOCAL: Save WireGuard state"]
+    L2 --> L3["LOCAL: Record in inventory"]
+
+    style G1 fill:#f96,stroke:#333,color:#000
+    style G2 fill:#f96,stroke:#333,color:#000
+    style ABORT1 fill:#f44,stroke:#333,color:#fff
+    style ABORT2 fill:#f44,stroke:#333,color:#fff
+    style WG_LOCK fill:#ffa,stroke:#333,color:#000
+```
+
+**Key safety properties:**
+
+- **Gate 1** (pre-port-change): Verifies that the admin user can log in with key auth before the SSH port is changed. If this fails, nothing dangerous has happened — the server is still on its original port with root access.
+- **Gate 2** (post-port-change): Verifies that the admin user can log in on the new port. `disable_root_login`, `disable_password_auth`, and `finalize_firewall` all carry `depends_on` pointing to this gate — they **never execute** unless the gate passes.
+- **WireGuard SSH restriction** is the absolute last remote step. After it runs, only WireGuard-tunneled connections reach SSH. All subsequent steps are local.
+- **Goss verification** is non-fatal — a failure is reported but does not abort the plan.
+
+---
+
 ## Spec Types
 
 ### `kind: bootstrap`
