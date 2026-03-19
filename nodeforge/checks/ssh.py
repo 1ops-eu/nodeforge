@@ -40,6 +40,7 @@ def check_ssh_reachable(
             port=port,
             password=password,
             key_path=key_path,
+            connect_timeout=timeout,
         )
         try:
             ok = session.test_connection()

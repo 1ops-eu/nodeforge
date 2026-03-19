@@ -45,6 +45,7 @@ class SSHSession:
         port: int = 22,
         password: str | None = None,
         key_path: str | None = None,
+        connect_timeout: int = 10,
     ) -> None:
         connect_kwargs: dict = {}
         if password:
@@ -63,6 +64,7 @@ class SSHSession:
             user=user,
             port=port,
             connect_kwargs=connect_kwargs,
+            connect_timeout=connect_timeout,
         )
         self.host = host
         self.user = user

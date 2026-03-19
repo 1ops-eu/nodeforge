@@ -46,6 +46,7 @@ class Executor:
         ctx=None,
         spec=None,
         console: Console | None = None,
+        effective_port: int | None = None,
     ) -> None:
         self._plan = plan
         self._session = ssh_session
@@ -53,6 +54,7 @@ class Executor:
         self._ctx = ctx
         self._spec = spec
         self._console = console or Console()
+        self._effective_port = effective_port
 
     def apply(self, dry_run: bool = False) -> ApplyResult:
         """Execute all steps in order, respecting gates and dependencies."""
@@ -173,9 +175,7 @@ class Executor:
                     step_id=step.id,
                     scope=step.scope.value,
                     status="failed",
-                    error=(
-                        f"Unknown step kind: '{step.kind}'. " "Is the required addon installed?"
-                    ),
+                    error=(f"Unknown step kind: '{step.kind}'. Is the required addon installed?"),
                 )
         except Exception as e:
             result = StepResult(
@@ -230,11 +230,22 @@ class Executor:
         )
 
     def _execute_gate(self, step: Step) -> StepResult:
-        """Execute a gate step — typically an SSH login verification."""
+        """Execute a gate step — typically an SSH login verification.
+
+        When ``effective_port`` is set (credential fallback activated because
+        the server was already bootstrapped), all ``ssh_check:`` gate commands
+        have their port replaced with the effective port.  This prevents the
+        gate from trying to connect to the original login port (e.g. 22) that
+        may already be firewalled off.
+        """
         from nodeforge.checks.ssh import check_ssh_reachable
 
         if step.command and step.command.startswith("ssh_check:"):
             _, host, port_str, user = step.command.split(":", 3)
+            # When credential fallback is active, override the compiled port
+            # so gates don't try to connect to the now-firewalled original port.
+            if self._effective_port is not None:
+                port_str = str(self._effective_port)
             key_path = None
             password = None
             if self._ctx:
@@ -496,7 +507,6 @@ class Executor:
                 output="Inventory database initialized",
             )
         elif step.command == "upsert_server" and self._spec and self._ctx:
-
             # Will be called after apply completes with full result
             return StepResult(
                 step_index=step.index,

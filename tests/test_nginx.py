@@ -198,14 +198,14 @@ class TestNginxSteps:
     def test_site_config_path(self):
         site = NginxSiteBlock(domain="app.example.com", upstream_port=3000)
         path = site_config_path(site)
-        assert "sites-available/app_example_com" in path
+        assert "sites-available/app.example.com" in path
 
     def test_enable_site(self):
         site = NginxSiteBlock(domain="app.example.com", upstream_port=3000)
         cmd = enable_site(site)
         assert "ln -sf" in cmd
-        assert "sites-available/app_example_com" in cmd
-        assert "sites-enabled/app_example_com" in cmd
+        assert "sites-available/app.example.com" in cmd
+        assert "sites-enabled/app.example.com" in cmd
 
     def test_site_config_content_basic(self):
         site = NginxSiteBlock(domain="app.example.com", upstream_port=3000)

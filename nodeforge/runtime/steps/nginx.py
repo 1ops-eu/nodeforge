@@ -42,9 +42,12 @@ def remove_default_site() -> str:
 
 
 def site_config_path(site: NginxSiteBlock) -> str:
-    """Return the target path for a site's nginx configuration file."""
-    filename = site.domain.replace(".", "_")
-    return f"/etc/nginx/sites-available/{filename}"
+    """Return the target path for a site's nginx configuration file.
+
+    Uses the raw domain name as the filename — standard nginx convention
+    (e.g. ``/etc/nginx/sites-available/app.example.com``).
+    """
+    return f"/etc/nginx/sites-available/{site.domain}"
 
 
 def site_config_content(site: NginxSiteBlock) -> str:
@@ -53,9 +56,11 @@ def site_config_content(site: NginxSiteBlock) -> str:
 
 
 def enable_site(site: NginxSiteBlock) -> str:
-    """Create the symlink from sites-enabled to sites-available."""
-    filename = site.domain.replace(".", "_")
-    return f"ln -sf /etc/nginx/sites-available/{filename} /etc/nginx/sites-enabled/{filename}"
+    """Create the symlink from sites-enabled to sites-available.
+
+    Uses the raw domain name as the filename — standard nginx convention.
+    """
+    return f"ln -sf /etc/nginx/sites-available/{site.domain} /etc/nginx/sites-enabled/{site.domain}"
 
 
 def _render_site_conf(site: NginxSiteBlock) -> str:

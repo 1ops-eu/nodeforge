@@ -19,6 +19,18 @@ This package contains the SSH transport layer and the plan execution engine. It 
 
 The `Executor` class takes a `Plan`, an `SSHSession`, an `InventoryDB`, and the normalized context/spec, then executes each step in order.
 
+### Constructor parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `plan` | `Plan` | The execution plan |
+| `ssh_session` | `SSHSession \| None` | SSH session for remote steps (`None` during dry-run) |
+| `inventory_db` | `InventoryDB \| None` | Local inventory database |
+| `ctx` | `NormalizedContext \| None` | Normalized context with paths and keys |
+| `spec` | spec model | Parsed spec model |
+| `console` | `Console \| None` | Rich console for output |
+| `effective_port` | `int \| None` | When credential fallback activated (server already bootstrapped), the port actually used. Gate steps replace their compiled port with this value to avoid connecting to firewalled ports. |
+
 ### Core behaviour
 
 1. **Sequential execution**: steps are executed in index order.
@@ -34,7 +46,7 @@ The `Executor` class takes a `Plan`, an `SSHSession`, an `InventoryDB`, and the 
 |---|---|---|
 | `ssh_command` | `_execute_ssh_command()` | Run a shell command on the remote host via SSH |
 | `ssh_upload` | `_execute_ssh_upload()` | Upload file content to a remote path (handles `~` expansion) |
-| `gate` | `_execute_gate()` | SSH login verification (parses `ssh_check:host:port:user` command format) |
+| `gate` | `_execute_gate()` | SSH login verification (parses `ssh_check:host:port:user` command format). When `effective_port` is set, replaces the compiled port with the effective port to handle re-runs on already-bootstrapped servers. |
 | `verify` | `_execute_verify()` | Non-gate verification: goss validate, postflight checks, SSH commands |
 | `local_file_write` | `_execute_local_file_write()` | Write SSH conf.d entry locally |
 | `local_command` | `_execute_local_command()` | Backup SSH config, ensure Include, save WireGuard state |
@@ -60,6 +72,7 @@ The `SSHSession` class wraps a Fabric `Connection` with a clean API:
 ### Key details
 
 - Uses `_AutoAddConnection` subclass that auto-accepts unknown host keys (required for fresh VMs).
+- Accepts a `connect_timeout` parameter (default 10 seconds) that is passed through to the Fabric `Connection`. This prevents SSH attempts to firewalled ports from hanging at the TCP default (~30 seconds per attempt).
 - When password auth is used without a key, explicitly disables key-based auth to prevent Paramiko errors.
 - `CommandResult` is a Pydantic model with `ok`, `stdout`, `stderr`, `return_code`.
 
@@ -74,7 +87,7 @@ Shell command builder modules that generate the exact commands executed on remot
 | `bootstrap.py` | Server hardening | `apt_update()`, `install_packages()`, `create_admin_user()`, `install_authorized_keys()`, `write_sshd_config_candidate()`, `disable_root_login()`, `disable_password_auth()`, `ufw_default_deny_incoming()`, `ufw_default_allow_outgoing()`, `ufw_force_enable()`, `allow_ssh_on_wireguard()`, `delete_open_ssh_rule()` |
 | `wireguard.py` | WireGuard VPN | `generate_server_config()`, `generate_client_config()`, `enable_wireguard()` |
 | `postgres.py` | PostgreSQL | `install_postgres()`, `configure_listen()`, `enable_postgres()`, `create_role()`, `create_database()`, `install_pgdg_prerequisites()`, `add_pgdg_signing_key()`, `add_pgdg_source_list()` |
-| `nginx.py` | Nginx reverse proxy | `install_nginx()`, `enable_nginx()`, `validate_nginx_config()`, `reload_nginx_service()`, `remove_default_site()`, `site_config_path()`, `site_config_content()`, `enable_site()` |
+| `nginx.py` | Nginx reverse proxy | `install_nginx()`, `enable_nginx()`, `validate_nginx_config()`, `reload_nginx_service()`, `remove_default_site()`, `site_config_path()`, `site_config_content()`, `enable_site()`. Site config files use the raw domain name as the filename (e.g., `/etc/nginx/sites-available/app.example.com`) — standard nginx convention. Step IDs in the planner still use underscores (e.g., `write_nginx_site_app_example_com`). |
 | `docker.py` | Docker | `install_docker()`, `enable_docker()` |
 | `container.py` | Docker containers | `pull_image()`, `stop_container()`, `remove_container()`, `run_container()` |
 

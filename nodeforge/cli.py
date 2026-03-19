@@ -347,6 +347,7 @@ def apply(
         ctx=ctx,
         spec=parsed_spec,
         console=console,
+        effective_port=effective_port if ssh_session else None,
     )
 
     result = executor.apply(dry_run=dry_run)

@@ -40,6 +40,7 @@ class CheckResult(BaseModel):
 This is the critical check used by the GATE steps that enforce SSH lockout prevention:
 
 - Creates a temporary `SSHSession` and calls `test_connection()`
+- Passes the `timeout` parameter through to `SSHSession` as `connect_timeout`, ensuring that SSH attempts to firewalled ports fail fast (default 10 seconds) instead of hanging at the TCP default (~30 seconds)
 - Retries up to 5 times with 1-second delays to handle the brief window after `systemctl reload ssh` where the daemon has acknowledged the reload but hasn't re-bound to its port
 - The session is closed after each attempt to avoid connection pooling issues
 
