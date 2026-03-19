@@ -121,8 +121,12 @@ def ship_and_run(
     # ------------------------------------------------------------------ #
     # 5. Run goss validate (JSON output for machine-readable results)
     # ------------------------------------------------------------------ #
+    # sudo=True because goss internally runs privileged commands (e.g.
+    # ``ufw status verbose``, ``wg show``).  On a first run the session
+    # connects as root so sudo is a no-op; on an idempotent re-run the
+    # session connects as the admin user who has passwordless sudo.
     goss_cmd = f"goss -g {goss_master} validate --format json --no-color"
-    goss_result = session.run(goss_cmd, sudo=False, warn=True)
+    goss_result = session.run(goss_cmd, sudo=True, warn=True)
 
     raw_output = goss_result.stdout.strip()
 
@@ -135,7 +139,7 @@ def ship_and_run(
         # (e.g. /usr/local/bin not in PATH). Try the full path.
         goss_result2 = session.run(
             f"/usr/local/bin/goss -g {goss_master} validate --format json --no-color",
-            sudo=False,
+            sudo=True,
             warn=True,
         )
         raw_output = goss_result2.stdout.strip()
