@@ -2,7 +2,8 @@
 
 Responsibilities:
   1. Ensure goss binary is present on the remote server (install via curl if missing).
-  2. Create ~/.goss/ directory on the remote.
+  2. Create ~/.goss/ directory on the remote (resolved dynamically via $HOME
+     so it works for any connecting user, not just root).
   3. Upload the generated goss YAML to ~/.goss/<spec_name>.yaml.
   4. Read-modify-write the master gossfile ~/.goss/goss.yaml so every shipped
      spec is included in a single umbrella run.
@@ -22,18 +23,29 @@ import yaml
 if TYPE_CHECKING:
     from nodeforge.runtime.ssh import SSHSession
 
-# Remote directory where nodeforge deposits all goss files.
-# Use the absolute path so goss gossfile references resolve correctly
-# (goss resolves relative gossfile keys against the master file's directory,
-# so a literal "~/.goss/..." key would expand to "/root/.goss/~/.goss/...").
-GOSS_REMOTE_DIR = "/root/.goss"
-GOSS_MASTER_FILE = f"{GOSS_REMOTE_DIR}/goss.yaml"
-
 # Install command: idempotent — only runs curl if goss is not already on PATH.
 # Installs to /usr/local/bin so it is available system-wide.
 _GOSS_INSTALL_CMD = (
-    "command -v goss >/dev/null 2>&1 || " "(curl -fsSL https://goss.rocks/install | sudo sh)"
+    "command -v goss >/dev/null 2>&1 || (curl -fsSL https://goss.rocks/install | sudo sh)"
 )
+
+
+def _resolve_goss_remote_dir(session: SSHSession) -> str:
+    """Return the absolute path to the goss directory on the remote.
+
+    Runs ``echo $HOME`` on the remote to determine the connecting user's home
+    directory, then appends ``/.goss``.  This mirrors the ``~`` expansion in
+    ``executor._execute_ssh_upload()`` and ensures goss files land in the
+    correct home regardless of whether we connect as root or as the admin user
+    (e.g. on an idempotent re-run where credential fallback activates).
+
+    Falls back to ``/root/.goss`` if the probe fails (should never happen in
+    practice — $HOME is always set for SSH sessions).
+    """
+    result = session.run("echo $HOME", sudo=False, warn=True)
+    if result.ok and result.stdout.strip():
+        return f"{result.stdout.strip()}/.goss"
+    return "/root/.goss"
 
 
 def ship_and_run(
@@ -52,6 +64,12 @@ def ship_and_run(
       - "error":       str — non-empty when something failed before goss ran
     """
     # ------------------------------------------------------------------ #
+    # 0. Resolve the remote goss directory for the connecting user
+    # ------------------------------------------------------------------ #
+    goss_dir = _resolve_goss_remote_dir(session)
+    goss_master = f"{goss_dir}/goss.yaml"
+
+    # ------------------------------------------------------------------ #
     # 1. Install goss if absent
     # ------------------------------------------------------------------ #
     install_result = session.run(_GOSS_INSTALL_CMD, sudo=False, warn=True)
@@ -61,14 +79,14 @@ def ship_and_run(
     # ------------------------------------------------------------------ #
     # 2. Ensure ~/.goss/ directory exists
     # ------------------------------------------------------------------ #
-    mkdir_result = session.run(f"mkdir -p {GOSS_REMOTE_DIR}", sudo=False, warn=True)
+    mkdir_result = session.run(f"mkdir -p {goss_dir}", sudo=False, warn=True)
     if not mkdir_result.ok:
-        return _error(f"mkdir {GOSS_REMOTE_DIR} failed: {mkdir_result.stderr}")
+        return _error(f"mkdir {goss_dir} failed: {mkdir_result.stderr}")
 
     # ------------------------------------------------------------------ #
     # 3. Upload the generated goss spec
     # ------------------------------------------------------------------ #
-    spec_remote_path = f"{GOSS_REMOTE_DIR}/{spec_name}.yaml"
+    spec_remote_path = f"{goss_dir}/{spec_name}.yaml"
     try:
         session.upload_content(goss_yaml_content, spec_remote_path, sudo=False)
     except Exception as exc:
@@ -78,7 +96,7 @@ def ship_and_run(
     # 4. Read-modify-write the master gossfile
     # ------------------------------------------------------------------ #
     master_result = session.run(
-        f"cat {GOSS_MASTER_FILE} 2>/dev/null || echo '{{}}'",
+        f"cat {goss_master} 2>/dev/null || echo '{{}}'",
         sudo=False,
         warn=True,
     )
@@ -96,14 +114,14 @@ def ship_and_run(
     master_yaml = yaml.dump(existing_master, default_flow_style=False, sort_keys=True)
 
     try:
-        session.upload_content(master_yaml, GOSS_MASTER_FILE, sudo=False)
+        session.upload_content(master_yaml, goss_master, sudo=False)
     except Exception as exc:
         return _error(f"upload of master gossfile failed: {exc}")
 
     # ------------------------------------------------------------------ #
     # 5. Run goss validate (JSON output for machine-readable results)
     # ------------------------------------------------------------------ #
-    goss_cmd = f"goss -g {GOSS_MASTER_FILE} validate --format json --no-color"
+    goss_cmd = f"goss -g {goss_master} validate --format json --no-color"
     goss_result = session.run(goss_cmd, sudo=False, warn=True)
 
     raw_output = goss_result.stdout.strip()
@@ -116,7 +134,7 @@ def ship_and_run(
         # goss may not be in PATH for non-interactive sessions on some distros
         # (e.g. /usr/local/bin not in PATH). Try the full path.
         goss_result2 = session.run(
-            f"/usr/local/bin/goss -g {GOSS_MASTER_FILE} validate --format json --no-color",
+            f"/usr/local/bin/goss -g {goss_master} validate --format json --no-color",
             sudo=False,
             warn=True,
         )
