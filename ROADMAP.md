@@ -63,7 +63,33 @@ The product evolves in three deliberate stages:
 
 ---
 
-## v0.3 -- UX + Spec Ergonomics
+## v0.3 -- Single-Host Compose Stacks
+
+**Goal:** Enable deploying Docker Compose-based multi-service stacks on a single host,
+managed entirely through nodeforge specs.
+
+| Item | Description |
+|---|---|
+| `kind: file_template` | Render managed configuration files from Jinja2 templates and variables |
+| `kind: compose_project` | Manage Docker Compose projects: upload compose file, pull, up, health check |
+| Managed directories | Deterministic creation of project directories on the remote host |
+| Compose health checks | Wait for container health after `docker compose up -d`; surface failures |
+
+**New capabilities:**
+- Rendered `.env` files, `docker-compose.yml` files, and arbitrary config from Jinja2 templates
+- Change detection for rendered files (hash-based)
+- Docker Compose validation (`docker compose config`) before apply
+- Health-aware startup with configurable timeout and retry
+
+**Acceptance criteria:**
+- A fresh bootstrapped VPS can run a multi-container Compose stack (e.g., database + web app
+  + reverse proxy) using only nodeforge-managed specs
+- Template rendering is deterministic and reviewable in the plan
+- Health check failures are surfaced clearly in apply output
+
+---
+
+## v0.4 -- UX + Spec Ergonomics
 
 **Goal:** Make nodeforge pleasant enough for daily use in a real infra repository.
 
@@ -82,46 +108,21 @@ The product evolves in three deliberate stages:
 
 ---
 
-## v0.4 -- Stack Foundations + Addon Architecture
+## v0.5 -- Stack Foundations + Addon Architecture
 
-**Goal:** Introduce a first-class single-host stack model and the addon extension system that makes new spec kinds possible without touching core source.
+**Goal:** Introduce a first-class single-host stack model and the addon extension system.
 
 | Item | Description |
 |---|---|
-| Addon registry | `nodeforge/registry/` -- open extension points for spec kinds, planners, normalizers, validators, step handlers, lifecycle hooks, and value resolvers |
+| Addon registry | Formalize external addon discovery and lifecycle |
 | Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` |
-| `nodeforge/addons/` | Package for built-in optional components (goss ships here as reference) |
 | `kind: stack` | Group related resources into a single deployable application boundary |
-| `kind: file_template` | Render managed configuration files from templates and variables |
-| Managed directories | Deterministic runtime directory layout |
 | Apply ordering | Stack-aware dependency-ordered execution |
-| Overlay / env-file layering | Multiple `.env` file layers with explicit precedence order (deferred from resolver RFC; RFC 008) |
-
-**New capabilities:**
-- Rendered `.env` files, reverse proxy configs, helper scripts, compose files
-- Change detection for rendered files
-- Variable interpolation in templates
-- Stack-level shared variables inherited by child resources
+| Overlay / env-file layering | Multiple `.env` file layers with explicit precedence order (RFC 008) |
 
 **Acceptance criteria:**
-- Nodeforge can reproducibly materialize all config needed for a multi-service stack on a host
-
----
-
-## v0.5 -- Docker Compose Runtime
-
-**Goal:** Make Docker Compose a first-class single-host runtime target.
-
-| Item | Description |
-|---|---|
-| `kind: compose_project` | Represent a Docker Compose project managed by nodeforge |
-| Compose validation | `docker compose config` before apply |
-| Health-aware startup | Wait for container health checks after `up -d` |
-| Structured runtime logs | Capture Compose output for run records |
-
-**Acceptance criteria:**
-- A fresh VPS can be bootstrapped and can run PostgreSQL + a web application + a reverse proxy using only nodeforge-managed specs
-- Health failures are surfaced clearly
+- Nodeforge can define stacks that group file_template + compose_project resources
+- Stacks execute in dependency order
 
 ---
 
@@ -227,8 +228,8 @@ The product evolves in three deliberate stages:
 | RFC 002 | Concrete Implementation Blueprint | Adopted | v0.1 |
 | RFC 003 | Release Signing and Artifact Integrity | Planned | v1.0 |
 | RFC 006 | Cross-Platform Smoke Testing and QA Gates | Adopted | v0.2 |
-| RFC 007 | Single-Host Stack Runtime Model | Planned | v0.4--v0.6 |
-| RFC 008 | Overlay / Env-File Layering for Value Resolution | Planned | v0.4 |
+| RFC 007 | Single-Host Stack Runtime Model | Planned | v0.3--v0.6 |
+| RFC 008 | Overlay / Env-File Layering for Value Resolution | Planned | v0.5 |
 | RFC 012 | Light Blueprints and Stack Composition | Planned | v0.7 |
 | RFC 013 | Multi-Host Light Operations | Planned | v0.8 |
 
