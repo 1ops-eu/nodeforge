@@ -121,6 +121,9 @@ class SSHSession:
                 mv_result = self.run(f"mv {tmp_remote} {remote_path}", sudo=True)
                 if not mv_result.ok:
                     return mv_result
+                chown_result = self.run(f"chown root:root {remote_path}", sudo=True)
+                if not chown_result.ok:
+                    return chown_result
                 chmod_result = self.run(f"chmod 600 {remote_path}", sudo=True)
                 if not chmod_result.ok:
                     return chmod_result
