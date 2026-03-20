@@ -22,7 +22,6 @@ from nodeforge.specs.compose_project_schema import (
 )
 from nodeforge.specs.validators import has_errors, validate_compose_project
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

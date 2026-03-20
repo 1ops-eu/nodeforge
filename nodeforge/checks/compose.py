@@ -35,7 +35,7 @@ def check_compose_health(
         CheckResult with per-container status in details.
     """
     deadline = time.monotonic() + timeout
-    last_statuses: dict[str, str] = {}
+    last_containers: list[dict] = []
 
     cmd = (
         f"bash -c 'cd {directory} && "
@@ -53,27 +53,27 @@ def check_compose_health(
             time.sleep(interval)
             continue
 
-        last_statuses = {c["name"]: c["state"] for c in containers}
+        last_containers = containers
 
         # Check if all containers are in an acceptable state
         all_healthy = all(_is_container_healthy(c) for c in containers)
 
         if all_healthy:
+            summary = {c["name"]: _container_status(c) for c in containers}
             return CheckResult(
                 passed=True,
                 check_type="compose_health",
                 message=f"All {len(containers)} containers healthy/running",
-                details={"containers": last_statuses},
+                details={"containers": summary},
             )
 
         time.sleep(interval)
 
     # Timeout — report which containers are not healthy
     unhealthy = {
-        name: state
-        for name, state in last_statuses.items()
-        if state.lower() not in ("running", "healthy")
+        c["name"]: _container_status(c) for c in last_containers if not _is_container_healthy(c)
     }
+    summary = {c["name"]: _container_status(c) for c in last_containers}
     return CheckResult(
         passed=False,
         check_type="compose_health",
@@ -81,7 +81,7 @@ def check_compose_health(
             f"Timeout after {timeout}s: {len(unhealthy)} container(s) not healthy: "
             + ", ".join(f"{n}={s}" for n, s in unhealthy.items())
         ),
-        details={"containers": last_statuses, "unhealthy": unhealthy},
+        details={"containers": summary, "unhealthy": unhealthy},
     )
 
 
@@ -123,6 +123,15 @@ def _parse_compose_ps(stdout: str) -> list[dict]:
             continue
 
     return containers
+
+
+def _container_status(container: dict) -> str:
+    """Return a human-readable status string including health when present."""
+    state = container.get("state", "unknown")
+    health = container.get("health", "")
+    if health:
+        return f"{state} ({health})"
+    return state
 
 
 def _is_container_healthy(container: dict) -> bool:

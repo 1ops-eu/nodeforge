@@ -22,6 +22,34 @@ from nodeforge.utils.hashing import sha256_string
 AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
 
 
+def _encode_check_command(check, spec) -> str:
+    """Encode a CheckBlock into a command string for the executor to dispatch."""
+    ctype = check.type
+    host = spec.host.address
+    if ctype == "ssh_reachable":
+        port = check.port or 22
+        user = check.user or "root"
+        return f"check:ssh_reachable:{host}:{port}:{user}"
+    elif ctype == "port_open":
+        port = check.port or 22
+        return f"check:port_open:{host}:{port}"
+    elif ctype == "wireguard_up":
+        iface = check.interface or "wg0"
+        return f"check:wireguard_up:{iface}"
+    elif ctype == "container_running":
+        name = check.name or "unknown"
+        return f"check:container_running:{name}"
+    elif ctype == "http":
+        url = check.url or ""
+        status = check.expect_status or 200
+        return f"check:http:{url}:{status}"
+    elif ctype == "postgres_ready":
+        return "check:postgres_ready"
+    elif ctype == "nginx_ready":
+        return "check:nginx_ready"
+    return f"check:{ctype}"
+
+
 def plan(ctx: NormalizedContext) -> Plan:
     """Convert a NormalizedContext into an executable Plan."""
     from nodeforge.registry import get_planner, load_addons
@@ -465,6 +493,17 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
 
         steps.append(
             _s(
+                "set_wireguard_dir_permissions",
+                "Secure /etc/wireguard directory (chmod 700)",
+                R,
+                StepKind.SSH_COMMAND,
+                command=wg.set_wireguard_dir_permissions(),
+                sudo=True,
+                tags=["wireguard"],
+            )
+        )
+        steps.append(
+            _s(
                 "write_wireguard_config",
                 f"Write WireGuard server config: /etc/wireguard/{spec.wireguard.interface}.conf",
                 R,
@@ -529,7 +568,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
                 f"Postflight check: {check.type}",
                 V,
                 StepKind.VERIFY,
-                command=f"check:{check.type}",
+                command=_encode_check_command(check, spec),
                 tags=["postflight", check.type],
             )
         )
@@ -1221,7 +1260,7 @@ def _plan_file_template(spec: FileTemplateSpec, ctx: NormalizedContext) -> list[
                 f"Postflight check: {check.type}",
                 V,
                 StepKind.VERIFY,
-                command=f"check:{check.type}",
+                command=_encode_check_command(check, spec),
                 tags=["postflight", check.type],
             )
         )
@@ -1468,7 +1507,7 @@ def _plan_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext) -> l
                 f"Postflight check: {check.type}",
                 V,
                 StepKind.VERIFY,
-                command=f"check:{check.type}",
+                command=_encode_check_command(check, spec),
                 tags=["postflight", check.type],
             )
         )

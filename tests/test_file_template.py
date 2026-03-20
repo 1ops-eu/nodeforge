@@ -14,7 +14,6 @@ from nodeforge.specs.file_template_schema import (
 )
 from nodeforge.specs.validators import has_errors, validate_file_template
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -201,7 +200,7 @@ class TestFileTemplatePlanner:
         tpl = tpl_dir / "app.conf.j2"
         tpl.write_text("server_name {{ domain }};\nlisten {{ port }};\n")
 
-        content = textwrap.dedent(f"""\
+        content = textwrap.dedent("""\
             kind: file_template
             meta:
               name: ft-test
@@ -320,7 +319,7 @@ class TestFileTemplatePlanner:
         tpl = tpl_dir / "app.conf.j2"
         tpl.write_text("content = {{ value }}")
 
-        content = textwrap.dedent(f"""\
+        content = textwrap.dedent("""\
             kind: file_template
             meta:
               name: ft-inv-test

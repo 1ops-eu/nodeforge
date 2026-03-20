@@ -220,7 +220,15 @@ class Executor:
                 parent = target.rsplit("/", 1)[0]
                 self._session.run(f"mkdir -p {parent}", sudo=False, warn=True)
 
-            self._session.upload_content(step.file_content, target, sudo=step.sudo)
+            upload_result = self._session.upload_content(step.file_content, target, sudo=step.sudo)
+            if not upload_result.ok:
+                return StepResult(
+                    step_index=step.index,
+                    step_id=step.id,
+                    scope=step.scope.value,
+                    status="failed",
+                    error=f"Upload failed: {upload_result.stderr}",
+                )
         return StepResult(
             step_index=step.index,
             step_id=step.id,
@@ -340,13 +348,7 @@ class Executor:
             return self._execute_goss_validate(step)
 
         if step.command and step.command.startswith("check:"):
-            return StepResult(
-                step_index=step.index,
-                step_id=step.id,
-                scope=step.scope.value,
-                status="success",
-                output="[check skipped in V1]",
-            )
+            return self._execute_postflight_check(step)
         if step.command and not step.command.startswith(("echo ", "ssh_check:")):
             return self._execute_ssh_command(step)
         return StepResult(
@@ -356,6 +358,89 @@ class Executor:
             status="success",
             output="ok",
         )
+
+    def _execute_postflight_check(self, step: Step) -> StepResult:
+        """Dispatch a postflight check encoded as check:{type}:{params...}."""
+        parts = step.command.split(":", maxsplit=2) if step.command else []
+        check_type = parts[1] if len(parts) > 1 else ""
+        params = parts[2] if len(parts) > 2 else ""
+
+        try:
+            if check_type == "ssh_reachable":
+                from nodeforge.checks.ssh import check_ssh_reachable
+
+                host, port_str, user = params.split(":", 2)
+                key_path = None
+                if self._ctx and self._ctx.admin_key_path:
+                    key_path = str(self._ctx.admin_key_path)
+                check = check_ssh_reachable(host, int(port_str), user, key_path=key_path)
+
+            elif check_type == "port_open":
+                from nodeforge.checks.ports import check_port_open
+
+                host, port_str = params.split(":", 1)
+                check = check_port_open(host, int(port_str))
+
+            elif check_type == "wireguard_up":
+                from nodeforge.checks.wireguard import check_wireguard_up
+
+                if self._session is None:
+                    raise RuntimeError("No SSH session for wireguard check")
+                check = check_wireguard_up(self._session, params)
+
+            elif check_type == "container_running":
+                from nodeforge.checks.container import check_container_running
+
+                if self._session is None:
+                    raise RuntimeError("No SSH session for container check")
+                check = check_container_running(self._session, params)
+
+            elif check_type == "http":
+                from nodeforge.checks.http import check_http
+
+                url, status_str = params.rsplit(":", 1)
+                check = check_http(url, expect_status=int(status_str))
+
+            elif check_type == "postgres_ready":
+                from nodeforge.checks.postgres import check_postgres_ready
+
+                if self._session is None:
+                    raise RuntimeError("No SSH session for postgres check")
+                check = check_postgres_ready(self._session)
+
+            elif check_type == "nginx_ready":
+                from nodeforge.checks.nginx import check_nginx_ready
+
+                if self._session is None:
+                    raise RuntimeError("No SSH session for nginx check")
+                check = check_nginx_ready(self._session)
+
+            else:
+                return StepResult(
+                    step_index=step.index,
+                    step_id=step.id,
+                    scope=step.scope.value,
+                    status="failed",
+                    error=f"Unknown check type: {check_type}",
+                )
+
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="success" if check.passed else "failed",
+                output=check.message,
+                error="" if check.passed else check.message,
+            )
+
+        except Exception as exc:
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="failed",
+                error=f"Postflight check error: {exc}",
+            )
 
     def _execute_goss_validate(self, step: Step) -> StepResult:
         """Install goss on the remote, update the master gossfile, run validate."""

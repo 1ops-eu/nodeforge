@@ -49,7 +49,7 @@ This is the critical check used by the GATE steps that enforce SSH lockout preve
 
 ## Usage
 
-Checks are invoked by the executor, not called directly by users. The executor's `_execute_gate()` method parses the step command (e.g., `ssh_check:host:port:user`) and calls the appropriate check function. Other check types (`container_running`, `http`, `postgres_ready`, etc.) are called from `_execute_verify()`. The `compose_health_check` step kind has its own dedicated executor handler `_execute_compose_health_check()`.
+Checks are invoked by the executor, not called directly by users. The executor's `_execute_gate()` method parses the step command (e.g., `ssh_check:host:port:user`) and calls the appropriate check function. Postflight checks (from the spec's `checks:` block) are dispatched by `_execute_postflight_check()`, which parses the encoded command string (e.g., `check:wireguard_up:wg0`, `check:port_open:192.168.56.10:2222`) and calls the corresponding check function. The `compose_health_check` step kind has its own dedicated executor handler `_execute_compose_health_check()`.
 
 ---
 

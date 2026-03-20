@@ -45,9 +45,9 @@ The `Executor` class takes a `Plan`, an `SSHSession`, an `InventoryDB`, and the 
 | Step Kind | Handler | Description |
 |---|---|---|
 | `ssh_command` | `_execute_ssh_command()` | Run a shell command on the remote host via SSH |
-| `ssh_upload` | `_execute_ssh_upload()` | Upload file content to a remote path (handles `~` expansion) |
+| `ssh_upload` | `_execute_ssh_upload()` | Upload file content to a remote path (handles `~` expansion). Returns failure if the remote mv/chmod fails. |
 | `gate` | `_execute_gate()` | SSH login verification (parses `ssh_check:host:port:user` command format). When `effective_port` is set, replaces the compiled port with the effective port to handle re-runs on already-bootstrapped servers. |
-| `verify` | `_execute_verify()` | Non-gate verification: goss validate, postflight checks, SSH commands |
+| `verify` | `_execute_verify()` | Non-gate verification: goss validate, postflight checks (dispatched via `_execute_postflight_check()`), SSH commands |
 | `local_file_write` | `_execute_local_file_write()` | Write SSH conf.d entry locally |
 | `local_command` | `_execute_local_command()` | Backup SSH config, ensure Include, save WireGuard state |
 | `local_db_write` | `_execute_local_db_write()` | Initialize/upsert inventory database |
