@@ -489,6 +489,17 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
         )
         steps.append(
             _s(
+                "load_wireguard_module",
+                "Load WireGuard kernel module",
+                R,
+                StepKind.SSH_COMMAND,
+                command=wg.load_wireguard_module(),
+                sudo=True,
+                tags=["wireguard"],
+            )
+        )
+        steps.append(
+            _s(
                 "enable_wireguard",
                 f"Enable and start WireGuard: wg-quick@{spec.wireguard.interface}",
                 R,
@@ -1254,6 +1265,7 @@ def _plan_file_template(spec: FileTemplateSpec, ctx: NormalizedContext) -> list[
 def _plan_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext) -> list[Step]:
     """Generate steps for deploying a Docker Compose project."""
     from nodeforge.runtime.steps import compose as cp
+    from nodeforge.runtime.steps import docker as dk
 
     steps: list[Step] = []
     R = StepScope.REMOTE
@@ -1271,6 +1283,52 @@ def _plan_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext) -> l
             StepKind.SSH_COMMAND,
             command="echo 'preflight ok'",
             tags=["preflight"],
+        )
+    )
+
+    # Docker — always required for compose_project
+    steps.append(
+        _s(
+            "apt_update",
+            "Update apt package index",
+            R,
+            StepKind.SSH_COMMAND,
+            command="apt-get update -y",
+            sudo=True,
+            tags=["packages"],
+        )
+    )
+    steps.append(
+        _s(
+            "install_docker",
+            "Install Docker",
+            R,
+            StepKind.SSH_COMMAND,
+            command=dk.install_docker(),
+            sudo=True,
+            tags=["docker"],
+        )
+    )
+    steps.append(
+        _s(
+            "enable_docker",
+            "Enable Docker service",
+            R,
+            StepKind.SSH_COMMAND,
+            command=dk.enable_docker(),
+            sudo=True,
+            tags=["docker"],
+        )
+    )
+    steps.append(
+        _s(
+            "docker_version_check",
+            "Verify Docker installation",
+            V,
+            StepKind.VERIFY,
+            command="docker --version",
+            sudo=True,
+            tags=["docker", "verify"],
         )
     )
 

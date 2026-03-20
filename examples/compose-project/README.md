@@ -5,14 +5,15 @@ Deploys a multi-service Docker Compose stack with template rendering and health 
 ## What it does
 
 1. Connects to the target server via SSH
-2. Creates the project directory `/opt/demo-stack`
-3. Creates managed subdirectory `data/`
-4. Renders `templates/nginx.conf.j2` with variables and uploads to the project directory
-5. Uploads `docker-compose.yml` to the project directory
-6. Validates the compose configuration (`docker compose config`)
-7. Pulls container images (`docker compose pull`)
-8. Starts the stack (`docker compose up -d`)
-9. Waits for all containers to be healthy (polls for up to 120 seconds)
+2. Installs Docker (if not already present)
+3. Creates the project directory `/opt/demo-stack`
+4. Creates managed subdirectory `data/`
+5. Renders `templates/nginx.conf.j2` with variables and uploads to the project directory
+6. Uploads `docker-compose.yml` to the project directory
+7. Validates the compose configuration (`docker compose config`)
+8. Pulls container images (`docker compose pull`)
+9. Starts the stack (`docker compose up -d`)
+10. Waits for all containers to be healthy (polls for up to 120 seconds)
 
 ## Usage
 
@@ -25,7 +26,6 @@ nodeforge apply examples/compose-project/compose-project.yaml
 ## Prerequisites
 
 - A bootstrapped server with SSH access on port 2222
-- Docker and Docker Compose v2 installed (use a `kind: service` spec with `docker.enabled: true` first)
 
 ## Notes
 

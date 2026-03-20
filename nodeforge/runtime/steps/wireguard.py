@@ -60,6 +60,10 @@ PersistentKeepalive = {persistent_keepalive}
 """
 
 
+def load_wireguard_module() -> str:
+    return "modprobe wireguard"
+
+
 def enable_wireguard(interface: str) -> str:
     return f"systemctl enable --now wg-quick@{interface}"
 

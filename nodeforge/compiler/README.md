@@ -87,7 +87,7 @@ Steps that would lock out the operator **MUST** depend on the gate step. If the 
 8. **Post-port-change gate** — verify admin login on new port
 9. **Lockout-gated steps** — disable root login, disable password auth
 10. **Firewall finalization** — three separate steps: default deny incoming, default allow outgoing, force enable
-11. **WireGuard** (if enabled) — config upload, enable, verify, SSH restriction (allow on WG + delete open rule)
+11. **WireGuard** (if enabled) — config upload, load kernel module (`modprobe wireguard`), enable, verify, SSH restriction (allow on WG + delete open rule)
 12. **Goss verification** — generate, ship, and run server-state checks
 12. **Local finalization** — SSH conf.d, WireGuard state save, inventory DB
 
@@ -107,7 +107,7 @@ Steps that would lock out the operator **MUST** depend on the gate step. If the 
 - `_plan_bootstrap()` — generates the full bootstrap step sequence
 - `_plan_service()` — generates the service deployment step sequence
 - `_plan_file_template()` — generates steps per template: mkdir parent, upload rendered content, chmod, chown
-- `_plan_compose_project()` — generates steps: mkdir project dir, mkdir managed dirs, upload rendered templates, upload compose file, compose config validate, compose pull, compose up, health check, inventory
+- `_plan_compose_project()` — generates steps: apt update, Docker install/enable/verify, mkdir project dir, mkdir managed dirs, upload rendered templates, upload compose file, compose config validate, compose pull, compose up, health check, inventory
 
 All are registered in `registry/_builtins.py` and dispatched via `PLANNER_REGISTRY`.
 
@@ -121,16 +121,20 @@ All are registered in `registry/_builtins.py` and dispatched via `PLANNER_REGIST
 ### Compose project plan structure
 
 1. **Preflight** — verify admin SSH access
-2. **Create project directory** (`mkdir -p`)
-3. **Create managed directories** (mkdir + chmod + chown via `bash -c` wrapper)
-4. **Upload rendered templates** (`SSH_UPLOAD` with Jinja2-rendered content)
-5. **Upload compose file** (`SSH_UPLOAD` with raw file content)
-6. **Validate compose config** (`docker compose config --quiet`)
-7. **Pull images** (optional, `pull_before_up`)
-8. **Start the stack** (`docker compose up -d`)
-9. **Health check** (optional, `COMPOSE_HEALTH_CHECK` step kind with configurable timeout/interval)
-10. **Postflight checks** (if defined)
-11. **Local inventory** (if enabled)
+2. **Apt update** — refresh package index (always emitted; Docker install requires it)
+3. **Docker install** — `curl -fsSL https://get.docker.com | sh` (always emitted; compose_project requires Docker)
+4. **Enable Docker service** — `systemctl enable --now docker`
+5. **Verify Docker** — `docker --version`
+6. **Create project directory** (`mkdir -p`)
+7. **Create managed directories** (mkdir + chmod + chown via `bash -c` wrapper)
+8. **Upload rendered templates** (`SSH_UPLOAD` with Jinja2-rendered content)
+9. **Upload compose file** (`SSH_UPLOAD` with raw file content)
+10. **Validate compose config** (`docker compose config --quiet`)
+11. **Pull images** (optional, `pull_before_up`)
+12. **Start the stack** (`docker compose up -d`)
+13. **Health check** (optional, `COMPOSE_HEALTH_CHECK` step kind with configurable timeout/interval)
+14. **Postflight checks** (if defined)
+15. **Local inventory** (if enabled)
 
 ---
 
