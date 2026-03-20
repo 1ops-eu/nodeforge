@@ -22,34 +22,59 @@ def _register_builtins() -> None:
 def _register_specs() -> None:
     from nodeforge.registry.specs import register_spec_kind
     from nodeforge.specs.bootstrap_schema import BootstrapSpec
+    from nodeforge.specs.compose_project_schema import ComposeProjectSpec
+    from nodeforge.specs.file_template_schema import FileTemplateSpec
     from nodeforge.specs.service_schema import ServiceSpec
 
     register_spec_kind("bootstrap", BootstrapSpec)
     register_spec_kind("service", ServiceSpec)
+    register_spec_kind("file_template", FileTemplateSpec)
+    register_spec_kind("compose_project", ComposeProjectSpec)
 
 
 def _register_normalizers() -> None:
-    from nodeforge.compiler.normalizer import _normalize_bootstrap, _normalize_service
+    from nodeforge.compiler.normalizer import (
+        _normalize_bootstrap,
+        _normalize_compose_project,
+        _normalize_file_template,
+        _normalize_service,
+    )
     from nodeforge.registry.normalizers import register_normalizer
 
     register_normalizer("bootstrap", _normalize_bootstrap)
     register_normalizer("service", _normalize_service)
+    register_normalizer("file_template", _normalize_file_template)
+    register_normalizer("compose_project", _normalize_compose_project)
 
 
 def _register_validators() -> None:
     from nodeforge.registry.validators import register_validator
-    from nodeforge.specs.validators import validate_bootstrap, validate_service
+    from nodeforge.specs.validators import (
+        validate_bootstrap,
+        validate_compose_project,
+        validate_file_template,
+        validate_service,
+    )
 
     register_validator("bootstrap", validate_bootstrap)
     register_validator("service", validate_service)
+    register_validator("file_template", validate_file_template)
+    register_validator("compose_project", validate_compose_project)
 
 
 def _register_planners() -> None:
-    from nodeforge.compiler.planner import _plan_bootstrap, _plan_service
+    from nodeforge.compiler.planner import (
+        _plan_bootstrap,
+        _plan_compose_project,
+        _plan_file_template,
+        _plan_service,
+    )
     from nodeforge.registry.planners import register_planner
 
     register_planner("bootstrap", _plan_bootstrap)
     register_planner("service", _plan_service)
+    register_planner("file_template", _plan_file_template)
+    register_planner("compose_project", _plan_compose_project)
 
 
 def _register_step_handlers() -> None:
@@ -69,10 +94,19 @@ def _register_step_handlers() -> None:
     )
     register_step_handler(StepKind.LOCAL_COMMAND, lambda ex, step: ex._execute_local_command(step))
     register_step_handler(StepKind.VERIFY, lambda ex, step: ex._execute_verify(step))
+    register_step_handler(
+        StepKind.COMPOSE_HEALTH_CHECK,
+        lambda ex, step: ex._execute_compose_health_check(step),
+    )
 
 
 def _register_hooks() -> None:
-    from nodeforge.local.inventory import record_bootstrap, record_service_apply
+    from nodeforge.local.inventory import (
+        record_bootstrap,
+        record_compose_project_apply,
+        record_file_template_apply,
+        record_service_apply,
+    )
     from nodeforge.registry.hooks import KindHooks, register_kind_hooks
 
     register_kind_hooks(
@@ -89,6 +123,22 @@ def _register_hooks() -> None:
             needs_key_generation=False,
             ssh_port_fallback=False,
             on_inventory_record=record_service_apply,
+        ),
+    )
+    register_kind_hooks(
+        "file_template",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_file_template_apply,
+        ),
+    )
+    register_kind_hooks(
+        "compose_project",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_compose_project_apply,
         ),
     )
 

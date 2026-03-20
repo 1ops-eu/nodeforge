@@ -15,6 +15,7 @@ This package provides check functions used by the executor during plan execution
 | `nginx.py` | Nginx readiness check — verifies config validity via `nginx -t` and that the service is active. |
 | `wireguard.py` | WireGuard interface check — verifies the interface is up via `wg show`. |
 | `ports.py` | TCP port connectivity check — attempts a socket connection to verify a port is open. |
+| `compose.py` | Docker Compose health check — polls `docker compose ps --format json` to verify all containers in a compose project are healthy/running, with configurable timeout and interval. Used by the `COMPOSE_HEALTH_CHECK` step kind. |
 | `__init__.py` | Empty package marker |
 
 ---
@@ -48,7 +49,22 @@ This is the critical check used by the GATE steps that enforce SSH lockout preve
 
 ## Usage
 
-Checks are invoked by the executor, not called directly by users. The executor's `_execute_gate()` method parses the step command (e.g., `ssh_check:host:port:user`) and calls the appropriate check function. Other check types (`container_running`, `http`, `postgres_ready`, etc.) are called from `_execute_verify()`.
+Checks are invoked by the executor, not called directly by users. The executor's `_execute_gate()` method parses the step command (e.g., `ssh_check:host:port:user`) and calls the appropriate check function. Other check types (`container_running`, `http`, `postgres_ready`, etc.) are called from `_execute_verify()`. The `compose_health_check` step kind has its own dedicated executor handler `_execute_compose_health_check()`.
+
+---
+
+## Compose Health Check (`compose.py`)
+
+`check_compose_health(session, directory, compose_file, project_name, timeout, interval) -> CheckResult`
+
+Polls the health status of all containers in a Docker Compose project:
+
+- Runs `docker compose ps --format json` on the remote host via SSH
+- Parses both NDJSON (Docker Compose v2, one JSON object per line) and JSON array formats
+- Normalizes field name casing (`Name`/`name`, `State`/`state`, `Health`/`health`)
+- A container is considered healthy if its state is `running` AND (if a health check is defined) its health is `healthy`
+- Retries every `interval` seconds (default 5) until all containers are healthy or `timeout` (default 120s) expires
+- Returns `CheckResult` with per-container status in `details`
 
 ---
 

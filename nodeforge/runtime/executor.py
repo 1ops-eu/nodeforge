@@ -275,6 +275,49 @@ class Executor:
         # Default verify: run the command
         return self._execute_ssh_command(step)
 
+    def _execute_compose_health_check(self, step: Step) -> StepResult:
+        """Execute a compose health check step — polls container health."""
+        from nodeforge.checks.compose import check_compose_health
+
+        if self._session is None:
+            return StepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="success",
+                output="[dry-run or no session — compose health check skipped]",
+            )
+
+        # Parse command: compose_health:<dir>:<compose_file>:<project>:<timeout>:<interval>
+        if step.command and step.command.startswith("compose_health:"):
+            parts = step.command.split(":", 5)
+            if len(parts) == 6:
+                _, directory, compose_file, project_name, timeout_s, interval_s = parts
+                check = check_compose_health(
+                    session=self._session,
+                    directory=directory,
+                    compose_file=compose_file,
+                    project_name=project_name,
+                    timeout=int(timeout_s),
+                    interval=int(interval_s),
+                )
+                return StepResult(
+                    step_index=step.index,
+                    step_id=step.id,
+                    scope=step.scope.value,
+                    status="success" if check.passed else "failed",
+                    output=check.message,
+                    error="" if check.passed else check.message,
+                )
+
+        return StepResult(
+            step_index=step.index,
+            step_id=step.id,
+            scope=step.scope.value,
+            status="failed",
+            error=f"Invalid compose_health_check command: {step.command}",
+        )
+
     def _execute_verify(self, step: Step) -> StepResult:
         """Execute a verify step (non-gate)."""
         # ── goss: no spec was generated (generator failed) ──────────────

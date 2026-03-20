@@ -33,6 +33,7 @@ class StepKind:
     LOCAL_DB_WRITE = "local_db_write"
     VERIFY = "verify"
     GATE = "gate"  # must pass before subsequent steps that depend on it execute
+    COMPOSE_HEALTH_CHECK = "compose_health_check"  # poll docker compose ps for container health
 
 
 class Step(BaseModel):

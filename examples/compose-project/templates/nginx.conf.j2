@@ -1,0 +1,14 @@
+upstream app_backend {
+    server {{ app_host }}:{{ app_port }};
+}
+
+server {
+    listen 80;
+    server_name {{ domain }};
+
+    location / {
+        proxy_pass http://app_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}

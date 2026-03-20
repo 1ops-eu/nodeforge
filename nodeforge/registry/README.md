@@ -6,7 +6,7 @@ This package contains all open registries that power nodeforge's extensible pipe
 
 ## How It Works
 
-Registries are simple `dict[str, Callable]` mappings. Built-in kinds (`bootstrap`, `service`) are registered at startup via `_builtins.py`. External addons register via Python `entry_points` and are discovered by `load_addons()`.
+Registries are simple `dict[str, Callable]` mappings. Built-in kinds (`bootstrap`, `service`, `file_template`, `compose_project`) are registered at startup via `_builtins.py`. External addons register via Python `entry_points` and are discovered by `load_addons()`.
 
 The `load_addons()` function is **idempotent** — it runs once on first call, subsequent calls are no-ops. It is called automatically by the CLI startup callback and lazily by `load_spec()` and `validate_spec()` for non-CLI usage (tests, library imports).
 
@@ -17,7 +17,7 @@ The `load_addons()` function is **idempotent** — it runs once on first call, s
 | File | Purpose |
 |---|---|
 | `__init__.py` | Public API: re-exports all registration functions + `load_addons()` entry point |
-| `_builtins.py` | Registers built-in `bootstrap` and `service` kinds across all registries at startup (all imports are lazy to avoid circular dependencies) |
+| `_builtins.py` | Registers built-in `bootstrap`, `service`, `file_template`, and `compose_project` kinds across all registries at startup (all imports are lazy to avoid circular dependencies) |
 | `specs.py` | `SPEC_REGISTRY`: maps `kind` string -> Pydantic model class |
 | `planners.py` | `PLANNER_REGISTRY`: maps `kind` -> plan-builder function `(spec, ctx) -> list[Step]` |
 | `normalizers.py` | `NORMALIZER_REGISTRY`: maps `kind` -> normalizer function `(spec, ctx) -> None` |

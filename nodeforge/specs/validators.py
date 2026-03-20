@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
+from nodeforge.specs.compose_project_schema import ComposeProjectSpec
+from nodeforge.specs.file_template_schema import FileTemplateSpec
 from nodeforge.specs.service_schema import ServiceSpec
 
-AnySpec = BootstrapSpec | ServiceSpec
+AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
 
 
 @dataclass
@@ -170,6 +173,161 @@ def validate_service(spec: ServiceSpec) -> list[ValidationIssue]:
                         f"Port {site.listen_port} is out of valid range 1-65535",
                     )
                 )
+
+    return issues
+
+
+def validate_file_template(spec: FileTemplateSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    # Must have at least one template
+    if not spec.templates:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "templates",
+                "At least one template is required",
+            )
+        )
+
+    dests: set[str] = set()
+    for i, t in enumerate(spec.templates):
+        # src must not be empty
+        if not t.src:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"templates[{i}].src",
+                    "Template source path must not be empty",
+                )
+            )
+
+        # dest must be an absolute path
+        if not t.dest or not t.dest.startswith("/"):
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"templates[{i}].dest",
+                    f"Template destination must be an absolute path, got '{t.dest}'",
+                )
+            )
+
+        # mode must be a valid octal string
+        if not re.match(r"^0?[0-7]{3,4}$", t.mode):
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"templates[{i}].mode",
+                    f"Invalid file mode '{t.mode}' — expected octal like '0644'",
+                )
+            )
+
+        # No duplicate destinations
+        if t.dest in dests:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"templates[{i}].dest",
+                    f"Duplicate destination path: {t.dest}",
+                )
+            )
+        dests.add(t.dest)
+
+    return issues
+
+
+def validate_compose_project(spec: ComposeProjectSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    p = spec.project
+
+    # Project name must not be empty
+    if not p.name:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "project.name",
+                "Compose project name must not be empty",
+            )
+        )
+
+    # Project directory must be absolute
+    if not p.directory or not p.directory.startswith("/"):
+        issues.append(
+            ValidationIssue(
+                "error",
+                "project.directory",
+                f"Project directory must be an absolute path, got '{p.directory}'",
+            )
+        )
+
+    # Template sources must not be empty
+    template_dests: set[str] = set()
+    for i, t in enumerate(p.templates):
+        if not t.src:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"project.templates[{i}].src",
+                    "Template source path must not be empty",
+                )
+            )
+        if not t.dest:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"project.templates[{i}].dest",
+                    "Template destination filename must not be empty",
+                )
+            )
+        if t.dest in template_dests:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"project.templates[{i}].dest",
+                    f"Duplicate template destination: {t.dest}",
+                )
+            )
+        template_dests.add(t.dest)
+
+    # Health check values
+    hc = p.healthcheck
+    if hc.timeout <= 0:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "project.healthcheck.timeout",
+                f"Health check timeout must be positive, got {hc.timeout}",
+            )
+        )
+    if hc.interval <= 0:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "project.healthcheck.interval",
+                f"Health check interval must be positive, got {hc.interval}",
+            )
+        )
+
+    # Managed directory paths should be relative (not absolute)
+    for i, d in enumerate(p.directories):
+        if d.path.startswith("/"):
+            issues.append(
+                ValidationIssue(
+                    "warning",
+                    f"project.directories[{i}].path",
+                    f"Directory path '{d.path}' is absolute — it will be used as-is, "
+                    "not relative to project.directory",
+                )
+            )
+        if not re.match(r"^0?[0-7]{3,4}$", d.mode):
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"project.directories[{i}].mode",
+                    f"Invalid directory mode '{d.mode}' — expected octal like '0755'",
+                )
+            )
 
     return issues
 

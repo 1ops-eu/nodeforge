@@ -10,7 +10,7 @@ This package contains the SSH transport layer and the plan execution engine. It 
 |---|---|
 | `executor.py` | Plan execution engine: walks the step list, dispatches to registered handlers, enforces gates and dependencies, tracks results |
 | `ssh.py` | Fabric SSH session wrapper: command execution, file upload, connection testing |
-| `steps/` | Shell command builders for each domain (bootstrap, wireguard, postgres, nginx, docker, container) |
+| `steps/` | Shell command builders for each domain (bootstrap, wireguard, postgres, nginx, docker, container, file_template, compose) |
 | `__init__.py` | Empty package marker |
 
 ---
@@ -51,6 +51,7 @@ The `Executor` class takes a `Plan`, an `SSHSession`, an `InventoryDB`, and the 
 | `local_file_write` | `_execute_local_file_write()` | Write SSH conf.d entry locally |
 | `local_command` | `_execute_local_command()` | Backup SSH config, ensure Include, save WireGuard state |
 | `local_db_write` | `_execute_local_db_write()` | Initialize/upsert inventory database |
+| `compose_health_check` | `_execute_compose_health_check()` | Poll `docker compose ps --format json` until all containers are healthy/running or timeout expires. Parses command format: `compose_health:<directory>:<compose_file>:<project_name>:<timeout>:<interval>` |
 
 ### Result model
 
@@ -90,6 +91,8 @@ Shell command builder modules that generate the exact commands executed on remot
 | `nginx.py` | Nginx reverse proxy | `install_nginx()`, `enable_nginx()`, `validate_nginx_config()`, `reload_nginx_service()`, `remove_default_site()`, `site_config_path()`, `site_config_content()`, `enable_site()`. Site config files use the raw domain name as the filename (e.g., `/etc/nginx/sites-available/app.example.com`) — standard nginx convention. Step IDs in the planner still use underscores (e.g., `write_nginx_site_app_example_com`). |
 | `docker.py` | Docker | `install_docker()`, `enable_docker()` |
 | `container.py` | Docker containers | `pull_image()`, `stop_container()`, `remove_container()`, `run_container()` |
+| `file_template.py` | File templates | `mkdir_for_file()`, `chmod_file()`, `chown_file()` |
+| `compose.py` | Docker Compose projects | `mkdir_with_permissions()`, `compose_config()`, `compose_pull()`, `compose_up()`, `compose_down()`. All compose commands use `bash -c 'cd <dir> && docker compose ...'` to chain `cd` with `docker compose` under a single sudo elevation. |
 
 These modules contain **no execution logic** — they only return shell command strings that the planner embeds in `Step` objects.
 

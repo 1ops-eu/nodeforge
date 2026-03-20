@@ -11,7 +11,9 @@ This package defines the YAML spec schemas (Pydantic v2 models), the YAML loader
 | `loader.py` | YAML loading, `${[prefix:]key[:-default]}` value resolution via resolver registry, `.env` file support, registry-based model dispatch |
 | `bootstrap_schema.py` | Pydantic v2 models for `kind: bootstrap` specs |
 | `service_schema.py` | Pydantic v2 models for `kind: service` specs |
-| `validators.py` | Cross-field validation beyond Pydantic schema checks (SSH port ranges, WireGuard completeness, etc.) |
+| `file_template_schema.py` | Pydantic v2 models for `kind: file_template` specs (Jinja2 template rendering and upload) |
+| `compose_project_schema.py` | Pydantic v2 models for `kind: compose_project` specs (Docker Compose project deployment) |
+| `validators.py` | Cross-field validation beyond Pydantic schema checks (SSH port ranges, WireGuard completeness, template paths, compose project config, etc.) |
 | `__init__.py` | Empty package marker |
 
 ---
@@ -109,6 +111,45 @@ After YAML parsing and env var resolution, the `kind` field is looked up in `SPE
 
 ---
 
+## File Template Schema (`file_template_schema.py`)
+
+`FileTemplateSpec` — the top-level model for `kind: file_template`. Renders managed configuration files from Jinja2 templates and uploads them to a remote host. Templates are rendered at plan time — the full rendered content appears in `step.file_content`, making plans fully reviewable.
+
+| Block | Model | Purpose |
+|---|---|---|
+| `meta` | `MetaBlock` | Spec name and description |
+| `host` | `HostBlock` | Target hostname and address |
+| `login` | `FileTemplateLoginBlock` | Admin login (defaults to admin@2222) |
+| `templates` | `list[TemplateFileBlock]` | Template files with src, dest, mode, owner, group |
+| `variables` | `dict[str, str]` | Key-value pairs passed to Jinja2 template context |
+| `local` | `FileTemplateLocalBlock` | state_dir, inventory settings |
+| `checks` | `list[CheckBlock]` | Postflight verification checks |
+
+---
+
+## Compose Project Schema (`compose_project_schema.py`)
+
+`ComposeProjectSpec` — the top-level model for `kind: compose_project`. Deploys Docker Compose projects with template rendering, managed directories, and container health checks.
+
+| Block | Model | Purpose |
+|---|---|---|
+| `meta` | `MetaBlock` | Spec name and description |
+| `host` | `HostBlock` | Target hostname and address |
+| `login` | `ComposeProjectLoginBlock` | Admin login (defaults to admin@2222) |
+| `project` | `ComposeProjectBlock` | Project config: name, directory, compose_file, templates, variables, directories, pull_before_up, healthcheck |
+| `local` | `ComposeProjectLocalBlock` | state_dir, inventory settings |
+| `checks` | `list[CheckBlock]` | Postflight verification checks |
+
+### ComposeProjectBlock sub-models
+
+| Block | Model | Purpose |
+|---|---|---|
+| `templates` | `list[ComposeTemplateBlock]` | Jinja2 templates with src (spec-relative) and dest (relative to project dir) |
+| `directories` | `list[ManagedDirectoryBlock]` | Additional directories with path, mode, owner, group |
+| `healthcheck` | `ComposeHealthCheckBlock` | enabled, timeout (120s), interval (5s) |
+
+---
+
 ## Validators (`validators.py`)
 
 Entry point: `validate_spec(spec) -> list[ValidationIssue]`
@@ -132,6 +173,22 @@ Performs semantic validation beyond what Pydantic schema checks can enforce:
 - Nginx SSL without certificate paths error
 - Nginx site listen port range check
 
+### File template validations
+- At least one template required
+- Template src must not be empty
+- Template dest must be an absolute path
+- Mode must be a valid octal string (e.g., `0644`)
+- No duplicate destination paths
+
+### Compose project validations
+- Project name must not be empty
+- Project directory must be an absolute path
+- Template sources and destinations must not be empty
+- No duplicate template destinations
+- Health check timeout and interval must be positive
+- Absolute directory paths in `directories` produce a warning
+- Invalid directory mode produces an error
+
 Each issue is a `ValidationIssue` with severity (`error` or `warning`), field path, and message.
 
 ---
@@ -140,4 +197,4 @@ Each issue is a `ValidationIssue` with severity (`error` or `warning`), field pa
 
 - **Pydantic v2**: all schemas use `BaseModel` with `model_validate()` for strict type checking and clear error messages.
 - **Field paths in errors**: env var resolution tracks the YAML path (e.g., `postgres.create_role.password_env`) for actionable error messages.
-- **Shared blocks**: `MetaBlock`, `HostBlock`, `CheckBlock`, `InventoryBlock` are defined once in `bootstrap_schema.py` and reused by `service_schema.py`.
+- **Shared blocks**: `MetaBlock`, `HostBlock`, `CheckBlock`, `InventoryBlock` are defined once in `bootstrap_schema.py` and reused by `service_schema.py`, `file_template_schema.py`, and `compose_project_schema.py`.
