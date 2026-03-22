@@ -338,6 +338,12 @@ def validate_spec(spec) -> list[ValidationIssue]:
 
     load_addons()
 
+    if isinstance(spec, list):
+        issues = []
+        for s in spec:
+            issues.extend(validate_spec(s))
+        return issues
+
     validator = get_validator(spec.kind)
     if validator is None:
         return [
