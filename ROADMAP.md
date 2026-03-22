@@ -151,9 +151,9 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 ---
 
-## v0.5 -- Declarative Reconciliation + Policy Engine
+## v0.5 -- Declarative Reconciliation + Policy Engine + Package Split
 
-**Goal:** Make the agent truly declarative (desired state vs. actual state) and ship the policy engine in OSS core.
+**Goal:** Make the agent truly declarative (desired state vs. actual state), ship the policy engine in OSS core, and split the codebase into three clean packages.
 
 ### Reconciliation
 
@@ -183,11 +183,23 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 | Apply ordering | Stack-aware dependency-ordered execution |
 | Overlay / env-file layering | Multiple `.env` file layers with explicit precedence order (RFC 008) |
 
+### Package Split (Monorepo)
+
+| Item | Description |
+|---|---|
+| `nodeforge-core` package | `plan/`, `specs/`, `registry/` (infrastructure), `utils/` — shared by client and agent |
+| `nodeforge` package | Client: `compiler/`, `runtime/`, `local/`, `logs/`, `checks/`, `addons/`, `cli.py` |
+| `nodeforge-agent` package | Agent: `executor.py`, `state.py`, `lock.py`, `paths.py`, `cli.py`, `installer.py` |
+| Import boundaries enforced | Agent may not import from client; client may not import from agent |
+| Monorepo layout | All three packages under `packages/` in the same git repo |
+
 **Acceptance criteria:**
 - `nodeforge apply` is safe to re-run at any time — only applies what changed
 - `nodeforge doctor` reports drift accurately
 - Policy engine is testable, auditable, and inert by default
 - Stacks group resources with dependency-ordered execution
+- `pip install nodeforge-core` / `nodeforge` / `nodeforge-agent` each work independently
+- Agent binary only includes agent + core code, not compiler/runtime/Fabric
 
 ---
 
