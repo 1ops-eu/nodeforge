@@ -35,6 +35,13 @@ class StepKind:
     GATE = "gate"  # must pass before subsequent steps that depend on it execute
     COMPOSE_HEALTH_CHECK = "compose_health_check"  # poll docker compose ps for container health
 
+    # Agent-side step kinds (v0.4) — execute locally on the managed server
+    AGENT_COMMAND = "agent_command"
+    AGENT_FILE_WRITE = "agent_file_write"
+    AGENT_GATE = "agent_gate"
+    AGENT_VERIFY = "agent_verify"
+    AGENT_COMPOSE_HEALTH = "agent_compose_health"
+
 
 class Step(BaseModel):
     id: str  # e.g. "create_admin_user", "verify_admin_login"
@@ -61,6 +68,7 @@ class Plan(BaseModel):
     plan_hash: str
     steps: list[Step]
     created_at: str
+    execution_mode: str = "client"  # "client" (Fabric) or "agent" (server-local)
 
     def remote_steps(self) -> list[Step]:
         return [s for s in self.steps if s.scope == StepScope.REMOTE]

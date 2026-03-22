@@ -11,6 +11,7 @@ This package defines the central `Plan` and `Step` data structures that all down
 | `models.py` | Pydantic models: `Plan`, `Step`, `StepScope` enum, `StepKind` open constants |
 | `render_text.py` | Rich console table output for `nodeforge plan` |
 | `render_markdown.py` | Jinja2-based Markdown rendering for `nodeforge docs` |
+| `render_diff.py` | Diff renderer for `nodeforge diff` — compares plan against runtime state |
 | `__init__.py` | Empty package marker |
 
 ---

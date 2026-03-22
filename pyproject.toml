@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nodeforge"
-version = "0.3.0"
+version = "0.4.0"
 description = "Securely bootstrap Linux servers with auditable plans, generated ops docs, and encrypted local inventory"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -69,6 +69,7 @@ line-length = 100
 
 [project.scripts]
 nodeforge = "nodeforge.cli:app"
+nodeforge-agent = "nodeforge.agent.cli:app"
 
 # Addon discovery group. External packages register here to extend nodeforge
 # with new spec kinds, step handlers, and lifecycle hooks without modifying core.

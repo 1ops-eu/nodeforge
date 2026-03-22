@@ -73,7 +73,7 @@ dev: venv
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
 test:
-	pytest tests/test_specs/ tests/test_compiler/ tests/test_plan/ tests/test_runtime/ tests/test_cli/ -v
+	pytest tests/test_specs/ tests/test_compiler/ tests/test_plan/ tests/test_runtime/ tests/test_cli/ tests/test_agent/ -v
 
 test-local:
 	pytest tests/test_local/ -v

@@ -4,7 +4,7 @@ This document tracks the planned evolution of `nodeforge` from its current v0.2 
 
 The roadmap is organized around milestones. Each milestone corresponds to a meaningful capability jump. Future infrastructure and design decisions are captured in the RFC series below.
 
-**Architectural pivot (v0.3):** Starting with v0.3, nodeforge transitions from a client-driven remote orchestrator to a **server-local agent model**. The `nodeforge-agent` binary is installed as the first step of every bootstrap. The client becomes a thin transporter; the agent is the operator. See [PIVOT.md](PIVOT.md) for the full decision document.
+**Architectural pivot (v0.3):** Starting with v0.3, nodeforge transitions from a client-driven remote orchestrator to a **server-local agent model**. The `nodeforge-agent` binary is installed as the first step of every bootstrap. The client becomes a thin transporter; the agent is the operator.
 
 ---
 
@@ -110,34 +110,44 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 ---
 
-## v0.4 -- Logic Migration + UX
+## v0.4 -- Logic Migration + UX ✅
 
 **Goal:** Complete the migration of all spec kinds to agent-side execution, and improve daily-use ergonomics.
 
 ### Logic Migration
 
-| Item | Description |
-|---|---|
-| All spec kinds via agent | Bootstrap, service (PostgreSQL, Nginx, Docker, containers), file_template, compose_project — all execute through the agent |
-| Server-side plan/apply | Plan generation and apply run on the agent, not the client |
-| Idempotent re-apply | Agent skips unchanged resources on re-apply |
-| Deprecate old Fabric path | Mark the direct-Fabric execution path as deprecated |
+| Item | Description | Status |
+|---|---|---|
+| All spec kinds via agent | Bootstrap, service (PostgreSQL, Nginx, Docker, containers), file_template, compose_project — all execute through the agent | Done |
+| Server-side plan/apply | Plan generation and apply run on the agent, not the client | Done |
+| Idempotent re-apply | Agent skips unchanged resources on re-apply (hash-based content comparison) | Done |
+| Deprecate old Fabric path | Mark the direct-Fabric execution path as deprecated (`DeprecationWarning` on `ssh_session=`) | Done |
 
 ### UX Improvements
 
-| Item | Description |
-|---|---|
-| `nodeforge version` | Print current version (client + agent) |
-| `nodeforge update` | Self-update client from GitHub Releases; `nodeforge agent-update <host>` for the agent |
-| Shell completion | Enable `typer` completion install |
-| Spec dry-run diff | Show exactly what would change on the server before applying |
-| Multiple YAML documents | Allow `---` documents in a single file |
+| Item | Description | Status |
+|---|---|---|
+| `nodeforge version` | Print current version (client + agent via `--host`) | Done |
+| `nodeforge update` | Self-update client from GitHub Releases; `nodeforge agent-update <host>` for the agent | Done |
+| Shell completion | Enable `typer` completion (`add_completion=True`) | Done |
+| Spec dry-run diff | `nodeforge diff` shows exactly what would change on the server before applying | Done |
+| Multiple YAML documents | `yaml.safe_load_all()` with `---` separator support; backward-compatible | Done |
+
+**New capabilities:**
+- Transport protocol abstraction (`Transport` protocol decouples executor from Fabric)
+- Agent executor with subprocess-based local execution
+- Mutation locking via `fcntl.flock` (one apply at a time)
+- Runtime state tracking with atomic save (`runtime-state.json`)
+- Agent binary entry point (`nodeforge-agent apply|status|version`)
+- Agent detection and auto/manual mode selection (`--mode auto|agent|client`)
+- Dry-run diff with added/changed/unchanged/always-run classification
+- Multi-document YAML with per-document error reporting
 
 **Acceptance criteria:**
-- All existing spec kinds execute through the agent — no direct Fabric orchestration for provisioning steps
-- `nodeforge apply` is idempotent — re-running produces no changes if state matches
-- Plans are reviewable and stable
-- Operators can inspect intended changes before execution
+- All existing spec kinds execute through the agent — no direct Fabric orchestration for provisioning steps -- **met**
+- `nodeforge apply` is idempotent — re-running produces no changes if state matches -- **met**
+- Plans are reviewable and stable -- **met**
+- Operators can inspect intended changes before execution (`nodeforge diff`) -- **met**
 
 ---
 

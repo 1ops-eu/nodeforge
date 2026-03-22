@@ -8,7 +8,7 @@ This package defines the YAML spec schemas (Pydantic v2 models), the YAML loader
 
 | File | Purpose |
 |---|---|
-| `loader.py` | YAML loading, `${[prefix:]key[:-default]}` value resolution via resolver registry, `.env` file support, registry-based model dispatch |
+| `loader.py` | YAML loading with multi-document support (`---` separators), `${[prefix:]key[:-default]}` value resolution via resolver registry, `.env` file support, registry-based model dispatch |
 | `bootstrap_schema.py` | Pydantic v2 models for `kind: bootstrap` specs |
 | `service_schema.py` | Pydantic v2 models for `kind: service` specs |
 | `file_template_schema.py` | Pydantic v2 models for `kind: file_template` specs (Jinja2 template rendering and upload) |

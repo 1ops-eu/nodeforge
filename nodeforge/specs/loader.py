@@ -182,31 +182,51 @@ def load_spec(path: Path, *, strict_env: bool = True, env_file: Path | None = No
         for key, value in load_env_file(env_file).items():
             os.environ.setdefault(key, value)
 
+    text = path.read_text(encoding="utf-8")
+
+    # Support multiple YAML documents separated by ---
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        documents = list(yaml.safe_load_all(text))
     except yaml.YAMLError as e:
         raise SpecLoadError(f"YAML parse error in {path}: {e}") from e
 
-    if not isinstance(raw, dict):
-        raise SpecLoadError(f"Spec file must be a YAML mapping, got {type(raw).__name__}")
+    # Filter out empty documents (e.g. trailing ---)
+    documents = [d for d in documents if d is not None]
 
-    kind = raw.get("kind")
-    model_class = get_spec_model(kind)
-    if model_class is None:
-        known = ", ".join(list_spec_kinds()) or "none"
-        raise SpecLoadError(f"Unknown spec kind '{kind}'. Supported: {known}")
+    if not documents:
+        raise SpecLoadError(f"Spec file is empty: {path}")
 
-    try:
-        data = _resolve_values(raw, strict=strict_env)
-    except SpecLoadError:
-        raise
+    specs = []
+    for doc_idx, raw in enumerate(documents):
+        if not isinstance(raw, dict):
+            raise SpecLoadError(
+                f"Document {doc_idx + 1} in {path} must be a YAML mapping, "
+                f"got {type(raw).__name__}"
+            )
 
-    try:
-        return model_class.model_validate(data)
-    except Exception as e:
-        # Wrap pydantic ValidationError with a friendlier message.
-        # Import lazily to keep module importable without pydantic installed
-        # (useful for testing _resolve_values / load_env_file in isolation).
-        if type(e).__name__ == "ValidationError":
-            raise SpecLoadError(f"Spec validation error in {path}:\n{e}") from e
-        raise
+        kind = raw.get("kind")
+        model_class = get_spec_model(kind)
+        if model_class is None:
+            known = ", ".join(list_spec_kinds()) or "none"
+            raise SpecLoadError(
+                f"Unknown spec kind '{kind}' in document {doc_idx + 1}. Supported: {known}"
+            )
+
+        try:
+            data = _resolve_values(raw, strict=strict_env)
+        except SpecLoadError:
+            raise
+
+        try:
+            specs.append(model_class.model_validate(data))
+        except Exception as e:
+            if type(e).__name__ == "ValidationError":
+                raise SpecLoadError(
+                    f"Spec validation error in {path} (document {doc_idx + 1}):\n{e}"
+                ) from e
+            raise
+
+    # Return single spec for backward compatibility, list for multi-doc
+    if len(specs) == 1:
+        return specs[0]
+    return specs

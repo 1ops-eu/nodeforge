@@ -23,6 +23,11 @@ _KIND_LABELS: dict[str, str] = {
     StepKind.LOCAL_DB_WRITE: "db write",
     StepKind.VERIFY: "verify",
     StepKind.GATE: "GATE",
+    StepKind.AGENT_COMMAND: "agent cmd",
+    StepKind.AGENT_FILE_WRITE: "agent write",
+    StepKind.AGENT_GATE: "GATE",
+    StepKind.AGENT_VERIFY: "verify",
+    StepKind.AGENT_COMPOSE_HEALTH: "health",
 }
 
 

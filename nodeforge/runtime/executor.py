@@ -9,13 +9,17 @@ Critical invariants enforced here:
 from __future__ import annotations
 
 import time
+import warnings
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
 from rich.console import Console
 
 from nodeforge.plan.models import Plan, Step, StepScope
+
+if TYPE_CHECKING:
+    from nodeforge.runtime.transport import Transport
 
 
 class StepResult(BaseModel):
@@ -42,6 +46,7 @@ class Executor:
         self,
         plan: Plan,
         ssh_session=None,
+        transport: Transport | None = None,
         inventory_db=None,
         ctx=None,
         spec=None,
@@ -49,7 +54,18 @@ class Executor:
         effective_port: int | None = None,
     ) -> None:
         self._plan = plan
-        self._session = ssh_session
+        # Transport-first: prefer transport, fall back to ssh_session (deprecated).
+        if transport is not None:
+            self._session = transport
+        elif ssh_session is not None:
+            warnings.warn(
+                "Executor(ssh_session=...) is deprecated, use transport= instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            self._session = ssh_session
+        else:
+            self._session = None
         self._db = inventory_db
         self._ctx = ctx
         self._spec = spec

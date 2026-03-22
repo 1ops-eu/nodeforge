@@ -30,7 +30,7 @@ app = typer.Typer(
         "with auditable plans, generated ops docs, and encrypted local inventory."
     ),
     no_args_is_help=True,
-    add_completion=False,
+    add_completion=True,
 )
 inventory_app = typer.Typer(help="Manage local server inventory.", no_args_is_help=True)
 inspect_app = typer.Typer(help="Inspect apply runs.", no_args_is_help=True)
@@ -48,6 +48,72 @@ def _startup() -> None:
     load_addons()
 
 
+# ------------------------------------------------------------------ #
+# version
+# ------------------------------------------------------------------ #
+
+
+@app.command()
+def version(
+    host: str | None = typer.Option(
+        None, "--host", help="Also check agent version on a remote host"
+    ),
+    port: int = typer.Option(22, "--port", help="SSH port for remote agent check"),
+    user: str = typer.Option("root", "--user", help="SSH user for remote agent check"),
+    key: str | None = typer.Option(None, "--key", help="SSH key path for remote agent check"),
+) -> None:
+    """Print client version (and optionally agent version on a remote host)."""
+    from nodeforge import __version__
+
+    console.print(f"nodeforge client: {__version__}")
+
+    if host:
+        from nodeforge.agent.installer import detect_agent
+        from nodeforge.runtime.fabric_transport import FabricTransport
+
+        try:
+            transport = FabricTransport(host=host, user=user, port=port, key_path=key)
+            agent_version = detect_agent(transport)
+            if agent_version:
+                console.print(f"nodeforge agent:  {agent_version} (on {host})")
+            else:
+                console.print(f"nodeforge agent:  [dim]not installed[/dim] (on {host})")
+            transport.close()
+        except Exception as e:
+            console.print(f"nodeforge agent:  [red]unreachable[/red] ({e})")
+
+
+# ------------------------------------------------------------------ #
+# update
+# ------------------------------------------------------------------ #
+
+
+@app.command()
+def update() -> None:
+    """Check for updates and self-update the nodeforge client."""
+    from nodeforge.updater import self_update
+
+    self_update(console=console)
+
+
+@app.command(name="agent-update")
+def agent_update(
+    host: str = typer.Argument(..., help="Target host to update the agent on"),
+    port: int = typer.Option(22, "--port", help="SSH port"),
+    user: str = typer.Option("root", "--user", help="SSH user"),
+    key: str | None = typer.Option(None, "--key", help="SSH key path"),
+) -> None:
+    """Update the nodeforge-agent binary on a remote host."""
+    from nodeforge.runtime.fabric_transport import FabricTransport
+    from nodeforge.updater import update_agent
+
+    transport = FabricTransport(host=host, user=user, port=port, key_path=key)
+    try:
+        update_agent(transport, console=console)
+    finally:
+        transport.close()
+
+
 def _build_pipeline(
     spec_path: Path,
     ensure_keys: bool = False,
@@ -55,18 +121,43 @@ def _build_pipeline(
     strict_env: bool = True,
     env_file: Path | None = None,
 ):
-    """Run Parse → Validate → (KeyGen) → Normalize → Plan. Returns (spec, ctx, plan, issues)."""
+    """Run Parse → Validate → (KeyGen) → Normalize → Plan.
+
+    Returns (spec, ctx, plan, issues) for single-document specs.
+    Returns (specs, ctxs, plans, all_issues) for multi-document specs.
+    """
     from nodeforge.compiler.normalizer import normalize
     from nodeforge.compiler.parser import parse
     from nodeforge.compiler.planner import plan as make_plan
     from nodeforge.registry import get_kind_hooks
     from nodeforge.specs.validators import validate_spec
 
-    spec = parse(spec_path, strict_env=strict_env, env_file=env_file)
+    parsed = parse(spec_path, strict_env=strict_env, env_file=env_file)
+
+    # Multi-document support: process each spec independently
+    if isinstance(parsed, list):
+        specs = []
+        ctxs = []
+        plans = []
+        all_issues = []
+        for spec in parsed:
+            issues = validate_spec(spec)
+            all_issues.extend(issues)
+            if ensure_keys and get_kind_hooks(spec.kind).needs_key_generation:
+                from nodeforge.local.keys import ensure_admin_keys
+
+                ensure_admin_keys(spec, console=console)
+            ctx = normalize(spec, spec_dir=spec_path.resolve().parent)
+            p = make_plan(ctx)
+            specs.append(spec)
+            ctxs.append(ctx)
+            plans.append(p)
+        return specs, ctxs, plans, all_issues
+
+    # Single document (backward compatible)
+    spec = parsed
     issues = validate_spec(spec)
 
-    # Ensure admin SSH key pairs exist before normalization reads pubkey content.
-    # Determined by the kind's registered hooks, not by a hardcoded isinstance check.
     if ensure_keys and get_kind_hooks(spec.kind).needs_key_generation:
         from nodeforge.local.keys import ensure_admin_keys
 
@@ -117,13 +208,21 @@ def validate(
         console.print(f"[bold red]Parse error:[/bold red] {e}")
         raise typer.Exit(1) from None
 
-    issues = validate_spec(parsed)
+    # Handle multi-document specs
+    specs_list = parsed if isinstance(parsed, list) else [parsed]
+    all_issues = []
+    for i, s in enumerate(specs_list):
+        if len(specs_list) > 1:
+            console.print(f"\n[bold]Document {i + 1}:[/bold] {s.meta.name} ({s.kind})")
+        issues = validate_spec(s)
+        all_issues.extend(issues)
 
-    if not issues:
-        console.print("[bold green]✓ Spec is valid.[/bold green]")
+    if not all_issues:
+        doc_label = f"{len(specs_list)} document(s)" if len(specs_list) > 1 else "Spec"
+        console.print(f"[bold green]✓ {doc_label} valid.[/bold green]")
     else:
-        _print_issues(issues, stop_on_error=False)
-        if has_errors(issues):
+        _print_issues(all_issues, stop_on_error=False)
+        if has_errors(all_issues):
             raise typer.Exit(1)
 
 
@@ -148,16 +247,84 @@ def plan(
     from nodeforge.plan.render_text import render_plan
 
     try:
-        _, _, p, issues = _build_pipeline(spec, strict_env=not passthrough, env_file=env_file)
+        result = _build_pipeline(spec, strict_env=not passthrough, env_file=env_file)
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1) from None
+
+    specs_r, _, plans_r, issues = result
 
     if issues:
         console.print("[bold yellow]Validation warnings:[/bold yellow]")
         _print_issues(issues, stop_on_error=True)
 
-    render_plan(p, console=console)
+    # Handle multi-doc: plans_r may be a list or a single Plan
+    plans_list = plans_r if isinstance(plans_r, list) else [plans_r]
+    for p in plans_list:
+        render_plan(p, console=console)
+
+
+# ------------------------------------------------------------------ #
+# diff
+# ------------------------------------------------------------------ #
+
+
+@app.command(name="diff")
+def diff_cmd(
+    spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
+    env_file: Path | None = typer.Option(
+        None, "--env-file", help="Load environment variables from a .env file"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
+) -> None:
+    """Show what would change on the server before applying."""
+    from nodeforge.agent.installer import detect_agent
+    from nodeforge.agent.state import RuntimeState
+    from nodeforge.plan.render_diff import render_diff
+    from nodeforge.runtime.fabric_transport import FabricTransport
+
+    try:
+        parsed_spec, ctx, p, issues = _build_pipeline(
+            spec, strict_env=not passthrough, env_file=env_file
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(1) from None
+
+    if issues:
+        _print_issues(issues, stop_on_error=True)
+
+    # Try to retrieve runtime state from the target
+    current_state = None
+    try:
+        login = parsed_spec.login
+        key_path = (
+            str(ctx.login_key_path) if ctx.login_key_path and ctx.login_key_path.exists() else None
+        )
+        transport = FabricTransport(
+            host=parsed_spec.host.address,
+            user=login.user,
+            port=login.port,
+            key_path=key_path,
+            password=ctx.login_password,
+        )
+
+        agent_version = detect_agent(transport)
+        if agent_version:
+            state_content = transport.download("/var/lib/nodeforge/runtime-state.json")
+            current_state = RuntimeState.model_validate_json(state_content)
+            console.print(f"[dim]Agent v{agent_version} — loaded runtime state[/dim]")
+        else:
+            console.print("[dim]No agent installed — showing full plan as new[/dim]")
+        transport.close()
+    except Exception:
+        console.print("[dim]Could not retrieve runtime state — showing full plan as new[/dim]")
+
+    render_diff(p, current_state, console=console)
 
 
 # ------------------------------------------------------------------ #
@@ -185,15 +352,18 @@ def docs(
     from nodeforge.plan.render_markdown import render_markdown
 
     try:
-        _, _, p, issues = _build_pipeline(spec, strict_env=not passthrough, env_file=env_file)
+        result = _build_pipeline(spec, strict_env=not passthrough, env_file=env_file)
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1) from None
 
+    _, _, plans_r, issues = result
+
     if issues:
         _print_issues(issues, stop_on_error=True)
 
-    md = render_markdown(p, mode=mode)
+    plans_list = plans_r if isinstance(plans_r, list) else [plans_r]
+    md = "\n\n---\n\n".join(render_markdown(p, mode=mode) for p in plans_list)
 
     if output:
         output.write_text(md, encoding="utf-8")
@@ -221,24 +391,43 @@ def apply(
         "--passthrough",
         help="Leave unresolved ${VAR} references unchanged instead of erroring",
     ),
+    mode: str = typer.Option(
+        "auto",
+        "--mode",
+        help="Execution mode: 'auto' (detect agent), 'agent', or 'client' (Fabric)",
+    ),
 ) -> None:
     """Apply a spec to provision infrastructure."""
-    from nodeforge.local.inventory_db import InventoryDB
-    from nodeforge.logs.writer import write_log
-    from nodeforge.registry import get_kind_hooks
-    from nodeforge.runtime.executor import Executor
-    from nodeforge.runtime.ssh import SSHSession
-
     try:
-        parsed_spec, ctx, p, issues = _build_pipeline(
+        result = _build_pipeline(
             spec, ensure_keys=True, strict_env=not passthrough, env_file=env_file
         )
     except Exception as e:
         console.print(f"[bold red]Error:[/bold red] {e}")
         raise typer.Exit(1) from None
 
+    specs_r, ctxs_r, plans_r, issues = result
+
     if issues:
         _print_issues(issues, stop_on_error=True)
+
+    # Normalize to lists for uniform handling
+    if isinstance(specs_r, list):
+        spec_list = list(zip(specs_r, ctxs_r, plans_r, strict=True))
+    else:
+        spec_list = [(specs_r, ctxs_r, plans_r)]
+
+    for parsed_spec, ctx, p in spec_list:
+        _apply_single(parsed_spec, ctx, p, mode, dry_run, console)
+
+
+def _apply_single(parsed_spec, ctx, p, mode, dry_run, console) -> None:
+    """Apply a single spec. Extracted to support multi-document iteration."""
+    from nodeforge.local.inventory_db import InventoryDB
+    from nodeforge.logs.writer import write_log
+    from nodeforge.registry import get_kind_hooks
+    from nodeforge.runtime.executor import Executor
+    from nodeforge.runtime.fabric_transport import FabricTransport
 
     console.print(
         Panel(
@@ -251,8 +440,8 @@ def apply(
         )
     )
 
-    # Build SSH session
-    ssh_session = None
+    # Build transport (SSH session)
+    transport = None
     if not dry_run:
         import socket
 
@@ -300,7 +489,7 @@ def apply(
                 )
                 if admin_name and admin_key:
                     try:
-                        probe = SSHSession(
+                        probe = FabricTransport(
                             host=parsed_spec.host.address,
                             user=admin_name,
                             port=fallback_port,
@@ -326,7 +515,7 @@ def apply(
                 )
                 raise typer.Exit(1)
 
-        ssh_session = SSHSession(
+        transport = FabricTransport(
             host=parsed_spec.host.address,
             user=effective_user,
             port=effective_port,
@@ -334,23 +523,113 @@ def apply(
             password=effective_password,
         )
 
+    # Determine execution mode (agent vs client)
+    use_agent = False
+    if transport and not dry_run:
+        if mode == "agent":
+            use_agent = True
+        elif mode == "auto":
+            from nodeforge.agent.installer import detect_agent
+
+            agent_version = detect_agent(transport)
+            if agent_version:
+                console.print(
+                    f"[dim]Agent detected (v{agent_version}) — using agent execution[/dim]"
+                )
+                use_agent = True
+        # mode == "client" → use_agent stays False
+        if mode == "client" or (mode == "auto" and not use_agent):
+            console.print(
+                "[dim]Using direct SSH execution "
+                "(install nodeforge-agent on the target for agent mode)[/dim]"
+            )
+
     # Build inventory DB
     inventory_db = None
     inv_cfg = parsed_spec.local.inventory
     if inv_cfg.enabled:
         inventory_db = InventoryDB(db_path=str(ctx.db_path))
 
-    executor = Executor(
-        plan=p,
-        ssh_session=ssh_session,
-        inventory_db=inventory_db,
-        ctx=ctx,
-        spec=parsed_spec,
-        console=console,
-        effective_port=effective_port if ssh_session and effective_port != login.port else None,
-    )
+    if use_agent:
+        # Agent execution: upload plan, invoke agent, retrieve results
+        from nodeforge.runtime.agent_transport import AgentTransport
+        from nodeforge.runtime.executor import ApplyResult, StepResult
 
-    result = executor.apply(dry_run=dry_run)
+        agent_transport = AgentTransport(
+            host=parsed_spec.host.address,
+            user=effective_user,
+            port=effective_port,
+            key_path=effective_key_path,
+            password=effective_password,
+        )
+        p.execution_mode = "agent"
+        agent_result = agent_transport.apply_plan(p)
+
+        # Print agent step results
+        icons = {"success": "✓", "failed": "✗", "skipped": "○", "unchanged": "≡"}
+        colors = {"success": "green", "failed": "red", "skipped": "dim", "unchanged": "blue"}
+        for sr in agent_result.step_results:
+            icon = icons.get(sr.status, "?")
+            color = colors.get(sr.status, "white")
+            duration = f"{sr.duration_seconds:.1f}s" if sr.duration_seconds else ""
+            console.print(
+                f"  [{color}]{icon}[/{color}] [{sr.step_index:>2}] {sr.step_id[:50]}"
+                + (f" [{duration}]" if duration else ""),
+            )
+            if sr.status == "failed" and sr.error:
+                console.print(f"     [red]{sr.error[:120]}[/red]")
+
+        console.print(
+            f"\n[dim]Agent: {agent_result.applied_count} applied, "
+            f"{agent_result.unchanged_count} unchanged[/dim]"
+        )
+
+        # Run local steps via the regular executor
+        local_executor = Executor(
+            plan=p,
+            transport=transport,
+            inventory_db=inventory_db,
+            ctx=ctx,
+            spec=parsed_spec,
+            console=console,
+        )
+        # Only execute LOCAL-scoped steps
+        local_result = local_executor.apply(dry_run=dry_run)
+
+        # Merge into a single ApplyResult for logging
+        result = ApplyResult(
+            plan=p,
+            step_results=[
+                StepResult(
+                    step_index=sr.step_index,
+                    step_id=sr.step_id,
+                    scope=sr.scope,
+                    status="success" if sr.status in ("success", "unchanged") else sr.status,
+                    output=sr.output,
+                    error=sr.error,
+                    duration_seconds=sr.duration_seconds,
+                )
+                for sr in agent_result.step_results
+            ]
+            + local_result.step_results,
+            status=agent_result.status if agent_result.status == "failed" else local_result.status,
+            aborted_at=agent_result.aborted_at,
+            started_at=agent_result.started_at,
+            finished_at=local_result.finished_at,
+        )
+        agent_transport.close()
+    else:
+        # Client execution: direct SSH via Fabric (original path)
+        executor = Executor(
+            plan=p,
+            transport=transport,
+            inventory_db=inventory_db,
+            ctx=ctx,
+            spec=parsed_spec,
+            console=console,
+            effective_port=(effective_port if transport and effective_port != login.port else None),
+        )
+        result = executor.apply(dry_run=dry_run)
 
     # Post-apply: record inventory via the kind's registered hook.
     if not dry_run and inventory_db and "success" in result.status:
@@ -371,9 +650,9 @@ def apply(
         except Exception as e:
             console.print(f"[yellow]⚠ Log write failed: {e}[/yellow]")
 
-    # Close SSH session
-    if ssh_session:
-        ssh_session.close()
+    # Close transport
+    if transport:
+        transport.close()
 
     # Summary
     status_color = {

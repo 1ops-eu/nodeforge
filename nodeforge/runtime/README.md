@@ -1,6 +1,6 @@
-# nodeforge/runtime/ — SSH Sessions and Plan Execution
+# nodeforge/runtime/ — Transport Layer and Plan Execution
 
-This package contains the SSH transport layer and the plan execution engine. It is the "apply" phase of the pipeline — where plans become actions.
+This package contains the transport abstraction, SSH transport, agent transport, and the plan execution engine. It is the "apply" phase of the pipeline — where plans become actions.
 
 ---
 
@@ -8,7 +8,10 @@ This package contains the SSH transport layer and the plan execution engine. It 
 
 | File | Purpose |
 |---|---|
-| `executor.py` | Plan execution engine: walks the step list, dispatches to registered handlers, enforces gates and dependencies, tracks results |
+| `transport.py` | `Transport` protocol definition — structural typing for all transport implementations |
+| `fabric_transport.py` | `FabricTransport` — wraps `SSHSession` to satisfy the `Transport` protocol (default client-side transport) |
+| `agent_transport.py` | `AgentTransport` — uploads plan to target, invokes `nodeforge-agent`, retrieves results |
+| `executor.py` | Plan execution engine: walks the step list, dispatches to registered handlers, enforces gates and dependencies, tracks results. Accepts any `Transport` implementation. |
 | `ssh.py` | Fabric SSH session wrapper: command execution, file upload, connection testing |
 | `steps/` | Shell command builders for each domain (bootstrap, wireguard, postgres, nginx, docker, container, file_template, compose) |
 | `__init__.py` | Empty package marker |

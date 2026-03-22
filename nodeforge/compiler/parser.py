@@ -18,7 +18,7 @@ def parse(
     *,
     strict_env: bool = True,
     env_file: Path | None = None,
-) -> AnySpec:
+) -> AnySpec | list[AnySpec]:
     """Load and parse a YAML spec file.
 
     Parameters
@@ -30,5 +30,8 @@ def parse(
         When False, they are left unchanged (passthrough mode).
     env_file:
         Optional path to a ``.env`` file to load before resolving the spec.
+
+    Returns a single spec for single-document files, or a list of specs
+    for multi-document files (separated by ``---``).
     """
     return load_spec(spec_path, strict_env=strict_env, env_file=env_file)
