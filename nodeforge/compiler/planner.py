@@ -14,10 +14,40 @@ from datetime import UTC, datetime
 from nodeforge.compiler.normalizer import NormalizedContext
 from nodeforge.plan.models import Plan, Step, StepKind, StepScope
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
+from nodeforge.specs.compose_project_schema import ComposeProjectSpec
+from nodeforge.specs.file_template_schema import FileTemplateSpec
 from nodeforge.specs.service_schema import ServiceSpec
 from nodeforge.utils.hashing import sha256_string
 
-AnySpec = BootstrapSpec | ServiceSpec
+AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
+
+
+def _encode_check_command(check, spec) -> str:
+    """Encode a CheckBlock into a command string for the executor to dispatch."""
+    ctype = check.type
+    host = spec.host.address
+    if ctype == "ssh_reachable":
+        port = check.port or 22
+        user = check.user or "root"
+        return f"check:ssh_reachable:{host}:{port}:{user}"
+    elif ctype == "port_open":
+        port = check.port or 22
+        return f"check:port_open:{host}:{port}"
+    elif ctype == "wireguard_up":
+        iface = check.interface or "wg0"
+        return f"check:wireguard_up:{iface}"
+    elif ctype == "container_running":
+        name = check.name or "unknown"
+        return f"check:container_running:{name}"
+    elif ctype == "http":
+        url = check.url or ""
+        status = check.expect_status or 200
+        return f"check:http:{url}:{status}"
+    elif ctype == "postgres_ready":
+        return "check:postgres_ready"
+    elif ctype == "nginx_ready":
+        return "check:nginx_ready"
+    return f"check:{ctype}"
 
 
 def plan(ctx: NormalizedContext) -> Plan:
@@ -463,6 +493,17 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
 
         steps.append(
             _s(
+                "set_wireguard_dir_permissions",
+                "Secure /etc/wireguard directory (chmod 700)",
+                R,
+                StepKind.SSH_COMMAND,
+                command=wg.set_wireguard_dir_permissions(),
+                sudo=True,
+                tags=["wireguard"],
+            )
+        )
+        steps.append(
+            _s(
                 "write_wireguard_config",
                 f"Write WireGuard server config: /etc/wireguard/{spec.wireguard.interface}.conf",
                 R,
@@ -483,6 +524,17 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
                 command=f"ufw allow {wg_port}/udp",
                 sudo=True,
                 tags=["wireguard", "firewall"],
+            )
+        )
+        steps.append(
+            _s(
+                "load_wireguard_module",
+                "Load WireGuard kernel module",
+                R,
+                StepKind.SSH_COMMAND,
+                command=wg.load_wireguard_module(),
+                sudo=True,
+                tags=["wireguard"],
             )
         )
         steps.append(
@@ -516,7 +568,7 @@ def _plan_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> list[Step]:
                 f"Postflight check: {check.type}",
                 V,
                 StepKind.VERIFY,
-                command=f"check:{check.type}",
+                command=_encode_check_command(check, spec),
                 tags=["postflight", check.type],
             )
         )
@@ -1111,6 +1163,381 @@ def _plan_service(spec: ServiceSpec, ctx: NormalizedContext) -> list[Step]:
             _s(
                 "record_service_run_metadata",
                 "Record service run metadata in inventory",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="record_run",
+                tags=["local", "inventory"],
+            )
+        )
+
+    return steps
+
+
+def _plan_file_template(spec: FileTemplateSpec, ctx: NormalizedContext) -> list[Step]:
+    """Generate steps for rendering and uploading managed configuration files."""
+    from nodeforge.runtime.steps import file_template as ft
+
+    steps: list[Step] = []
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    # Preflight
+    steps.append(
+        _s(
+            "preflight_connect_admin",
+            f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
+            R,
+            StepKind.SSH_COMMAND,
+            command="echo 'preflight ok'",
+            tags=["preflight"],
+        )
+    )
+
+    # For each template: mkdir parent -> upload rendered content -> chmod -> chown
+    for t in spec.templates:
+        safe_id = t.dest.replace("/", "_").strip("_")
+        rendered = ctx.rendered_templates.get(t.dest, "")
+
+        # mkdir parent directory
+        steps.append(
+            _s(
+                f"mkdir_{safe_id}",
+                f"Create parent directory for {t.dest}",
+                R,
+                StepKind.SSH_COMMAND,
+                command=ft.mkdir_for_file(t.dest),
+                sudo=True,
+                tags=["file_template", "mkdir"],
+            )
+        )
+
+        # Upload rendered content
+        steps.append(
+            _s(
+                f"upload_{safe_id}",
+                f"Upload rendered template to {t.dest}",
+                R,
+                StepKind.SSH_UPLOAD,
+                file_content=rendered,
+                target_path=t.dest,
+                sudo=True,
+                tags=["file_template", "upload"],
+            )
+        )
+
+        # Set permissions
+        steps.append(
+            _s(
+                f"chmod_{safe_id}",
+                f"Set permissions {t.mode} on {t.dest}",
+                R,
+                StepKind.SSH_COMMAND,
+                command=ft.chmod_file(t.dest, t.mode),
+                sudo=True,
+                tags=["file_template", "chmod"],
+            )
+        )
+
+        # Set ownership
+        steps.append(
+            _s(
+                f"chown_{safe_id}",
+                f"Set ownership {t.owner}:{t.group} on {t.dest}",
+                R,
+                StepKind.SSH_COMMAND,
+                command=ft.chown_file(t.dest, t.owner, t.group),
+                sudo=True,
+                tags=["file_template", "chown"],
+            )
+        )
+
+    # Postflight checks
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"postflight_{check.type}",
+                f"Postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "update_file_template_metadata",
+                f"Update file_template metadata in inventory for {spec.host.name}",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="upsert_services",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "record_file_template_run",
+                "Record file_template run metadata in inventory",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="record_run",
+                tags=["local", "inventory"],
+            )
+        )
+
+    return steps
+
+
+def _plan_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext) -> list[Step]:
+    """Generate steps for deploying a Docker Compose project."""
+    from nodeforge.runtime.steps import compose as cp
+    from nodeforge.runtime.steps import docker as dk
+
+    steps: list[Step] = []
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    p = spec.project
+
+    # Preflight
+    steps.append(
+        _s(
+            "preflight_connect_admin",
+            f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
+            R,
+            StepKind.SSH_COMMAND,
+            command="echo 'preflight ok'",
+            tags=["preflight"],
+        )
+    )
+
+    # Docker — always required for compose_project
+    steps.append(
+        _s(
+            "apt_update",
+            "Update apt package index",
+            R,
+            StepKind.SSH_COMMAND,
+            command="apt-get update -y",
+            sudo=True,
+            tags=["packages"],
+        )
+    )
+    steps.append(
+        _s(
+            "install_docker",
+            "Install Docker",
+            R,
+            StepKind.SSH_COMMAND,
+            command=dk.install_docker(),
+            sudo=True,
+            tags=["docker"],
+        )
+    )
+    steps.append(
+        _s(
+            "enable_docker",
+            "Enable Docker service",
+            R,
+            StepKind.SSH_COMMAND,
+            command=dk.enable_docker(),
+            sudo=True,
+            tags=["docker"],
+        )
+    )
+    steps.append(
+        _s(
+            "docker_version_check",
+            "Verify Docker installation",
+            V,
+            StepKind.VERIFY,
+            command="docker --version",
+            sudo=True,
+            tags=["docker", "verify"],
+        )
+    )
+
+    # Create project directory
+    steps.append(
+        _s(
+            "mkdir_project_dir",
+            f"Create project directory: {p.directory}",
+            R,
+            StepKind.SSH_COMMAND,
+            command=f"mkdir -p {p.directory}",
+            sudo=True,
+            tags=["compose", "mkdir"],
+        )
+    )
+
+    # Create managed directories
+    for d in p.directories:
+        if d.path.startswith("/"):
+            full_path = d.path
+        else:
+            full_path = f"{p.directory}/{d.path}"
+        safe_id = full_path.replace("/", "_").strip("_")
+        steps.append(
+            _s(
+                f"mkdir_{safe_id}",
+                f"Create managed directory: {full_path}",
+                R,
+                StepKind.SSH_COMMAND,
+                command=cp.mkdir_with_permissions(full_path, d.mode, d.owner, d.group),
+                sudo=True,
+                tags=["compose", "mkdir"],
+            )
+        )
+
+    # Upload rendered templates
+    for t in p.templates:
+        if t.dest.startswith("/"):
+            full_dest = t.dest
+        else:
+            full_dest = f"{p.directory}/{t.dest}"
+        safe_id = full_dest.replace("/", "_").strip("_")
+        rendered = ctx.rendered_templates.get(full_dest, "")
+
+        steps.append(
+            _s(
+                f"upload_template_{safe_id}",
+                f"Upload rendered template: {full_dest}",
+                R,
+                StepKind.SSH_UPLOAD,
+                file_content=rendered,
+                target_path=full_dest,
+                sudo=True,
+                tags=["compose", "template"],
+            )
+        )
+
+    # Upload compose file
+    compose_dest = f"{p.directory}/{p.compose_file}"
+    steps.append(
+        _s(
+            "upload_compose_file",
+            f"Upload compose file: {compose_dest}",
+            R,
+            StepKind.SSH_UPLOAD,
+            file_content=ctx.compose_file_content,
+            target_path=compose_dest,
+            sudo=True,
+            tags=["compose", "compose-file"],
+        )
+    )
+
+    # Validate compose config
+    steps.append(
+        _s(
+            "compose_config_validate",
+            f"Validate compose configuration for project '{p.name}'",
+            R,
+            StepKind.SSH_COMMAND,
+            command=cp.compose_config(p.directory, p.compose_file, p.name),
+            sudo=True,
+            rollback_hint="Check compose file syntax and variable substitution.",
+            tags=["compose", "validate"],
+        )
+    )
+
+    # Pull images (optional)
+    if p.pull_before_up:
+        steps.append(
+            _s(
+                "compose_pull",
+                f"Pull images for project '{p.name}'",
+                R,
+                StepKind.SSH_COMMAND,
+                command=cp.compose_pull(p.directory, p.compose_file, p.name),
+                sudo=True,
+                tags=["compose", "pull"],
+            )
+        )
+
+    # Start the stack
+    steps.append(
+        _s(
+            "compose_up",
+            f"Start compose project '{p.name}' (detached)",
+            R,
+            StepKind.SSH_COMMAND,
+            command=cp.compose_up(p.directory, p.compose_file, p.name),
+            sudo=True,
+            tags=["compose", "up"],
+        )
+    )
+
+    # Health check
+    if p.healthcheck.enabled:
+        # Command encodes the parameters for the handler to parse
+        health_cmd = (
+            f"compose_health:{p.directory}:{p.compose_file}:{p.name}"
+            f":{p.healthcheck.timeout}:{p.healthcheck.interval}"
+        )
+        steps.append(
+            _s(
+                "compose_health_check",
+                f"Wait for containers healthy (timeout={p.healthcheck.timeout}s)",
+                V,
+                StepKind.COMPOSE_HEALTH_CHECK,
+                command=health_cmd,
+                tags=["compose", "health"],
+            )
+        )
+
+    # Postflight checks
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"postflight_{check.type}",
+                f"Postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "update_compose_project_metadata",
+                f"Update compose_project metadata in inventory for {spec.host.name}",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="upsert_services",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "record_compose_project_run",
+                "Record compose_project run metadata in inventory",
                 L,
                 StepKind.LOCAL_DB_WRITE,
                 command="record_run",

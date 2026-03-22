@@ -1,0 +1,33 @@
+kind: file_template
+
+meta:
+  name: nginx-app-config
+  description: Render and deploy an nginx site configuration from a Jinja2 template
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: admin
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+templates:
+  - src: templates/nginx-site.conf.j2
+    dest: /etc/nginx/sites-available/app.example.com
+    mode: "0644"
+    owner: root
+    group: root
+
+variables:
+  domain: app.example.com
+  listen_port: "80"
+  upstream_host: "127.0.0.1"
+  upstream_port: "8080"
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db

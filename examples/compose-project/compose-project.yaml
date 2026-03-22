@@ -1,0 +1,47 @@
+kind: compose_project
+
+meta:
+  name: demo-stack
+  description: Deploy a multi-service stack with Docker Compose
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: admin
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+project:
+  name: demo-stack
+  directory: /opt/demo-stack
+  compose_file: docker-compose.yml
+
+  templates:
+    - src: templates/nginx.conf.j2
+      dest: nginx.conf
+
+  variables:
+    domain: app.example.com
+    app_host: "127.0.0.1"
+    app_port: "8080"
+
+  directories:
+    - path: data
+      mode: "0755"
+      owner: root
+      group: root
+
+  pull_before_up: true
+
+  healthcheck:
+    enabled: true
+    timeout: 120
+    interval: 5
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db

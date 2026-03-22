@@ -102,8 +102,11 @@ class SSHSession:
         """Upload a local file to the remote host."""
         self._conn.put(str(local_path), remote=remote_path)
 
-    def upload_content(self, content: str, remote_path: str, sudo: bool = False) -> None:
-        """Write string content to a remote file via /tmp."""
+    def upload_content(self, content: str, remote_path: str, sudo: bool = False) -> CommandResult:
+        """Write string content to a remote file via /tmp.
+
+        Returns a CommandResult indicating success or failure of the upload.
+        """
         import os
         import tempfile
 
@@ -115,12 +118,23 @@ class SSHSession:
             tmp_remote = f"/tmp/{Path(remote_path).name}.nodeforge_tmp"
             self._conn.put(tmp_path, remote=tmp_remote)
             if sudo:
-                self.run(f"mv {tmp_remote} {remote_path}", sudo=True)
-                self.run(f"chmod 600 {remote_path}", sudo=True)
+                mv_result = self.run(f"mv {tmp_remote} {remote_path}", sudo=True)
+                if not mv_result.ok:
+                    return mv_result
+                chown_result = self.run(f"chown root:root {remote_path}", sudo=True)
+                if not chown_result.ok:
+                    return chown_result
+                chmod_result = self.run(f"chmod 600 {remote_path}", sudo=True)
+                if not chmod_result.ok:
+                    return chmod_result
             else:
-                self.run(f"mv {tmp_remote} {remote_path}")
+                mv_result = self.run(f"mv {tmp_remote} {remote_path}")
+                if not mv_result.ok:
+                    return mv_result
         finally:
             os.unlink(tmp_path)
+
+        return CommandResult(ok=True, stdout="", stderr="", return_code=0)
 
     def test_connection(self) -> bool:
         """Return True if SSH connection succeeds."""

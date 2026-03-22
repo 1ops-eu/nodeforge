@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     from nodeforge.local.inventory_db import InventoryDB
     from nodeforge.runtime.executor import ApplyResult
     from nodeforge.specs.bootstrap_schema import BootstrapSpec
+    from nodeforge.specs.compose_project_schema import ComposeProjectSpec
+    from nodeforge.specs.file_template_schema import FileTemplateSpec
     from nodeforge.specs.service_schema import ServiceSpec
 
 
@@ -111,6 +113,81 @@ def record_service_apply(
     db.record_run(
         id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
         kind="service",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+    )
+
+
+def record_file_template_apply(
+    db: InventoryDB,
+    spec: FileTemplateSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After a file_template apply, record template metadata + run in inventory."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+
+    template_dests = [t.dest for t in spec.templates]
+    db.upsert_service(
+        server_id=server_id,
+        service_type="file_template",
+        service_name=f"file_template:{spec.meta.name}",
+        status="active" if "success" in status else "failed",
+        metadata_json=json.dumps(
+            {
+                "templates": template_dests,
+                "template_count": len(template_dests),
+            }
+        ),
+    )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="file_template",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+    )
+
+
+def record_compose_project_apply(
+    db: InventoryDB,
+    spec: ComposeProjectSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After a compose_project apply, record project metadata + run in inventory."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+    p = spec.project
+
+    db.upsert_service(
+        server_id=server_id,
+        service_type="compose_project",
+        service_name=p.name,
+        status="active" if "success" in status else "failed",
+        metadata_json=json.dumps(
+            {
+                "directory": p.directory,
+                "compose_file": p.compose_file,
+                "template_count": len(p.templates),
+            }
+        ),
+    )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="compose_project",
         spec_hash=apply_result.plan.spec_hash,
         plan_hash=apply_result.plan.plan_hash,
         status=status,

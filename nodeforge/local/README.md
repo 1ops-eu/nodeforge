@@ -11,7 +11,7 @@ This package manages all local state that nodeforge persists after a successful 
 | `ssh_config.py` | SSH conf.d fragment management: write, remove, backup, ensure Include directive |
 | `wireguard_store.py` | WireGuard state persistence: server/client keys, configs, metadata |
 | `inventory_db.py` | SQLite inventory database with versionize historization (SCD Type 2 pattern) |
-| `inventory.py` | High-level inventory recording functions called post-apply (`record_bootstrap()`, `record_service_apply()`) |
+| `inventory.py` | High-level inventory recording functions called post-apply (`record_bootstrap()`, `record_service_apply()`, `record_file_template_apply()`, `record_compose_project_apply()`) |
 | `keys.py` | SSH key pair generation: auto-generates missing ed25519 keys before apply |
 | `ddl/` | SQL DDL definitions for the inventory schema |
 | `ddl/bootstrap_tables.py` | Domain table DDL: `tv_server`, `tv_server_service`, `tv_run` |
@@ -93,6 +93,8 @@ High-level functions called post-apply by the CLI via `KindHooks.on_inventory_re
 
 - `record_bootstrap(db, spec, result)` — upserts server record with bootstrap status, SSH config, WireGuard state
 - `record_service_apply(db, spec, result)` — upserts service metadata (postgres, nginx, docker, containers) for the target server
+- `record_file_template_apply(db, spec, result)` — upserts a `file_template` service record with template destinations and count, plus a run record
+- `record_compose_project_apply(db, spec, result)` — upserts a `compose_project` service record with project directory, compose file, and template count, plus a run record
 
 ---
 

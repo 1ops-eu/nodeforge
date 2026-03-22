@@ -33,7 +33,7 @@ FROM python:3.12-slim
 
 # sqlcipher3 requires the SQLCipher shared library at runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libsqlcipher0 \
+        libsqlcipher2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -8,10 +8,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from nodeforge.specs.bootstrap_schema import BootstrapSpec
+from nodeforge.specs.compose_project_schema import ComposeProjectSpec
+from nodeforge.specs.file_template_schema import FileTemplateSpec
 from nodeforge.specs.service_schema import ServiceSpec
 from nodeforge.utils.files import expand_path, resolve_path
 
-AnySpec = BootstrapSpec | ServiceSpec
+AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
 
 
 @dataclass
@@ -22,6 +24,11 @@ class NormalizedContext:
     spec_dir: Path | None = (
         None  # directory containing the spec file; used for relative path resolution
     )
+
+    # Template rendering results (file_template and compose_project)
+    rendered_templates: dict[str, str] = field(default_factory=dict)  # dest -> rendered content
+    template_hashes: dict[str, str] = field(default_factory=dict)  # dest -> sha256 of content
+    compose_file_content: str = ""  # raw or rendered compose file content
 
     # Bootstrap-specific resolved values
     pubkey_contents: list[str] = field(default_factory=list)
@@ -215,3 +222,68 @@ def _normalize_service(spec: ServiceSpec, ctx: NormalizedContext) -> None:
         if role.password_env:
             pw = os.environ.get(role.password_env, "")
             role.password_env = pw  # store resolved value
+
+
+def _normalize_file_template(spec: FileTemplateSpec, ctx: NormalizedContext) -> None:
+    """Normalize a file_template spec: resolve paths, render templates at plan time."""
+    from nodeforge.utils.templates import content_hash, render_template_file
+
+    spec_dir = ctx.spec_dir
+
+    # Apply state_dir override before resolving any local paths
+    _apply_state_dir(spec)
+
+    # Resolve login key
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    # Resolve inventory (state_dir-aware)
+    ctx.db_path = _resolve_db_path(spec)
+
+    # Render all templates with Jinja2 and store results on ctx
+    for t in spec.templates:
+        src_path = resolve_path(t.src, spec_dir)
+        rendered = render_template_file(src_path, spec.variables)
+        ctx.rendered_templates[t.dest] = rendered
+        ctx.template_hashes[t.dest] = content_hash(rendered)
+
+
+def _normalize_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext) -> None:
+    """Normalize a compose_project spec: resolve paths, render templates, read compose file."""
+    from nodeforge.utils.templates import content_hash, render_template_file
+
+    spec_dir = ctx.spec_dir
+    p = spec.project
+
+    # Apply state_dir override before resolving any local paths
+    _apply_state_dir(spec)
+
+    # Resolve login key
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    # Resolve inventory (state_dir-aware)
+    ctx.db_path = _resolve_db_path(spec)
+
+    # Render project templates (Jinja2)
+    for t in p.templates:
+        src_path = resolve_path(t.src, spec_dir)
+        rendered = render_template_file(src_path, p.variables)
+        # dest is relative to project directory — store with full remote path as key
+        if t.dest.startswith("/"):
+            full_dest = t.dest
+        else:
+            full_dest = f"{p.directory}/{t.dest}"
+        ctx.rendered_templates[full_dest] = rendered
+        ctx.template_hashes[full_dest] = content_hash(rendered)
+
+    # Read the compose file (static, not rendered through Jinja2)
+    compose_path = resolve_path(p.compose_file, spec_dir)
+    if compose_path.exists():
+        ctx.compose_file_content = compose_path.read_text(encoding="utf-8")
+    else:
+        ctx.compose_file_content = f"<compose file not found: {compose_path}>"
