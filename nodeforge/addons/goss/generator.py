@@ -94,7 +94,7 @@ def generate_goss_yaml(spec: BootstrapSpec) -> str:
 
     if spec.wireguard.enabled:
         iface = spec.wireguard.interface
-        doc["service"][f"wg-quick@{iface}"] = {"enabled": True, "running": True}
+        doc["service"][f"wg-quick@{iface}"] = {"enabled": True}
 
     # ------------------------------------------------------------------ #
     # port: SSH port must be listening; port 22 must NOT be if port changed
