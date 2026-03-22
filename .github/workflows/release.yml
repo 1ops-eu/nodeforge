@@ -26,11 +26,6 @@ jobs:
             binary_path: dist/nodeforge
             setup_cmd: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
 
-          - os: macos-13
-            artifact_name: nodeforge-macos-amd64
-            binary_path: dist/nodeforge
-            setup_cmd: brew install sqlcipher
-
           - os: macos-latest
             artifact_name: nodeforge-macos-arm64
             binary_path: dist/nodeforge
