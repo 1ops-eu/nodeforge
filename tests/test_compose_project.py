@@ -13,14 +13,14 @@ from nodeforge.runtime.steps.compose import (
     compose_up,
     mkdir_with_permissions,
 )
-from nodeforge.specs.compose_project_schema import (
+from nodeforge_core.specs.compose_project_schema import (
     ComposeHealthCheckBlock,
     ComposeProjectBlock,
     ComposeProjectSpec,
     ComposeTemplateBlock,
     ManagedDirectoryBlock,
 )
-from nodeforge.specs.validators import has_errors, validate_compose_project
+from nodeforge_core.specs.validators import has_errors, validate_compose_project
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -399,7 +399,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_compose_steps(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -411,7 +411,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_preflight(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -423,7 +423,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_project_dir_step(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -435,7 +435,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_managed_directory_step(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -451,7 +451,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_template_upload(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -465,7 +465,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_compose_file_upload(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -480,7 +480,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_compose_lifecycle_steps(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -494,7 +494,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_health_check(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -511,7 +511,7 @@ class TestComposeProjectPlanner:
     def test_compose_remote_steps_are_sudo(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -524,7 +524,7 @@ class TestComposeProjectPlanner:
     def test_step_indices_sequential(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -567,7 +567,7 @@ class TestComposeProjectPlanner:
     def test_plan_without_pull(self, compose_yaml_no_pull):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml_no_pull)
         ctx = normalize(spec, spec_dir=compose_yaml_no_pull.parent)
@@ -612,7 +612,7 @@ class TestComposeProjectPlanner:
     def test_plan_with_inventory_has_local_steps(self, compose_yaml_with_inventory):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml_with_inventory)
         ctx = normalize(spec, spec_dir=compose_yaml_with_inventory.parent)

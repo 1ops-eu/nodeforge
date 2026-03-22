@@ -7,7 +7,7 @@ PYTHON    := $(VENV)/bin/python
 PIP       := $(VENV)/bin/pip
 APP_NAME  := nodeforge
 IMAGE_NAME ?= ghcr.io/1ops-eu/nodeforge
-VERSION   ?= $(shell python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null || python -c "import tomli; print(tomli.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null || grep '^version' pyproject.toml | head -1 | cut -d'"' -f2)
+VERSION   ?= $(shell python -c "import tomllib; print(tomllib.load(open('packages/core/pyproject.toml','rb'))['project']['version'])" 2>/dev/null || python -c "import tomli; print(tomli.load(open('packages/core/pyproject.toml','rb'))['project']['version'])" 2>/dev/null || grep '^version' packages/core/pyproject.toml | head -1 | cut -d'"' -f2)
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 
@@ -17,8 +17,8 @@ help:
 	@echo ""
 	@echo "  Setup"
 	@echo "    make venv            Create .venv virtualenv"
-	@echo "    make install         Install package (runtime deps)"
-	@echo "    make dev             Install package + dev deps (editable)"
+	@echo "    make install         Install all packages (runtime deps)"
+	@echo "    make dev             Install all packages + dev deps (editable)"
 	@echo ""
 	@echo "  Testing"
 	@echo "    make test            Run unit/integration tests (no live host needed)"
@@ -64,11 +64,11 @@ venv:
 
 install: venv
 	$(PIP) install --upgrade pip
-	$(PIP) install .
+	$(PIP) install packages/core packages/client packages/agent
 
 dev: venv
 	$(PIP) install --upgrade pip
-	$(PIP) install -e ".[dev]"
+	$(PIP) install -e packages/core -e packages/client -e packages/agent -e ".[dev]"
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -147,16 +147,6 @@ build-docker:
 	@echo "Built $(IMAGE_NAME):$(VERSION) and $(IMAGE_NAME):latest"
 
 # ── Goss integration tests (requires a live Ubuntu server) ────────────────────
-# Goss is shipped and run automatically by `nodeforge apply` for bootstrap specs.
-# Use this target to manually re-run a static reference spec or the master gossfile.
-#
-# Usage:
-#   make test-goss HOST=203.0.113.10 PORT=2222 USER=admin
-#       → runs the master ~/.goss/goss.yaml on the server (all shipped specs)
-#
-#   make test-goss HOST=203.0.113.10 PORT=2222 USER=admin \
-#        SPEC=examples/ubuntu/04-firewall-ssh2222/04-firewall-ssh2222.goss.yaml
-#       → copies a specific static reference spec and runs it
 
 SPEC ?=
 HOST ?= 203.0.113.10

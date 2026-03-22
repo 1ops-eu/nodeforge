@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nodeforge.registry.resolvers import (
+from nodeforge_core.registry.resolvers import (
     get_resolver,
     list_resolvers,
     register_resolver,
@@ -15,7 +15,7 @@ from nodeforge.registry.resolvers import (
 
 def _isolated_registry(monkeypatch):
     """Monkeypatch the registry dict to be empty for the duration of a test."""
-    monkeypatch.setattr("nodeforge.registry.resolvers._RESOLVER_REGISTRY", {})
+    monkeypatch.setattr("nodeforge_core.registry.resolvers._RESOLVER_REGISTRY", {})
 
 
 # ------------------------------------------------------------------ #
@@ -111,19 +111,19 @@ class TestBuiltinResolvers:
     """
 
     def test_env_resolver_registered(self):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         assert get_resolver("env") is not None
 
     def test_file_resolver_registered(self):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         assert get_resolver("file") is not None
 
     def test_env_resolver_reads_os_environ(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.setenv("NF_TEST_KEY", "test-value-xyz")
@@ -131,7 +131,7 @@ class TestBuiltinResolvers:
         assert resolver("NF_TEST_KEY") == "test-value-xyz"
 
     def test_env_resolver_returns_none_for_missing(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_DEFINITELY_NOT_SET", raising=False)
@@ -139,7 +139,7 @@ class TestBuiltinResolvers:
         assert resolver("NF_DEFINITELY_NOT_SET") is None
 
     def test_file_resolver_reads_file(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         key_file = tmp_path / "key.pub"
@@ -148,7 +148,7 @@ class TestBuiltinResolvers:
         assert resolver(str(key_file)) == "ssh-ed25519 AAAA...publickey"
 
     def test_file_resolver_strips_trailing_newline(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         f = tmp_path / "value.txt"
@@ -157,14 +157,14 @@ class TestBuiltinResolvers:
         assert resolver(str(f)) == "myvalue"
 
     def test_file_resolver_returns_none_for_missing(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         resolver = get_resolver("file")
         assert resolver(str(tmp_path / "nonexistent.txt")) is None
 
     def test_both_builtin_prefixes_appear_in_list(self):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         resolvers = list_resolvers()

@@ -1,6 +1,6 @@
 """Tests for multi-document YAML support."""
 
-from nodeforge.specs.loader import load_spec
+from nodeforge_core.specs.loader import load_spec
 
 
 def test_single_doc_returns_single_spec(tmp_path):

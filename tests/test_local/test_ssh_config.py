@@ -8,7 +8,7 @@ from nodeforge.local.ssh_config import (
     remove_ssh_conf_d,
     write_ssh_conf_d,
 )
-from nodeforge.registry.local_paths import LocalPathsConfig, register_local_paths
+from nodeforge_core.registry.local_paths import LocalPathsConfig, register_local_paths
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +47,7 @@ def test_write_ssh_conf_d_is_idempotent(tmp_path):
     for _ in range(2):
         write_ssh_conf_d("myserver", "1.2.3.4", "deploy", 2222)
 
-    from nodeforge.registry.local_paths import get_local_paths
+    from nodeforge_core.registry.local_paths import get_local_paths
 
     conf_file = get_local_paths().ssh_conf_d_base / "myserver.conf"
     content = conf_file.read_text()
@@ -56,7 +56,7 @@ def test_write_ssh_conf_d_is_idempotent(tmp_path):
 
 def test_write_ssh_conf_d_has_comment_marker():
     write_ssh_conf_d("myserver", "1.2.3.4", "deploy", 2222)
-    from nodeforge.registry.local_paths import get_local_paths
+    from nodeforge_core.registry.local_paths import get_local_paths
 
     conf_file = get_local_paths().ssh_conf_d_base / "myserver.conf"
     assert "# nodeforge managed: myserver" in conf_file.read_text()
@@ -64,7 +64,7 @@ def test_write_ssh_conf_d_has_comment_marker():
 
 def test_remove_ssh_conf_d():
     write_ssh_conf_d("myserver", "1.2.3.4", "deploy", 2222)
-    from nodeforge.registry.local_paths import get_local_paths
+    from nodeforge_core.registry.local_paths import get_local_paths
 
     conf_file = get_local_paths().ssh_conf_d_base / "myserver.conf"
     assert conf_file.exists()
@@ -74,7 +74,7 @@ def test_remove_ssh_conf_d():
 
 def test_ensure_include_writes_glob(tmp_path):
     """ensure_include writes 'Include {conf_d_base}/*' — a single glob, not per-file."""
-    from nodeforge.registry.local_paths import get_local_paths
+    from nodeforge_core.registry.local_paths import get_local_paths
 
     config = tmp_path / "ssh_config"
     config.touch()
@@ -93,7 +93,7 @@ def test_ensure_include_is_idempotent(tmp_path):
     ensure_include(config)
     ensure_include(config)
 
-    from nodeforge.registry.local_paths import get_local_paths
+    from nodeforge_core.registry.local_paths import get_local_paths
 
     expected = f"Include {get_local_paths().ssh_conf_d_base}/*"
     assert config.read_text().count(expected) == 1

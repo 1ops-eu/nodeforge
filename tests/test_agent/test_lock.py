@@ -1,7 +1,7 @@
 """Tests for agent mutation locking."""
 
-from nodeforge.agent import paths as agent_paths
-from nodeforge.agent.lock import LockError, MutationLock
+from nodeforge_agent import paths as agent_paths
+from nodeforge_agent.lock import LockError, MutationLock
 
 
 def test_lock_acquire_release(tmp_path, monkeypatch):

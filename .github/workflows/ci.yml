@@ -23,7 +23,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e packages/core -e packages/client -e packages/agent -e ".[dev]"
 
       - name: Run unit tests
         run: pytest tests/ -x -q

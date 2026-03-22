@@ -2,12 +2,12 @@
 
 import pytest
 
-from nodeforge.specs.loader import SpecLoadError, load_spec
+from nodeforge_core.specs.loader import SpecLoadError, load_spec
 
 
 def test_load_service_spec(service_yaml):
     spec = load_spec(service_yaml)
-    from nodeforge.specs.service_schema import ServiceSpec
+    from nodeforge_core.specs.service_schema import ServiceSpec
 
     assert isinstance(spec, ServiceSpec)
     assert spec.kind == "service"

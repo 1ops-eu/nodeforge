@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from nodeforge.plan.models import Plan, Step, StepKind, StepScope
 from nodeforge.runtime.executor import Executor, StepResult
+from nodeforge_core.plan.models import Plan, Step, StepKind, StepScope
 
 
 def _make_plan(steps: list[Step]) -> Plan:

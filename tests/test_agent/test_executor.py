@@ -1,7 +1,7 @@
 """Tests for agent-side executor."""
 
-from nodeforge.agent.executor import AgentExecutor
-from nodeforge.plan.models import Plan, Step, StepKind, StepScope
+from nodeforge_agent.executor import AgentExecutor
+from nodeforge_core.plan.models import Plan, Step, StepKind, StepScope
 
 
 def _make_plan(steps):
