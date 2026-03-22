@@ -1,8 +1,10 @@
 # nodeforge Roadmap
 
-This document tracks the planned evolution of `nodeforge` from its current v0.1 baseline through a production-ready v1.0 release.
+This document tracks the planned evolution of `nodeforge` from its current v0.2 baseline through a production-ready v1.0 release.
 
 The roadmap is organized around milestones. Each milestone corresponds to a meaningful capability jump. Future infrastructure and design decisions are captured in the RFC series below.
+
+**Architectural pivot (v0.3):** Starting with v0.3, nodeforge transitions from a client-driven remote orchestrator to a **server-local agent model**. The `nodeforge-agent` binary is installed as the first step of every bootstrap. The client becomes a thin transporter; the agent is the operator. See [PIVOT.md](PIVOT.md) for the full decision document.
 
 ---
 
@@ -10,11 +12,12 @@ The roadmap is organized around milestones. Each milestone corresponds to a mean
 
 Nodeforge is a **self-hosted infrastructure compiler** that turns human-readable YAML specs into **reviewable plans** and **deterministic execution**.
 
-The product evolves in three deliberate stages:
+The product evolves in four deliberate stages:
 
-1. **Bootstrap and validate** -- reliably harden fresh Linux servers
-2. **Deploy and operate** -- manage real multi-service stacks on single hosts
-3. **Compose and scale** -- reusable blueprints and light multi-host operations
+1. **Bootstrap and validate** -- reliably harden fresh Linux servers *(done)*
+2. **Agent pivot** -- move provisioning logic onto the target server *(v0.3)*
+3. **Deploy and operate** -- manage real multi-service stacks on single hosts *(v0.4--v0.6)*
+4. **Compose and scale** -- reusable blueprints and light multi-host operations *(v0.7--v0.8)*
 
 ---
 
@@ -63,54 +66,104 @@ The product evolves in three deliberate stages:
 
 ---
 
-## v0.3 -- Single-Host Compose Stacks
+## v0.3 -- Agent Pivot + Compose Stacks
 
-**Goal:** Enable deploying Docker Compose-based multi-service stacks on a single host,
-managed entirely through nodeforge specs.
+**Goal:** Introduce the server-local agent model and deliver Docker Compose stack management as the first agent-native workload.
+
+This is the **architectural pivot release**. The `nodeforge-agent` binary becomes the operator on every managed server. The client CLI becomes a thin transporter.
+
+### Agent Architecture
+
+| Item | Description |
+|---|---|
+| `nodeforge-agent` binary | Separate binary installed on the target server as the first step of bootstrap |
+| Agent-first bootstrap | Client connects via SSH, uploads agent + desired state, invokes `nodeforge-agent bootstrap`, disconnects. Agent operates locally. |
+| Transport abstraction | Fabric wrapped behind `Transport` protocol: `connect()`, `upload()`, `exec()`, `download()` |
+| Server-side state | `/etc/nodeforge/` (config), `/var/lib/nodeforge/` (runtime state, locks, secrets), `/var/log/nodeforge/` (logs) |
+| Local secret generation | Agent generates `.env` values and service secrets on the target server |
+| Runtime state tracking | `runtime-state.json` records applied state (hashes, timestamps, versions) |
+| Mutation locking | Lock file in `/var/lib/nodeforge/locks/` — one mutation at a time |
+
+### Compose Stacks (first agent-native workload)
 
 | Item | Description |
 |---|---|
 | `kind: file_template` | Render managed configuration files from Jinja2 templates and variables |
 | `kind: compose_project` | Manage Docker Compose projects: upload compose file, pull, up, health check |
-| Managed directories | Deterministic creation of project directories on the remote host |
+| Managed directories | Deterministic creation of project directories on the target server |
 | Compose health checks | Wait for container health after `docker compose up -d`; surface failures |
 
 **New capabilities:**
+- Agent-local execution — SSH restart during bootstrap is a non-event
 - Rendered `.env` files, `docker-compose.yml` files, and arbitrary config from Jinja2 templates
 - Change detection for rendered files (hash-based)
 - Docker Compose validation (`docker compose config`) before apply
 - Health-aware startup with configurable timeout and retry
+- Secrets generated and stored on the target server, never round-tripped through the client
 
 **Acceptance criteria:**
-- A fresh bootstrapped VPS can run a multi-container Compose stack (e.g., database + web app
-  + reverse proxy) using only nodeforge-managed specs
+- Bootstrap installs agent as first step; all subsequent operations run locally on the server
+- A fresh bootstrapped VPS can run a multi-container Compose stack using only nodeforge-managed specs
 - Template rendering is deterministic and reviewable in the plan
 - Health check failures are surfaced clearly in apply output
+- Client CLI works as a thin transporter (upload, invoke, retrieve status)
 
 ---
 
-## v0.4 -- UX + Spec Ergonomics
+## v0.4 -- Logic Migration + UX
 
-**Goal:** Make nodeforge pleasant enough for daily use in a real infra repository.
+**Goal:** Complete the migration of all spec kinds to agent-side execution, and improve daily-use ergonomics.
+
+### Logic Migration
 
 | Item | Description |
 |---|---|
-| `nodeforge version` | Print current version |
-| `nodeforge update` | Self-update from GitHub Releases |
+| All spec kinds via agent | Bootstrap, service (PostgreSQL, Nginx, Docker, containers), file_template, compose_project — all execute through the agent |
+| Server-side plan/apply | Plan generation and apply run on the agent, not the client |
+| Idempotent re-apply | Agent skips unchanged resources on re-apply |
+| Deprecate old Fabric path | Mark the direct-Fabric execution path as deprecated |
+
+### UX Improvements
+
+| Item | Description |
+|---|---|
+| `nodeforge version` | Print current version (client + agent) |
+| `nodeforge update` | Self-update client from GitHub Releases; `nodeforge agent-update <host>` for the agent |
 | Shell completion | Enable `typer` completion install |
 | Spec dry-run diff | Show exactly what would change on the server before applying |
 | Multiple YAML documents | Allow `---` documents in a single file |
 
 **Acceptance criteria:**
+- All existing spec kinds execute through the agent — no direct Fabric orchestration for provisioning steps
+- `nodeforge apply` is idempotent — re-running produces no changes if state matches
 - Plans are reviewable and stable
-- One file can describe multiple resources
 - Operators can inspect intended changes before execution
 
 ---
 
-## v0.5 -- Stack Foundations + Addon Architecture
+## v0.5 -- Declarative Reconciliation + Policy Engine
 
-**Goal:** Introduce a first-class single-host stack model and the addon extension system.
+**Goal:** Make the agent truly declarative (desired state vs. actual state) and ship the policy engine in OSS core.
+
+### Reconciliation
+
+| Item | Description |
+|---|---|
+| Desired vs. runtime state comparison | Agent compares `desired-state.yaml` against `runtime-state.json` |
+| Partial apply | Only changed resources are applied — unchanged resources are skipped |
+| Drift detection | `nodeforge doctor <host>` reports divergence between desired and actual state |
+| `nodeforge reconcile <host>` | Bring server back to desired state |
+
+### Policy Engine (OSS Core)
+
+| Item | Description |
+|---|---|
+| Policy engine | Enforce `policy.yaml` rules: auto_apply, require_approval, deny |
+| Policy inert by default | No `policy.yaml` = no policy checks = agent executes what it's told |
+| Manual policy option | OSS users can optionally write their own `policy.yaml` to constrain the agent |
+| Temporary approvals | One-off critical operations with auto-expiring approval tokens |
+
+### Stack Foundations
 
 | Item | Description |
 |---|---|
@@ -121,14 +174,18 @@ managed entirely through nodeforge specs.
 | Overlay / env-file layering | Multiple `.env` file layers with explicit precedence order (RFC 008) |
 
 **Acceptance criteria:**
-- Nodeforge can define stacks that group file_template + compose_project resources
-- Stacks execute in dependency order
+- `nodeforge apply` is safe to re-run at any time — only applies what changed
+- `nodeforge doctor` reports drift accurately
+- Policy engine is testable, auditable, and inert by default
+- Stacks group resources with dependency-ordered execution
 
 ---
 
-## v0.6 -- Operational Primitives
+## v0.6 -- Operational Primitives + Day-2 Operations
 
-**Goal:** Make single-host stacks operationally safe and maintainable.
+**Goal:** Make single-host stacks operationally safe and support post-bootstrap lifecycle management.
+
+### Operational Primitives
 
 | Item | Description |
 |---|---|
@@ -138,16 +195,25 @@ managed entirely through nodeforge specs.
 | Log rotation | Support log rotation policies |
 | Resource policies | Encourage CPU/RAM limits, restart policies, volume mounts |
 
+### Day-2 Operations
+
+| Item | Description |
+|---|---|
+| `nodeforge rotate-secret <host> <name>` | Rotate a managed secret, re-render dependent config, restart dependent services |
+| Feature toggles | Enable/disable modules through desired state changes |
+| Config updates | Update domains, proxy rules, integration tokens without full re-provision |
+
 **New capabilities:**
 - Timer-based recurring operations (reconcile, cleanup, scheduled jobs)
 - PostgreSQL dump backups with timestamped naming and retention
-- Restore metadata files
 - systemd daemon-reload, enable, start lifecycle
+- Secret rotation as a first-class operation
 
 **Acceptance criteria:**
 - Timers can trigger local jobs or HTTP hooks
 - Backup jobs can be installed and run predictably
-- Rerun is idempotent -- unchanged units are not recreated
+- Rerun is idempotent — unchanged units are not recreated
+- Secret rotation works end-to-end: generate → store → re-render → restart → verify
 
 ---
 
@@ -180,9 +246,22 @@ managed entirely through nodeforge specs.
 
 ---
 
-## v0.8 -- Multi-Host Light Operations
+## v0.8 -- Companion App + Multi-Host Light Operations
 
-**Goal:** Support practical small-fleet workflows without requiring a full control plane.
+**Goal:** Ship the optional companion app and support practical small-fleet workflows.
+
+### Companion App (OSS)
+
+| Item | Description |
+|---|---|
+| Companion binary | Optional install for users who prefer a visual workflow over CLI |
+| Localhost HTTP listener | Companion listens on `localhost:19532` for requests |
+| Credential prompt UI | Focused dialog for entering credentials during bootstrap |
+| WireGuard detection | Detect WireGuard installation, prompt to install if missing, manage config |
+| Cross-platform auto-start | `systemd --user` (Linux), LaunchAgent (macOS) |
+| Credential store interface | Pluggable `CredentialStore` protocol with built-in transient + `.env` backends |
+
+### Multi-Host Light Operations
 
 | Item | Description |
 |---|---|
@@ -193,6 +272,7 @@ managed entirely through nodeforge specs.
 | Failure handling | Stop on first failure or continue through all hosts |
 
 **Acceptance criteria:**
+- Companion app works on Linux and macOS as an optional alternative to CLI
 - A small fleet can be managed using one logical deployment command
 - Results are aggregated and attributable per host
 - Doctor/drift summaries available at fleet level
@@ -206,9 +286,10 @@ managed entirely through nodeforge specs.
 | Item | Description |
 |---|---|
 | Stable spec schema | Commit to backwards-compatible format; document breaking change policy |
-| Full test coverage | Unit + integration coverage for all compiler, plan, and runtime paths |
+| Full test coverage | Unit + integration coverage for all compiler, plan, agent, and runtime paths |
 | Signed release artifacts | GPG-sign binaries; publish `.sig` files (RFC 003) |
 | SHA-256 checksums | `checksums.txt` with every release |
+| OS keychain credential store | macOS Keychain, GNOME Keyring, Windows Credential Manager integration |
 | CONTRIBUTING.md | Contributor guide, PR process, local dev setup |
 | CHANGELOG.md | Automated changelog from conventional commits |
 | Docs site | Generated from README + per-spec reference docs |
@@ -217,6 +298,7 @@ managed entirely through nodeforge specs.
 - A second operator can reproduce a full stack deployment from docs + repo
 - Upgrades and re-applies are reliable and idempotent
 - All release artifacts are signed and verifiable
+- Agent and client version compatibility is enforced
 
 ---
 
@@ -232,16 +314,24 @@ managed entirely through nodeforge specs.
 | RFC 008 | Overlay / Env-File Layering for Value Resolution | Planned | v0.5 |
 | RFC 012 | Light Blueprints and Stack Composition | Planned | v0.7 |
 | RFC 013 | Multi-Host Light Operations | Planned | v0.8 |
+| RFC 014 | Agent Architecture and Bootstrap Sequence | **New** | v0.3 |
+| RFC 015 | Policy Engine Design | **New** | v0.5 |
+| RFC 016 | Companion App and Credential Store | **New** | v0.8 |
 
 ---
 
 ## Platform Scope
 
-nodeforge runs on **Linux and macOS only**. Windows is not a supported client platform.
+### Client (CLI + optional companion)
 
-The target of every spec is always a remote Linux server (Debian/Ubuntu). nodeforge itself — the CLI that connects and applies changes — requires a Unix environment to manage local state correctly (SSH `conf.d`, WireGuard key material, POSIX paths).
+nodeforge client runs on **Linux, macOS, and Windows**.
 
-**Future consideration (post-v1.0):** A lightweight Windows client could be built on top of a nodeforge API server. The API server would run on a Linux host, expose the compile-plan-apply pipeline over HTTP, and accept spec payloads from any platform. This eliminates the local-state complexity on the Windows side entirely. This is not scheduled and not in scope for v1.0.
+- Linux and macOS: full support (CLI + companion)
+- Windows: companion support targeted for v1.0+; CLI works where Python is available
+
+### Agent (target server)
+
+The target of every spec is always a **remote Linux server (Debian/Ubuntu)**. The `nodeforge-agent` binary runs on the target server and performs all provisioning locally.
 
 ---
 
@@ -249,10 +339,14 @@ The target of every spec is always a remote Linux server (Debian/Ubuntu). nodefo
 
 > **Plan is the single source of truth** -- what you review is exactly what executes.
 
+> **Client is the transporter, agent is the operator** -- agent installed as first step.
+
 > **Ship a real self-hosted stack first** -- prove the model on a single host before generalizing.
 
 > **Composable specs that scale** -- from one VPS to a small fleet.
 
 > **No vendor lock-in** -- self-hosted by default, no mandatory external services.
+
+> **Policy engine is open source** -- auditable by anyone, activated by configuration.
 
 > **Operational safety over hidden magic** -- health checks, resource limits, and explicit failure handling.
