@@ -10,8 +10,9 @@ from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
 from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
 from nodeforge_core.specs.file_template_schema import FileTemplateSpec
 from nodeforge_core.specs.service_schema import ServiceSpec
+from nodeforge_core.specs.stack_schema import StackSpec
 
-AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
+AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec | StackSpec
 
 
 @dataclass
@@ -328,6 +329,104 @@ def validate_compose_project(spec: ComposeProjectSpec) -> list[ValidationIssue]:
                     f"Invalid directory mode '{d.mode}' — expected octal like '0755'",
                 )
             )
+
+    return issues
+
+
+def validate_stack(spec: StackSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    # Must have at least one resource
+    if not spec.resources:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "resources",
+                "Stack must contain at least one resource",
+            )
+        )
+
+    # Resource names must be unique
+    names: set[str] = set()
+    for i, res in enumerate(spec.resources):
+        if not res.name:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"resources[{i}].name",
+                    "Resource name must not be empty",
+                )
+            )
+        if res.name in names:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"resources[{i}].name",
+                    f"Duplicate resource name: {res.name}",
+                )
+            )
+        names.add(res.name)
+
+        # Check that referenced kinds are registered
+        from nodeforge_core.registry import get_spec_model, list_spec_kinds
+
+        if get_spec_model(res.kind) is None:
+            known = ", ".join(list_spec_kinds()) or "none"
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"resources[{i}].kind",
+                    f"Unknown resource kind '{res.kind}'. Supported: {known}",
+                )
+            )
+
+        # Check depends_on references exist
+        for dep in res.depends_on:
+            if dep not in names and dep != res.name:
+                # dep might refer to a resource defined later — defer full check
+                pass
+
+    # Full circular dependency check (topological sort)
+    name_set = {r.name for r in spec.resources}
+    for i, res in enumerate(spec.resources):
+        for dep in res.depends_on:
+            if dep not in name_set:
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        f"resources[{i}].depends_on",
+                        f"Dependency '{dep}' not found in stack resources",
+                    )
+                )
+
+    # Detect cycles using DFS
+    adj: dict[str, list[str]] = {r.name: list(r.depends_on) for r in spec.resources}
+    visited: set[str] = set()
+    in_stack: set[str] = set()
+
+    def _has_cycle(node: str) -> bool:
+        if node in in_stack:
+            return True
+        if node in visited:
+            return False
+        visited.add(node)
+        in_stack.add(node)
+        for dep in adj.get(node, []):
+            if _has_cycle(dep):
+                return True
+        in_stack.discard(node)
+        return False
+
+    for name in adj:
+        if _has_cycle(name):
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "resources",
+                    "Circular dependency detected in stack resources",
+                )
+            )
+            break
 
     return issues
 

@@ -1,0 +1,31 @@
+# Policy configuration for the nodeforge agent.
+#
+# Place this file at /etc/nodeforge/policy.yaml on the target host,
+# or pass --policy to the agent CLI.
+#
+# When no policy file is present, the agent auto-applies everything.
+
+version: "1"
+default_action: auto_apply
+
+rules:
+  # Deny any step that disables root login — require human override
+  - name: deny-root-lockout
+    match_id: "disable_root_login"
+    action: deny
+
+  # Require approval for any firewall-related steps
+  - name: approve-firewall
+    match_id: "ufw_*"
+    action: require_approval
+
+  # Require approval for anything tagged "destructive"
+  - name: approve-destructive
+    match_tags:
+      - destructive
+    action: require_approval
+
+  # Auto-apply all agent_command steps (e.g. package installs)
+  - name: auto-commands
+    match_kind: agent_command
+    action: auto_apply

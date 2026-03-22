@@ -3,6 +3,10 @@
 Executes plan steps locally on the managed server via subprocess,
 rather than over SSH. Supports idempotent re-apply by tracking
 resource state via content hashes.
+
+Policy integration: when a policy.yaml is present at
+``/etc/nodeforge/policy.yaml``, each step is evaluated against
+the policy before execution.
 """
 
 from __future__ import annotations
@@ -20,9 +24,14 @@ from nodeforge_agent.state import (
     update_resource,
 )
 from nodeforge_core.agent_models import AgentApplyResult, AgentStepResult
+from nodeforge_core.agent_paths import AGENT_CONFIG_DIR
 from nodeforge_core.plan.models import Plan, Step, StepScope
+from nodeforge_core.policy import PolicyAction, PolicyConfig, evaluate_step, load_policy
 from nodeforge_core.state import RuntimeState
 from nodeforge_core.utils.hashing import sha256_string
+
+# Default policy.yaml location on the managed server.
+_POLICY_PATH = AGENT_CONFIG_DIR / "policy.yaml"
 
 
 class AgentExecutor:
@@ -32,10 +41,16 @@ class AgentExecutor:
         self,
         plan: Plan,
         state_path: Path | None = None,
+        policy_path: Path | None = None,
+        approval_tokens: list[str] | None = None,
     ) -> None:
         self._plan = plan
         self._state_path = state_path
         self._state: RuntimeState = load_state(state_path)
+        self._policy: PolicyConfig | None = load_policy(
+            policy_path if policy_path is not None else _POLICY_PATH
+        )
+        self._approval_tokens = {t.split(":")[0]: t for t in (approval_tokens or [])}
 
     def apply(self) -> AgentApplyResult:
         """Execute all remote/verify steps in order, with idempotent skip logic."""
@@ -90,6 +105,37 @@ class AgentExecutor:
                 step_results.append(result)
                 unchanged_count += 1
                 continue
+
+            # Policy check: evaluate step against policy rules
+            decision = evaluate_step(self._policy, step.id, step.kind, step.tags)
+            if decision.action == PolicyAction.DENY:
+                result = AgentStepResult(
+                    step_index=step.index,
+                    step_id=step.id,
+                    scope=step.scope.value,
+                    status="failed",
+                    error=f"Denied by policy: {decision.reason}",
+                )
+                step_results.append(result)
+                if step.gate:
+                    aborted_at = step.index
+                    break
+                continue
+            if decision.action == PolicyAction.REQUIRE_APPROVAL:
+                token = self._approval_tokens.get(step.id)
+                if token is None:
+                    result = AgentStepResult(
+                        step_index=step.index,
+                        step_id=step.id,
+                        scope=step.scope.value,
+                        status="failed",
+                        error=f"Requires approval: {decision.reason}. Pass --approval-token.",
+                    )
+                    step_results.append(result)
+                    if step.gate:
+                        aborted_at = step.index
+                        break
+                    continue
 
             # Execute the step
             result = self._execute_step(step)

@@ -1,11 +1,14 @@
-"""nodeforge CLI — 6 commands wiring the full pipeline.
+"""nodeforge CLI — commands wiring the full pipeline.
 
-validate  <spec.yaml>
-plan      <spec.yaml>
-docs      <spec.yaml> [--output FILE] [--mode guide|commands]
-apply     <spec.yaml> [--dry-run]
-inspect   run <run-id>
-inventory list | show <server-id>
+validate   <spec.yaml>
+plan       <spec.yaml>
+docs       <spec.yaml> [--output FILE] [--mode guide|commands]
+diff       <spec.yaml>
+doctor     <spec.yaml>  — drift detection
+reconcile  <spec.yaml>  — bring server back to desired state
+apply      <spec.yaml> [--dry-run]
+inspect    run <run-id>
+inventory  list | show <server-id>
 """
 
 from __future__ import annotations
@@ -119,7 +122,7 @@ def _build_pipeline(
     ensure_keys: bool = False,
     *,
     strict_env: bool = True,
-    env_file: Path | None = None,
+    env_file: list[Path] | None = None,
 ):
     """Run Parse → Validate → (KeyGen) → Normalize → Plan.
 
@@ -132,7 +135,7 @@ def _build_pipeline(
     from nodeforge_core.registry import get_kind_hooks
     from nodeforge_core.specs.validators import validate_spec
 
-    parsed = parse(spec_path, strict_env=strict_env, env_file=env_file)
+    parsed = parse(spec_path, strict_env=strict_env, env_files=env_file)
 
     # Multi-document support: process each spec independently
     if isinstance(parsed, list):
@@ -188,8 +191,8 @@ def _print_issues(issues, stop_on_error: bool = True) -> None:
 @app.command()
 def validate(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    env_file: Path | None = typer.Option(
-        None, "--env-file", help="Load environment variables from a .env file"
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
     ),
     passthrough: bool = typer.Option(
         False,
@@ -203,7 +206,7 @@ def validate(
 
     console.print(f"[bold]Validating:[/bold] {spec}")
     try:
-        parsed = parse(spec, strict_env=not passthrough, env_file=env_file)
+        parsed = parse(spec, strict_env=not passthrough, env_files=env_file)
     except Exception as e:
         console.print(f"[bold red]Parse error:[/bold red] {e}")
         raise typer.Exit(1) from None
@@ -234,8 +237,8 @@ def validate(
 @app.command()
 def plan(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    env_file: Path | None = typer.Option(
-        None, "--env-file", help="Load environment variables from a .env file"
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
     ),
     passthrough: bool = typer.Option(
         False,
@@ -272,8 +275,8 @@ def plan(
 @app.command(name="diff")
 def diff_cmd(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
-    env_file: Path | None = typer.Option(
-        None, "--env-file", help="Load environment variables from a .env file"
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
     ),
     passthrough: bool = typer.Option(
         False,
@@ -328,6 +331,163 @@ def diff_cmd(
 
 
 # ------------------------------------------------------------------ #
+# doctor
+# ------------------------------------------------------------------ #
+
+
+@app.command()
+def doctor(
+    spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
+) -> None:
+    """Report drift between desired spec and actual server state.
+
+    Generates a plan from the spec, sends it to the agent's doctor
+    command, and displays which resources have drifted, are missing,
+    or are orphaned.
+    """
+    from nodeforge.agent_installer import detect_agent
+    from nodeforge.runtime.fabric_transport import FabricTransport
+
+    try:
+        parsed_spec, ctx, p, issues = _build_pipeline(
+            spec, strict_env=not passthrough, env_file=env_file
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(1) from None
+
+    if issues:
+        _print_issues(issues, stop_on_error=True)
+
+    # Connect to agent and run doctor
+    try:
+        login = parsed_spec.login
+        key_path = (
+            str(ctx.login_key_path) if ctx.login_key_path and ctx.login_key_path.exists() else None
+        )
+        transport = FabricTransport(
+            host=parsed_spec.host.address,
+            user=login.user,
+            port=login.port,
+            key_path=key_path,
+            password=ctx.login_password,
+        )
+
+        agent_version = detect_agent(transport)
+        if not agent_version:
+            console.print(
+                "[bold red]No agent installed on the target server.[/bold red]\n"
+                "Install the agent first: nodeforge apply <spec.yaml>"
+            )
+            transport.close()
+            raise typer.Exit(1)
+
+        # Upload the current plan as the desired state
+        from nodeforge_core.agent_paths import AGENT_BINARY_PATH, AGENT_DESIRED_DIR
+
+        plan_json = p.model_dump_json(indent=2)
+        plan_remote_path = f"{AGENT_DESIRED_DIR}/doctor-plan.json"
+        transport.upload_content(plan_json, plan_remote_path, sudo=True)
+
+        # Invoke agent doctor
+        result = transport.run(
+            f"{AGENT_BINARY_PATH} doctor {plan_remote_path}",
+            sudo=True,
+            warn=True,
+        )
+
+        # Print the agent's output
+        if result.stdout:
+            console.print(result.stdout.rstrip())
+        if result.stderr:
+            console.print(result.stderr.rstrip())
+
+        # Download and display the doctor result
+        import json as _json
+
+        try:
+            doctor_json = transport.download("/var/lib/nodeforge/doctor-result.json")
+            doctor_data = _json.loads(doctor_json)
+            healthy = doctor_data.get("healthy", False)
+            if not healthy:
+                console.print(
+                    f"\n[bold yellow]Drift detected on {parsed_spec.host.address}.[/bold yellow]"
+                    "\nRun 'nodeforge reconcile' to bring the server back to desired state."
+                )
+        except Exception:
+            pass  # agent output already shown
+
+        transport.close()
+
+        if result.return_code != 0:
+            raise typer.Exit(1)
+
+    except typer.Exit:
+        raise
+    except Exception as e:
+        console.print(f"[bold red]Doctor failed:[/bold red] {e}")
+        raise typer.Exit(1) from None
+
+
+# ------------------------------------------------------------------ #
+# reconcile
+# ------------------------------------------------------------------ #
+
+
+@app.command()
+def reconcile(
+    spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
+) -> None:
+    """Bring server back to desired state defined in the spec.
+
+    This is equivalent to 'nodeforge apply' but communicates the intent:
+    the server has drifted and needs to be reconciled. Only changed
+    resources are re-applied (idempotent).
+    """
+    console.print("[bold]Reconciling server to desired state...[/bold]\n")
+
+    # Reconcile is semantically identical to apply --mode agent
+    # The agent's idempotent executor handles partial apply automatically.
+    try:
+        result = _build_pipeline(
+            spec, ensure_keys=True, strict_env=not passthrough, env_file=env_file
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(1) from None
+
+    specs_r, ctxs_r, plans_r, issues = result
+
+    if issues:
+        _print_issues(issues, stop_on_error=True)
+
+    # Normalize to lists for uniform handling
+    if isinstance(specs_r, list):
+        spec_list = list(zip(specs_r, ctxs_r, plans_r, strict=True))
+    else:
+        spec_list = [(specs_r, ctxs_r, plans_r)]
+
+    for parsed_spec, ctx, p in spec_list:
+        _apply_single(parsed_spec, ctx, p, "agent", False, console)
+
+
+# ------------------------------------------------------------------ #
 # docs
 # ------------------------------------------------------------------ #
 
@@ -339,8 +499,8 @@ def docs(
         None, "--output", "-o", help="Output file (default: stdout)"
     ),
     mode: str = typer.Option("guide", "--mode", "-m", help="Output mode: guide or commands"),
-    env_file: Path | None = typer.Option(
-        None, "--env-file", help="Load environment variables from a .env file"
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
     ),
     passthrough: bool = typer.Option(
         False,
@@ -383,8 +543,8 @@ def apply(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be done without executing"
     ),
-    env_file: Path | None = typer.Option(
-        None, "--env-file", help="Load environment variables from a .env file"
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
     ),
     passthrough: bool = typer.Option(
         False,

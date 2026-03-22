@@ -9,8 +9,9 @@ from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
 from nodeforge_core.specs.file_template_schema import FileTemplateSpec
 from nodeforge_core.specs.loader import load_spec
 from nodeforge_core.specs.service_schema import ServiceSpec
+from nodeforge_core.specs.stack_schema import StackSpec
 
-AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
+AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec | StackSpec
 
 
 def parse(
@@ -18,6 +19,7 @@ def parse(
     *,
     strict_env: bool = True,
     env_file: Path | None = None,
+    env_files: list[Path] | None = None,
 ) -> AnySpec | list[AnySpec]:
     """Load and parse a YAML spec file.
 
@@ -29,9 +31,12 @@ def parse(
         When True (default), unresolved ``${VAR}`` references raise an error.
         When False, they are left unchanged (passthrough mode).
     env_file:
-        Optional path to a ``.env`` file to load before resolving the spec.
+        Optional path to a single ``.env`` file (backward-compatible).
+    env_files:
+        Optional list of ``.env`` file paths.  Later files override earlier
+        ones; existing ``os.environ`` values always take precedence.
 
     Returns a single spec for single-document files, or a list of specs
     for multi-document files (separated by ``---``).
     """
-    return load_spec(spec_path, strict_env=strict_env, env_file=env_file)
+    return load_spec(spec_path, strict_env=strict_env, env_file=env_file, env_files=env_files)

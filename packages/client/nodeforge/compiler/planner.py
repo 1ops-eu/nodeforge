@@ -9,6 +9,7 @@ CRITICAL INVARIANT (SSH lockout prevention):
 
 from __future__ import annotations
 
+import contextlib
 from datetime import UTC, datetime
 
 from nodeforge.compiler.normalizer import NormalizedContext
@@ -17,9 +18,10 @@ from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
 from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
 from nodeforge_core.specs.file_template_schema import FileTemplateSpec
 from nodeforge_core.specs.service_schema import ServiceSpec
+from nodeforge_core.specs.stack_schema import StackSpec
 from nodeforge_core.utils.hashing import sha256_string
 
-AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
+AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec | StackSpec
 
 
 def _encode_check_command(check, spec) -> str:
@@ -1546,3 +1548,144 @@ def _plan_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext) -> l
         )
 
     return steps
+
+
+def _plan_stack(spec: StackSpec, ctx: NormalizedContext) -> list[Step]:
+    """Plan a stack by expanding resources in dependency order.
+
+    Stack resources are topologically sorted by ``depends_on``, then each
+    resource is delegated to its kind's registered planner.  Steps from
+    each resource are prefixed with the resource name for traceability.
+    """
+    from nodeforge_core.registry import get_normalizer, get_planner, get_spec_model
+
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    steps: list[Step] = []
+
+    # Topological sort
+    ordered = _topo_sort(spec.resources)
+
+    for res in ordered:
+        planner_fn = get_planner(res.kind)
+        if planner_fn is None:
+            steps.append(
+                _s(
+                    f"stack_{res.name}_error",
+                    f"No planner for resource kind '{res.kind}'",
+                    R,
+                    StepKind.AGENT_COMMAND,
+                    command=f"echo 'ERROR: no planner for {res.kind}'",
+                    tags=["stack", res.name, "error"],
+                )
+            )
+            continue
+
+        # Build a minimal spec-like object for the resource's planner.
+        model_class = get_spec_model(res.kind)
+        if model_class is None:
+            continue
+
+        # Construct a synthetic spec for the child resource.  We merge
+        # the stack-level host/login/local into the resource config.
+        child_data = {
+            "kind": res.kind,
+            "meta": {"name": f"{spec.meta.name}/{res.name}"},
+            "host": spec.host.model_dump(),
+            **res.config,
+        }
+
+        # Inject login and local if the model expects them and they're
+        # not already in the config.
+        if "login" not in child_data:
+            child_data["login"] = spec.login.model_dump()
+        if "local" not in child_data:
+            child_data["local"] = spec.local.model_dump()
+
+        try:
+            child_spec = model_class.model_validate(child_data)
+        except Exception:
+            steps.append(
+                _s(
+                    f"stack_{res.name}_validation_error",
+                    f"Failed to validate resource '{res.name}' config as {res.kind}",
+                    R,
+                    StepKind.AGENT_COMMAND,
+                    command=f"echo 'ERROR: validation failed for {res.name}'",
+                    tags=["stack", res.name, "error"],
+                )
+            )
+            continue
+
+        # Normalize the child spec
+        child_ctx = NormalizedContext(spec=child_spec, spec_dir=ctx.spec_dir)
+        normalizer_fn = get_normalizer(res.kind)
+        if normalizer_fn is not None:
+            with contextlib.suppress(Exception):
+                normalizer_fn(child_spec, child_ctx)
+
+        # Generate steps from the child planner
+        child_steps = planner_fn(child_spec, child_ctx)
+
+        # Prefix step IDs with the resource name for traceability
+        for cs in child_steps:
+            cs.id = f"stack_{res.name}_{cs.id}"
+            cs.tags = ["stack", res.name] + cs.tags
+
+        steps.extend(child_steps)
+
+    # Postflight checks for the stack
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"stack_postflight_{check.type}",
+                f"Stack postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["stack", "postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "stack_open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory", "stack"],
+            )
+        )
+
+    return steps
+
+
+def _topo_sort(resources) -> list:
+    """Topologically sort stack resources by depends_on.
+
+    Returns resources in dependency-first order.
+    """
+    name_to_res = {r.name: r for r in resources}
+    visited: set[str] = set()
+    result: list = []
+
+    def _visit(name: str) -> None:
+        if name in visited:
+            return
+        visited.add(name)
+        res = name_to_res.get(name)
+        if res is None:
+            return
+        for dep in res.depends_on:
+            _visit(dep)
+        result.append(res)
+
+    for r in resources:
+        _visit(r.name)
+
+    return result

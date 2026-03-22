@@ -11,9 +11,10 @@ from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
 from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
 from nodeforge_core.specs.file_template_schema import FileTemplateSpec
 from nodeforge_core.specs.service_schema import ServiceSpec
+from nodeforge_core.specs.stack_schema import StackSpec
 from nodeforge_core.utils.files import expand_path, resolve_path
 
-AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec
+AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec | StackSpec
 
 
 @dataclass
@@ -291,3 +292,20 @@ def _normalize_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext)
         ctx.compose_file_content = compose_path.read_text(encoding="utf-8")
     else:
         ctx.compose_file_content = f"<compose file not found: {compose_path}>"
+
+
+def _normalize_stack(spec: StackSpec, ctx: NormalizedContext) -> None:
+    """Normalize a stack spec: resolve login, paths, state_dir."""
+    spec_dir = ctx.spec_dir
+
+    # Apply state_dir override before resolving any local paths
+    _apply_state_dir(spec)
+
+    # Resolve login key
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    # Resolve inventory (state_dir-aware)
+    ctx.db_path = _resolve_db_path(spec)

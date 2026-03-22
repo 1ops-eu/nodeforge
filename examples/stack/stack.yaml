@@ -1,0 +1,42 @@
+kind: stack
+
+meta:
+  name: blog-stack
+  description: A simple blog application stack with Nginx reverse proxy and a Compose project
+
+host:
+  name: blog-host
+  address: ${env:SERVER_IP:-10.0.0.1}
+  os_family: debian
+
+login:
+  user: admin
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+local:
+  inventory:
+    enabled: true
+
+resources:
+  - name: nginx-config
+    kind: file_template
+    config:
+      template: templates/nginx.conf.j2
+      dest: /etc/nginx/sites-available/blog.conf
+      vars:
+        domain: blog.example.com
+        upstream_port: 3000
+
+  - name: blog-app
+    kind: compose_project
+    depends_on:
+      - nginx-config
+    config:
+      project_name: blog
+      compose_file: docker-compose.yml
+      pull: true
+
+checks:
+  - type: http_reachable
+    url: http://localhost:3000

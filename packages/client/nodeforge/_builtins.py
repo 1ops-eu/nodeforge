@@ -25,11 +25,13 @@ def _register_specs() -> None:
     from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
     from nodeforge_core.specs.file_template_schema import FileTemplateSpec
     from nodeforge_core.specs.service_schema import ServiceSpec
+    from nodeforge_core.specs.stack_schema import StackSpec
 
     register_spec_kind("bootstrap", BootstrapSpec)
     register_spec_kind("service", ServiceSpec)
     register_spec_kind("file_template", FileTemplateSpec)
     register_spec_kind("compose_project", ComposeProjectSpec)
+    register_spec_kind("stack", StackSpec)
 
 
 def _register_normalizers() -> None:
@@ -38,6 +40,7 @@ def _register_normalizers() -> None:
         _normalize_compose_project,
         _normalize_file_template,
         _normalize_service,
+        _normalize_stack,
     )
     from nodeforge_core.registry.normalizers import register_normalizer
 
@@ -45,6 +48,7 @@ def _register_normalizers() -> None:
     register_normalizer("service", _normalize_service)
     register_normalizer("file_template", _normalize_file_template)
     register_normalizer("compose_project", _normalize_compose_project)
+    register_normalizer("stack", _normalize_stack)
 
 
 def _register_validators() -> None:
@@ -54,12 +58,14 @@ def _register_validators() -> None:
         validate_compose_project,
         validate_file_template,
         validate_service,
+        validate_stack,
     )
 
     register_validator("bootstrap", validate_bootstrap)
     register_validator("service", validate_service)
     register_validator("file_template", validate_file_template)
     register_validator("compose_project", validate_compose_project)
+    register_validator("stack", validate_stack)
 
 
 def _register_planners() -> None:
@@ -68,6 +74,7 @@ def _register_planners() -> None:
         _plan_compose_project,
         _plan_file_template,
         _plan_service,
+        _plan_stack,
     )
     from nodeforge_core.registry.planners import register_planner
 
@@ -75,6 +82,7 @@ def _register_planners() -> None:
     register_planner("service", _plan_service)
     register_planner("file_template", _plan_file_template)
     register_planner("compose_project", _plan_compose_project)
+    register_planner("stack", _plan_stack)
 
 
 def _register_step_handlers() -> None:
@@ -106,6 +114,7 @@ def _register_hooks() -> None:
         record_compose_project_apply,
         record_file_template_apply,
         record_service_apply,
+        record_stack_apply,
     )
     from nodeforge_core.registry.hooks import KindHooks, register_kind_hooks
 
@@ -139,6 +148,14 @@ def _register_hooks() -> None:
             needs_key_generation=False,
             ssh_port_fallback=False,
             on_inventory_record=record_compose_project_apply,
+        ),
+    )
+    register_kind_hooks(
+        "stack",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_stack_apply,
         ),
     )
 

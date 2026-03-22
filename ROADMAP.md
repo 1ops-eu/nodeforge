@@ -151,55 +151,67 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 ---
 
-## v0.5 -- Declarative Reconciliation + Policy Engine + Package Split
+## v0.5 -- Declarative Reconciliation + Policy Engine + Package Split ✅
 
 **Goal:** Make the agent truly declarative (desired state vs. actual state), ship the policy engine in OSS core, and split the codebase into three clean packages.
 
 ### Reconciliation
 
-| Item | Description |
-|---|---|
-| Desired vs. runtime state comparison | Agent compares `desired-state.yaml` against `runtime-state.json` |
-| Partial apply | Only changed resources are applied — unchanged resources are skipped |
-| Drift detection | `nodeforge doctor <host>` reports divergence between desired and actual state |
-| `nodeforge reconcile <host>` | Bring server back to desired state |
+| Item | Description | Status |
+|---|---|---|
+| Desired vs. runtime state comparison | Agent compares `desired-state.json` against `runtime-state.json` | Done |
+| Partial apply | Only changed resources are applied — unchanged resources are skipped (hash-based) | Done |
+| Drift detection | `nodeforge doctor <spec>` reports divergence between desired and actual state | Done |
+| `nodeforge reconcile <spec>` | Bring server back to desired state by re-applying drifted resources | Done |
+| Desired state storage | Agent persists last-applied plan to `/var/lib/nodeforge/desired/desired-state.json` | Done |
 
 ### Policy Engine (OSS Core)
 
-| Item | Description |
-|---|---|
-| Policy engine | Enforce `policy.yaml` rules: auto_apply, require_approval, deny |
-| Policy inert by default | No `policy.yaml` = no policy checks = agent executes what it's told |
-| Manual policy option | OSS users can optionally write their own `policy.yaml` to constrain the agent |
-| Temporary approvals | One-off critical operations with auto-expiring approval tokens |
+| Item | Description | Status |
+|---|---|---|
+| Policy engine | Enforce `policy.yaml` rules: auto_apply, require_approval, deny | Done |
+| Policy inert by default | No `policy.yaml` = no policy checks = agent executes what it's told | Done |
+| Manual policy option | OSS users can optionally write their own `policy.yaml` to constrain the agent | Done |
+| Temporary approvals | HMAC-SHA256 time-limited approval tokens for `require_approval` steps | Done |
+| Policy integration in agent | Agent executor loads policy and evaluates each step before execution | Done |
 
 ### Stack Foundations
 
-| Item | Description |
-|---|---|
-| Addon registry | Formalize external addon discovery and lifecycle |
-| Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` |
-| `kind: stack` | Group related resources into a single deployable application boundary |
-| Apply ordering | Stack-aware dependency-ordered execution |
-| Overlay / env-file layering | Multiple `.env` file layers with explicit precedence order (RFC 008) |
+| Item | Description | Status |
+|---|---|---|
+| Addon registry | 7 open registries + `load_addons()` via entry_points | Done |
+| Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` | Done |
+| `kind: stack` | Group related resources into a single deployable application boundary | Done |
+| Apply ordering | Stack-aware dependency-ordered execution via topological sort | Done |
+| Overlay / env-file layering | Multiple `--env-file` flags with explicit precedence order (RFC 008) | Done |
 
 ### Package Split (Monorepo)
 
-| Item | Description |
-|---|---|
-| `nodeforge-core` package | `plan/`, `specs/`, `registry/` (infrastructure), `utils/` — shared by client and agent |
-| `nodeforge` package | Client: `compiler/`, `runtime/`, `local/`, `logs/`, `checks/`, `addons/`, `cli.py` |
-| `nodeforge-agent` package | Agent: `executor.py`, `state.py`, `lock.py`, `paths.py`, `cli.py`, `installer.py` |
-| Import boundaries enforced | Agent may not import from client; client may not import from agent |
-| Monorepo layout | All three packages under `packages/` in the same git repo |
+| Item | Description | Status |
+|---|---|---|
+| `nodeforge-core` package | `plan/`, `specs/`, `registry/` (infrastructure), `utils/` — shared by client and agent | Done |
+| `nodeforge` package | Client: `compiler/`, `runtime/`, `local/`, `logs/`, `checks/`, `addons/`, `cli.py` | Done |
+| `nodeforge-agent` package | Agent: `executor.py`, `state.py`, `lock.py`, `paths.py`, `cli.py` | Done |
+| Import boundaries enforced | Agent may not import from client; client may not import from agent | Done |
+| Monorepo layout | All three packages under `packages/` in the same git repo | Done |
+
+**New capabilities:**
+- Doctor command (`nodeforge doctor`) compares desired plan against runtime state, writes doctor-result.json
+- Reconcile command (`nodeforge reconcile`) re-applies only drifted resources
+- Policy engine with per-step evaluation, fnmatch-based rule matching, AND logic for multi-condition rules
+- HMAC-SHA256 approval tokens with configurable TTL for `require_approval` steps
+- `kind: stack` schema with resources, dependency ordering, and circular dependency detection at validation time
+- Stack planner with topological sort and step ID prefixing for traceability
+- Repeatable `--env-file` CLI option for overlay layering; `env_files` parameter in loader
+- Stack inventory recording (`record_stack_apply`) tracks each resource as a stack_resource entry
 
 **Acceptance criteria:**
-- `nodeforge apply` is safe to re-run at any time — only applies what changed
-- `nodeforge doctor` reports drift accurately
-- Policy engine is testable, auditable, and inert by default
-- Stacks group resources with dependency-ordered execution
-- `pip install nodeforge-core` / `nodeforge` / `nodeforge-agent` each work independently
-- Agent binary only includes agent + core code, not compiler/runtime/Fabric
+- `nodeforge apply` is safe to re-run at any time — only applies what changed -- **met** (hash-based idempotent skip)
+- `nodeforge doctor` reports drift accurately -- **met** (compares desired plan hashes against runtime state)
+- Policy engine is testable, auditable, and inert by default -- **met** (22 tests, no policy = no checks)
+- Stacks group resources with dependency-ordered execution -- **met** (topological sort, circular dep detection)
+- `pip install nodeforge-core` / `nodeforge` / `nodeforge-agent` each work independently -- **met** (three pyproject.toml, editable installs)
+- Agent binary only includes agent + core code, not compiler/runtime/Fabric -- **met** (import boundaries enforced)
 
 ---
 

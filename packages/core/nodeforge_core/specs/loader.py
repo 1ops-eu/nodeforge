@@ -151,7 +151,13 @@ def _resolve_values(obj: Any, *, strict: bool = True, _path: str = "") -> Any:
 _resolve_env_vars = _resolve_values
 
 
-def load_spec(path: Path, *, strict_env: bool = True, env_file: Path | None = None) -> Any:
+def load_spec(
+    path: Path,
+    *,
+    strict_env: bool = True,
+    env_file: Path | None = None,
+    env_files: list[Path] | None = None,
+) -> Any:
     """Load and parse a YAML spec file into a typed model.
 
     Parameters
@@ -162,10 +168,12 @@ def load_spec(path: Path, *, strict_env: bool = True, env_file: Path | None = No
         When True (default), unresolved ``${...}`` references raise an error.
         When False, they are left unchanged (passthrough mode).
     env_file:
-        Optional path to a ``.env`` file.  Variables defined in it are
-        loaded into ``os.environ`` *before* resolving the spec, but only
-        for variables that are not already set (existing env vars take
-        precedence).
+        Optional path to a single ``.env`` file (backward-compatible).
+    env_files:
+        Optional list of ``.env`` file paths.  Files are loaded in order;
+        later files override earlier ones, but existing ``os.environ``
+        values always take precedence.  When both ``env_file`` and
+        ``env_files`` are provided, ``env_file`` is prepended to the list.
     """
     # Ensure built-in and addon kinds are registered (idempotent).
     from nodeforge_core.registry import get_spec_model, list_spec_kinds, load_addons
@@ -175,12 +183,22 @@ def load_spec(path: Path, *, strict_env: bool = True, env_file: Path | None = No
     if not path.exists():
         raise SpecLoadError(f"Spec file not found: {path}")
 
-    # Load .env file if provided (existing env vars take precedence).
+    # Build the ordered list of env files (RFC 008: overlay layering).
+    all_env_files: list[Path] = []
     if env_file is not None:
-        if not env_file.exists():
-            raise SpecLoadError(f"Env file not found: {env_file}")
-        for key, value in load_env_file(env_file).items():
-            os.environ.setdefault(key, value)
+        all_env_files.append(env_file)
+    if env_files:
+        all_env_files.extend(env_files)
+
+    # Load env files in order: later files override earlier, but existing
+    # os.environ values always take precedence.
+    merged_env: dict[str, str] = {}
+    for ef in all_env_files:
+        if not ef.exists():
+            raise SpecLoadError(f"Env file not found: {ef}")
+        merged_env.update(load_env_file(ef))
+    for key, value in merged_env.items():
+        os.environ.setdefault(key, value)
 
     text = path.read_text(encoding="utf-8")
 

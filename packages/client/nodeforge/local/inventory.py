@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
     from nodeforge_core.specs.file_template_schema import FileTemplateSpec
     from nodeforge_core.specs.service_schema import ServiceSpec
+    from nodeforge_core.specs.stack_schema import StackSpec
 
 
 def _now_iso() -> str:
@@ -194,6 +195,52 @@ def record_compose_project_apply(
         started_at=apply_result.started_at,
         finished_at=apply_result.finished_at,
         server_id=server_id,
+    )
+
+
+def record_stack_apply(
+    db: InventoryDB,
+    spec: StackSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After a stack apply, record stack metadata + per-resource services + run."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+
+    # Record each resource as a service entry
+    for res in spec.resources:
+        db.upsert_service(
+            server_id=server_id,
+            service_type="stack_resource",
+            service_name=f"{spec.meta.name}/{res.name}",
+            status="active" if "success" in status else "failed",
+            metadata_json=json.dumps(
+                {
+                    "stack": spec.meta.name,
+                    "resource_kind": res.kind,
+                    "depends_on": res.depends_on,
+                }
+            ),
+        )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="stack",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+        metadata_json=json.dumps(
+            {
+                "stack_name": spec.meta.name,
+                "resource_count": len(spec.resources),
+                "resources": [r.name for r in spec.resources],
+            }
+        ),
     )
 
 
