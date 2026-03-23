@@ -242,6 +242,13 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 | Log rotation | Support log rotation policies |
 | Resource policies | Encourage CPU/RAM limits, restart policies, volume mounts |
 
+### Integration Primitives
+
+| Item | Description |
+|---|---|
+| `kind: http_request` | Execute HTTP calls (GET/POST/PUT/DELETE) from the ops machine or via SSH exec on the target host. Supports JSON body, headers, file-based body, and response status assertions. Enables fully automated Phase 1 → Phase 2 transitions (e.g. import n8n workflows, verify service health, trigger webhooks). |
+| `kind: postgres_init` | Idempotent SQL execution against running PostgreSQL instances (container or host). Connects via `docker exec` or host/port, runs `CREATE USER/DATABASE IF NOT EXISTS` patterns, and reports success/failure as a nodeforge health check. Replaces the fragile `docker-entrypoint-initdb.d` bind-mount pattern that only fires on first boot. |
+
 ### Day-2 Operations
 
 | Item | Description |
@@ -255,12 +262,16 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 - PostgreSQL dump backups with timestamped naming and retention
 - systemd daemon-reload, enable, start lifecycle
 - Secret rotation as a first-class operation
+- HTTP request execution with response assertions for API-driven deployment automation
+- Idempotent PostgreSQL database/user initialization against running containers
 
 **Acceptance criteria:**
 - Timers can trigger local jobs or HTTP hooks
 - Backup jobs can be installed and run predictably
 - Rerun is idempotent — unchanged units are not recreated
 - Secret rotation works end-to-end: generate → store → re-render → restart → verify
+- `kind: http_request` can POST a JSON file to an API endpoint and assert on status code
+- `kind: postgres_init` can create users and databases idempotently on a running Postgres container
 
 ---
 
