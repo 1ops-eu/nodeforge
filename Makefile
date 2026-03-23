@@ -1,6 +1,6 @@
 .PHONY: help venv install dev test test-local test-all lint fmt \
         validate-example plan-example docs-example smoke \
-        build-binary build-docker test-goss clean
+        build-binary build-agent-binary build-docker test-goss clean
 
 VENV      := .venv
 PYTHON    := $(VENV)/bin/python
@@ -36,8 +36,9 @@ help:
 	@echo "    make smoke              Run all smoke tests"
 	@echo ""
 	@echo "  Distribution"
-	@echo "    make build-binary    Build standalone CLI binary via PyInstaller"
-	@echo "    make build-docker    Build Docker image ($(IMAGE_NAME):$(VERSION))"
+	@echo "    make build-binary         Build standalone CLI binary via PyInstaller"
+	@echo "    make build-agent-binary   Build standalone agent binary via PyInstaller"
+	@echo "    make build-docker         Build Docker image ($(IMAGE_NAME):$(VERSION))"
 	@echo ""
 	@echo "  Goss integration tests (requires a live Ubuntu server)"
 	@echo "    make test-goss HOST=<ip> PORT=<port> USER=<user>"
@@ -94,7 +95,7 @@ fmt:
 
 validate-example:
 	@failed=0; \
-	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' ! -name 'policy.yaml' | sort); do \
 	  name=$$(basename "$$spec"); \
 	  case "$$name" in \
 	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
@@ -107,7 +108,7 @@ validate-example:
 
 plan-example:
 	@failed=0; \
-	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' ! -name 'policy.yaml' | sort); do \
 	  name=$$(basename "$$spec"); \
 	  case "$$name" in \
 	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
@@ -120,7 +121,7 @@ plan-example:
 
 docs-example:
 	@failed=0; \
-	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' ! -name 'policy.yaml' | sort); do \
 	  name=$$(basename "$$spec"); \
 	  case "$$name" in \
 	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
@@ -138,6 +139,9 @@ smoke: validate-example plan-example docs-example
 
 build-binary:
 	python scripts/build_binary.py
+
+build-agent-binary:
+	python scripts/build_agent_binary.py
 
 build-docker:
 	docker build \

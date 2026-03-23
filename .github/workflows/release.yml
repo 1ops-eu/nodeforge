@@ -10,8 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  # ── Build platform binaries ─────────────────────────────────────────────────
-  build:
+  # ── Build client binaries ──────────────────────────────────────────────────
+  build-client:
     strategy:
       fail-fast: false
       matrix:
@@ -61,9 +61,48 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: release/${{ matrix.artifact_name }}
 
+  # ── Build agent binaries (Linux only — agent runs on servers) ──────────────
+  build-agent:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: nodeforge-agent-linux-amd64
+            binary_path: dist/nodeforge-agent
+
+          - os: ubuntu-24.04-arm
+            artifact_name: nodeforge-agent-linux-arm64
+            binary_path: dist/nodeforge-agent
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build agent binary
+        run: python scripts/build_agent_binary.py
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release
+          cp "${{ matrix.binary_path }}" "release/${{ matrix.artifact_name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release/${{ matrix.artifact_name }}
+
   # ── Generate checksums ──────────────────────────────────────────────────────
   checksums:
-    needs: build
+    needs: [build-client, build-agent]
     runs-on: ubuntu-latest
 
     steps:
@@ -91,7 +130,7 @@ jobs:
 
   # ── Publish GitHub Release ──────────────────────────────────────────────────
   publish:
-    needs: [build, checksums]
+    needs: [build-client, build-agent, checksums]
     runs-on: ubuntu-latest
 
     steps:

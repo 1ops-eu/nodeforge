@@ -29,12 +29,20 @@ _ENV_VAR_SPECS = {
     "bootstrap-password-login.yaml",
 }
 
+# Non-spec YAML files in examples/ that should not be parsed as nodeforge specs
+# (e.g. agent policy configs, plain config examples)
+_NON_SPEC_FILES = {
+    "policy.yaml",
+}
+
 
 def _discover_example_specs() -> list[Path]:
-    """Return all .yaml spec files under examples/, excluding goss specs."""
+    """Return all .yaml spec files under examples/, excluding goss specs and non-spec files."""
     specs = []
     for p in sorted(EXAMPLES_ROOT.rglob("*.yaml")):
         if ".goss." in p.name:
+            continue
+        if p.name in _NON_SPEC_FILES:
             continue
         specs.append(p)
     return specs

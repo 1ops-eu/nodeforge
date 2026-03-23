@@ -165,10 +165,10 @@ def update_agent(transport: Transport, console: Console | None = None) -> bool:
 
     url = find_asset_url(release, f"agent-{suffix}")
     if not url:
-        # Fall back to main binary
-        url = find_asset_url(release, suffix)
-    if not url:
-        c.print(f"[yellow]No agent binary found for {suffix}[/yellow]")
+        c.print(
+            f"[yellow]No agent binary found for {suffix} in release {latest_tag}. "
+            f"The release may predate the agent binary pipeline.[/yellow]"
+        )
         return False
 
     c.print(f"[dim]Downloading {url}...[/dim]")
@@ -190,7 +190,13 @@ def update_agent(transport: Transport, console: Console | None = None) -> bool:
 
         # Verify
         new_version = detect_agent(transport)
-        c.print(f"[bold green]Agent updated to {new_version or latest_tag}[/bold green]")
+        if not new_version:
+            c.print(
+                "[red]Agent binary was uploaded but verification failed — "
+                "the installed binary did not respond correctly.[/red]"
+            )
+            return False
+        c.print(f"[bold green]Agent updated to {new_version}[/bold green]")
 
         import os
 

@@ -195,6 +195,16 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 | Import boundaries enforced | Agent may not import from client; client may not import from agent | Done |
 | Monorepo layout | All three packages under `packages/` in the same git repo | Done |
 
+### Agent Binary Pipeline
+
+| Item | Description | Status |
+|---|---|---|
+| Agent binary build script | `scripts/build_agent_binary.py` — PyInstaller build with only core + agent deps (no Fabric/sqlcipher/paramiko) | Done |
+| Agent PyInstaller entrypoint | `scripts/agent_entrypoint.py` — delegates to `nodeforge_agent.cli:app` | Done |
+| Release workflow: agent jobs | `release.yml` split into `build-client` and `build-agent` jobs; agent builds `nodeforge-agent-linux-{amd64,arm64}` | Done |
+| Makefile target | `make build-agent-binary` for local agent binary builds | Done |
+| Updater compatibility | `updater.py` `update_agent()` already expects `agent-{suffix}` assets in GitHub Releases — now produced by the pipeline | Done |
+
 **New capabilities:**
 - Doctor command (`nodeforge doctor`) compares desired plan against runtime state, writes doctor-result.json
 - Reconcile command (`nodeforge reconcile`) re-applies only drifted resources
@@ -204,6 +214,8 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 - Stack planner with topological sort and step ID prefixing for traceability
 - Repeatable `--env-file` CLI option for overlay layering; `env_files` parameter in loader
 - Stack inventory recording (`record_stack_apply`) tracks each resource as a stack_resource entry
+- Agent binary pipeline — `nodeforge-agent` standalone binaries (Linux amd64/arm64) built and published alongside client binaries in GitHub Releases
+- Agent binary is minimal: only `nodeforge-core` + `nodeforge-agent` deps (no Fabric, sqlcipher, paramiko)
 
 **Acceptance criteria:**
 - `nodeforge apply` is safe to re-run at any time — only applies what changed -- **met** (hash-based idempotent skip)
@@ -212,6 +224,7 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 - Stacks group resources with dependency-ordered execution -- **met** (topological sort, circular dep detection)
 - `pip install nodeforge-core` / `nodeforge` / `nodeforge-agent` each work independently -- **met** (three pyproject.toml, editable installs)
 - Agent binary only includes agent + core code, not compiler/runtime/Fabric -- **met** (import boundaries enforced)
+- Agent binary assets (`agent-linux-amd64`, `agent-linux-arm64`) produced in release pipeline -- **met** (`build-agent` job in `release.yml`)
 
 ---
 
@@ -351,6 +364,31 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 | RFC 014 | Agent Architecture and Bootstrap Sequence | **New** | v0.3 |
 | RFC 015 | Policy Engine Design | **New** | v0.5 |
 | RFC 016 | Companion App and Credential Store | **New** | v0.8 |
+
+---
+
+## Binary Distribution Architecture
+
+nodeforge ships two standalone binaries:
+
+| Binary | Targets | Contents | Build Script |
+|---|---|---|---|
+| `nodeforge` | Linux amd64/arm64, macOS amd64/arm64 | Client + core (includes Fabric, paramiko, sqlcipher3) | `scripts/build_binary.py` |
+| `nodeforge-agent` | Linux amd64/arm64 only | Agent + core (minimal — no Fabric, no sqlcipher, no paramiko) | `scripts/build_agent_binary.py` |
+
+Both binaries are built via PyInstaller and published as GitHub Release assets. The client binary includes `nodeforge update` (self-update) and `nodeforge agent-update <host>` (remote agent update). The `updater.py` module downloads the correct platform-specific asset from the latest GitHub Release.
+
+### Future: OSS-to-Pro Upgrade Path
+
+The Pro variant (`nodeforge-pro`) is a separate binary distributed from self-hosted infrastructure (Minio/S3-compatible, bootstrapped with nodeforge itself). The upgrade flow is planned but not yet built:
+
+| Item | Description | Target |
+|---|---|---|
+| `nodeforge upgrade-to-pro --token <TOKEN>` | CLI command that downloads the Pro binary from a presigned URL and replaces the OSS binary | pro-v0.1 |
+| Presigned URL support in updater | `updater.py` gains a `download_from_url()` path alongside the existing GitHub Releases path | pro-v0.1 |
+| Localhost callback upgrade | Browser-to-localhost handoff (like Spotify auth) — platform sends upgrade token to companion | pro-v0.2 |
+| Self-hosted binary hosting | API endpoint returns presigned S3/Minio URLs; no private GitHub Releases | pro-v0.1 |
+| Auto-install agent during apply | Client automatically installs/updates the agent binary on the target server as part of `nodeforge apply` | v0.6 |
 
 ---
 
