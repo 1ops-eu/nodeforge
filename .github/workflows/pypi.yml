@@ -8,11 +8,11 @@ on:
 
 permissions:
   contents: read
+  id-token: write  # Required for PyPI trusted publishers (OIDC)
 
 jobs:
-  pypi:
+  build:
     runs-on: ubuntu-latest
-    environment: pypi
 
     steps:
       - name: Checkout
@@ -32,18 +32,74 @@ jobs:
           python -m build packages/client
           python -m build packages/agent
 
-      - name: Collect distributions
-        run: |
-          mkdir -p dist
-          cp packages/core/dist/* dist/
-          cp packages/client/dist/* dist/
-          cp packages/agent/dist/* dist/
-
       - name: Check distributions
-        run: twine check dist/*
+        run: |
+          twine check packages/core/dist/*
+          twine check packages/client/dist/*
+          twine check packages/agent/dist/*
 
-      - name: Publish to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+      - name: Upload core artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-core
+          path: packages/core/dist/
+
+      - name: Upload client artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-client
+          path: packages/client/dist/
+
+      - name: Upload agent artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-agent
+          path: packages/agent/dist/
+
+  publish-core:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download core artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-core
+          path: dist/
+
+      - name: Publish nodeforge-core to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-client:
+    needs: publish-core  # client depends on core being available
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download client artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-client
+          path: dist/
+
+      - name: Publish nodeforge to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-agent:
+    needs: publish-core  # agent depends on core being available
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download agent artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-agent
+          path: dist/
+
+      - name: Publish nodeforge-agent to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

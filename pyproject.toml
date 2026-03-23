@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nodeforge-workspace"
-version = "0.5.0"
+version = "0.5.1"
 description = "Workspace root for nodeforge monorepo"
 requires-python = ">=3.11"
 
