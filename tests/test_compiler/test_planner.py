@@ -2,8 +2,8 @@
 
 from nodeforge.compiler.normalizer import normalize
 from nodeforge.compiler.planner import plan
-from nodeforge.plan.models import StepScope
-from nodeforge.specs.loader import load_spec
+from nodeforge_core.plan.models import StepScope
+from nodeforge_core.specs.loader import load_spec
 
 
 def _make_plan(bootstrap_yaml):

@@ -16,6 +16,8 @@ pip install nodeforge
 
 Download the pre-built binary for your platform from the [Releases](../../releases) page:
 
+**Client binary** (runs on your machine):
+
 | Platform | File |
 |---|---|
 | Linux (x86-64) | `nodeforge-linux-amd64` |
@@ -30,6 +32,15 @@ sudo mv nodeforge-linux-amd64 /usr/local/bin/nodeforge
 # Verify
 nodeforge --help
 ```
+
+**Agent binary** (installed on managed servers — Linux only):
+
+| Platform | File |
+|---|---|
+| Linux (x86-64) | `nodeforge-agent-linux-amd64` |
+| Linux (ARM64) | `nodeforge-agent-linux-arm64` |
+
+The agent binary is automatically installed on servers during bootstrap. You generally don't need to download it manually — use `nodeforge agent-update <host>` to update an existing agent.
 
 ### Option 3 — Docker
 
@@ -107,13 +118,19 @@ nodeforge apply examples/app-container.yaml
 ## Commands
 
 ```
-nodeforge validate <spec.yaml>          Validate a spec file
-nodeforge plan     <spec.yaml>          Show the execution plan
-nodeforge docs     <spec.yaml> [-o FILE] [--mode guide|commands]
+nodeforge validate  <spec.yaml>          Validate a spec file
+nodeforge plan      <spec.yaml>          Show the execution plan
+nodeforge docs      <spec.yaml> [-o FILE] [--mode guide|commands]
                                          Generate Markdown ops docs
-nodeforge apply    <spec.yaml> [--dry-run]
+nodeforge diff      <spec.yaml>          Show what would change on the server
+nodeforge apply     <spec.yaml> [--dry-run] [--mode auto|agent|client]
                                          Execute the plan
-nodeforge inspect  run <run-id>          Inspect a past run
+nodeforge doctor    <spec.yaml>          Detect drift between desired and actual state
+nodeforge reconcile <spec.yaml>          Re-apply only drifted resources
+nodeforge version   [--host HOST]        Print client (+ agent) version
+nodeforge update                         Self-update client from GitHub Releases
+nodeforge agent-update <host>            Update agent on remote host
+nodeforge inspect   run <run-id>         Inspect a past run
 nodeforge inventory list                 List all servers
 nodeforge inventory show <server-id>     Show server details
 ```
@@ -132,22 +149,52 @@ All commands that load specs support these options:
 ## Architecture
 
 ```
-YAML Spec
+YAML Spec (supports multi-document ---)
   └─ Parse (loader.py)            ← registry lookup: kind -> model class
        └─ Validate (validators.py) ← registry lookup: kind -> validator fn
             └─ Normalize (normalizer.py) ← registry lookup: kind -> normalizer fn
                  └─ Plan (planner.py) ← registry lookup: kind -> planner fn
                       ├─ Docs  (render_markdown.py)
-                      └─ Apply (executor.py)
-                               ├─ Step dispatch: registry lookup: step.kind -> handler
-                               ├─ Remote: SSH via Fabric
-                               └─ Local:
-                                    ├─ SSH conf.d entry
-                                    ├─ WireGuard state
-                                    └─ Local inventory
+                      ├─ Diff  (render_diff.py)     ← compare plan against runtime state
+                      └─ Apply
+                           ├─ Agent mode (AgentTransport)
+                           │    └─ Upload plan → nodeforge-agent apply → retrieve result
+                           ├─ Client mode (FabricTransport)
+                           │    └─ Step dispatch via SSH (legacy, deprecated)
+                           └─ Local steps:
+                                ├─ SSH conf.d entry
+                                ├─ WireGuard state
+                                └─ Local inventory
 ```
 
-**Plan is the single source of truth.** Both docs and apply are generated from the same Plan object — what you review is exactly what executes.
+**Plan is the single source of truth.** Both docs and apply are generated from the same Plan object — what you review is exactly what executes. The `Transport` protocol decouples execution from Fabric SSH.
+
+### Agent-First Execution
+
+Since v0.3, nodeforge uses an **agent-first architecture**. The `nodeforge-agent` binary is installed on the target server as the first step of every bootstrap. The client becomes a thin transporter:
+
+1. Client connects via SSH, uploads the agent binary + plan
+2. Client invokes `nodeforge-agent apply` on the server
+3. Agent executes all steps locally (no SSH round-trips for each command)
+4. Client retrieves the result
+
+This means SSH restarts during bootstrap are a non-event — the agent continues operating locally.
+
+### Three-Package Monorepo
+
+The codebase is split into three installable packages under `packages/`:
+
+```
+packages/
+  core/     nodeforge-core    Shared models, specs, registry infrastructure
+  client/   nodeforge         CLI tool, compiler, runtime, transports
+  agent/    nodeforge-agent   Server-side executor, state management
+```
+
+See each package's README for detailed architecture:
+- [`packages/core/README.md`](packages/core/README.md) — spec schemas, plan models, registry system, policy engine
+- [`packages/client/README.md`](packages/client/README.md) — compiler pipeline, transports, local state, updater
+- [`packages/agent/README.md`](packages/agent/README.md) — executor, state tracking, mutation locking
 
 ### How Spec Dispatch Works
 
@@ -162,7 +209,7 @@ This means new spec kinds and step types can be added by external addons without
 
 ### Registry System
 
-Six open registries power the pipeline — each maps a string key to a callable:
+Seven open registries power the pipeline — each maps a string key to a callable:
 
 | Registry | Maps | Signature |
 |---|---|---|
@@ -172,6 +219,7 @@ Six open registries power the pipeline — each maps a string key to a callable:
 | `VALIDATOR_REGISTRY` | `kind` -> validator | `(spec) -> list[ValidationIssue]` |
 | `STEP_HANDLER_REGISTRY` | `step.kind` -> executor handler | `(executor, step) -> StepResult` |
 | `HOOKS_REGISTRY` | `kind` -> `KindHooks` lifecycle | dataclass with callbacks |
+| `RESOLVER_REGISTRY` | `prefix` -> value resolver | `(key: str) -> str \| None` |
 
 Built-in kinds (`bootstrap`, `service`) are registered at startup. External addons register via Python `entry_points`:
 
@@ -440,6 +488,28 @@ Installs services on an already-bootstrapped server:
 
 See [examples/postgres.yaml](examples/postgres.yaml), [examples/nginx-reverse-proxy/](examples/nginx-reverse-proxy/), and [examples/app-container.yaml](examples/app-container.yaml)
 
+### `kind: file_template`
+
+Renders managed configuration files on the server from Jinja2 templates and variables. Change detection is hash-based — unchanged files are not re-written on re-apply.
+
+See [examples/file-template/](examples/file-template/)
+
+### `kind: compose_project`
+
+Manages Docker Compose projects on the server:
+- Uploads compose file and configuration
+- Validates with `docker compose config`
+- Pulls images, brings services up
+- Health-check aware startup with configurable timeout
+
+See [examples/compose-project/](examples/compose-project/)
+
+### `kind: stack`
+
+Groups related resources (`file_template`, `compose_project`, etc.) into a single deployable application boundary. Resources are declared inline with explicit dependency ordering. Execution follows topological sort — circular dependencies are rejected at validation time.
+
+See [examples/stack/](examples/stack/)
+
 ### Postflight Checks
 
 Both spec kinds support a `checks` block for post-apply verification:
@@ -635,11 +705,11 @@ make plan-example
 make docs-example
 ```
 
-### Building a standalone binary locally
+### Building standalone binaries locally
 
 ```bash
-# Linux / macOS
-make build-binary
+make build-binary         # Client binary (no system deps needed)
+make build-agent-binary   # Agent binary (no system deps needed)
 ```
 
 ### Building the Docker image locally
@@ -655,21 +725,22 @@ make build-docker
 Releases are triggered by Git tags:
 
 ```bash
-# Bump version in pyproject.toml and nodeforge/__init__.py, then:
-git add pyproject.toml nodeforge/__init__.py
-git commit -m "chore(release): bump version to 0.2.0"
+# Bump version in all three packages' pyproject.toml files, then:
+git add packages/core/pyproject.toml packages/client/pyproject.toml packages/agent/pyproject.toml
+git commit -m "chore(release): bump version to 0.5.0"
 git push origin main
 
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.5.0
+git push origin v0.5.0
 ```
 
 GitHub Actions will automatically:
-1. Build binaries for Linux (amd64, arm64) and macOS (Intel, Apple Silicon)
-2. Generate `checksums.txt`
-3. Create a GitHub Release with all assets
-4. Build and push the Docker image to `ghcr.io/1ops-eu/nodeforge`
-5. Publish the wheel to PyPI
+1. Build client binaries for Linux (amd64, arm64) and macOS (Apple Silicon)
+2. Build agent binaries for Linux (amd64, arm64) — agent is Linux-only
+3. Generate `checksums.txt` covering all binaries
+4. Create a GitHub Release with all assets
+5. Build and push the Docker image to `ghcr.io/1ops-eu/nodeforge`
+6. Publish all three packages (nodeforge-core, nodeforge, nodeforge-agent) to PyPI
 
 ---
 

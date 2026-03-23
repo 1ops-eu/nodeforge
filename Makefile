@@ -1,13 +1,13 @@
 .PHONY: help venv install dev test test-local test-all lint fmt \
         validate-example plan-example docs-example smoke \
-        build-binary build-docker test-goss clean
+        build-binary build-agent-binary build-docker test-goss clean
 
 VENV      := .venv
 PYTHON    := $(VENV)/bin/python
 PIP       := $(VENV)/bin/pip
 APP_NAME  := nodeforge
 IMAGE_NAME ?= ghcr.io/1ops-eu/nodeforge
-VERSION   ?= $(shell python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null || python -c "import tomli; print(tomli.load(open('pyproject.toml','rb'))['project']['version'])" 2>/dev/null || grep '^version' pyproject.toml | head -1 | cut -d'"' -f2)
+VERSION   ?= $(shell python -c "import tomllib; print(tomllib.load(open('packages/core/pyproject.toml','rb'))['project']['version'])" 2>/dev/null || python -c "import tomli; print(tomli.load(open('packages/core/pyproject.toml','rb'))['project']['version'])" 2>/dev/null || grep '^version' packages/core/pyproject.toml | head -1 | cut -d'"' -f2)
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 
@@ -17,8 +17,8 @@ help:
 	@echo ""
 	@echo "  Setup"
 	@echo "    make venv            Create .venv virtualenv"
-	@echo "    make install         Install package (runtime deps)"
-	@echo "    make dev             Install package + dev deps (editable)"
+	@echo "    make install         Install all packages (runtime deps)"
+	@echo "    make dev             Install all packages + dev deps (editable)"
 	@echo ""
 	@echo "  Testing"
 	@echo "    make test            Run unit/integration tests (no live host needed)"
@@ -36,8 +36,9 @@ help:
 	@echo "    make smoke              Run all smoke tests"
 	@echo ""
 	@echo "  Distribution"
-	@echo "    make build-binary    Build standalone CLI binary via PyInstaller"
-	@echo "    make build-docker    Build Docker image ($(IMAGE_NAME):$(VERSION))"
+	@echo "    make build-binary         Build standalone CLI binary via PyInstaller"
+	@echo "    make build-agent-binary   Build standalone agent binary via PyInstaller"
+	@echo "    make build-docker         Build Docker image ($(IMAGE_NAME):$(VERSION))"
 	@echo ""
 	@echo "  Goss integration tests (requires a live Ubuntu server)"
 	@echo "    make test-goss HOST=<ip> PORT=<port> USER=<user>"
@@ -64,16 +65,16 @@ venv:
 
 install: venv
 	$(PIP) install --upgrade pip
-	$(PIP) install .
+	$(PIP) install packages/core packages/client packages/agent
 
 dev: venv
 	$(PIP) install --upgrade pip
-	$(PIP) install -e ".[dev]"
+	$(PIP) install -e packages/core -e packages/client -e packages/agent -e ".[dev]"
 
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
 test:
-	pytest tests/test_specs/ tests/test_compiler/ tests/test_plan/ tests/test_runtime/ tests/test_cli/ -v
+	pytest tests/test_specs/ tests/test_compiler/ tests/test_plan/ tests/test_runtime/ tests/test_cli/ tests/test_agent/ -v
 
 test-local:
 	pytest tests/test_local/ -v
@@ -94,7 +95,7 @@ fmt:
 
 validate-example:
 	@failed=0; \
-	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' ! -name 'policy.yaml' | sort); do \
 	  name=$$(basename "$$spec"); \
 	  case "$$name" in \
 	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
@@ -107,7 +108,7 @@ validate-example:
 
 plan-example:
 	@failed=0; \
-	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' ! -name 'policy.yaml' | sort); do \
 	  name=$$(basename "$$spec"); \
 	  case "$$name" in \
 	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
@@ -120,7 +121,7 @@ plan-example:
 
 docs-example:
 	@failed=0; \
-	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' | sort); do \
+	for spec in $$(find examples -name '*.yaml' ! -name '*.goss.yaml' ! -name 'policy.yaml' | sort); do \
 	  name=$$(basename "$$spec"); \
 	  case "$$name" in \
 	    bootstrap-env-vars.yaml|bootstrap-password-login.yaml) flags="--passthrough" ;; \
@@ -139,6 +140,9 @@ smoke: validate-example plan-example docs-example
 build-binary:
 	python scripts/build_binary.py
 
+build-agent-binary:
+	python scripts/build_agent_binary.py
+
 build-docker:
 	docker build \
 	  -t $(IMAGE_NAME):$(VERSION) \
@@ -147,16 +151,6 @@ build-docker:
 	@echo "Built $(IMAGE_NAME):$(VERSION) and $(IMAGE_NAME):latest"
 
 # ── Goss integration tests (requires a live Ubuntu server) ────────────────────
-# Goss is shipped and run automatically by `nodeforge apply` for bootstrap specs.
-# Use this target to manually re-run a static reference spec or the master gossfile.
-#
-# Usage:
-#   make test-goss HOST=203.0.113.10 PORT=2222 USER=admin
-#       → runs the master ~/.goss/goss.yaml on the server (all shipped specs)
-#
-#   make test-goss HOST=203.0.113.10 PORT=2222 USER=admin \
-#        SPEC=examples/ubuntu/04-firewall-ssh2222/04-firewall-ssh2222.goss.yaml
-#       → copies a specific static reference spec and runs it
 
 SPEC ?=
 HOST ?= 203.0.113.10

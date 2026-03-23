@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nodeforge.registry.local_paths import (
+from nodeforge_core.registry.local_paths import (
     LocalPathsConfig,
     get_local_paths,
     register_local_paths,

@@ -11,7 +11,7 @@ import textwrap
 
 import pytest
 
-from nodeforge.specs.loader import (
+from nodeforge_core.specs.loader import (
     SpecLoadError,
     _resolve_env_vars,
     _resolve_values,
@@ -301,14 +301,14 @@ class TestResolveValuesExplicitEnvPrefix:
     """${env:VAR} is the explicit form; behaviour is identical to bare ${VAR}."""
 
     def test_explicit_env_prefix_resolved(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.setenv("MY_HOST", "10.0.0.1")
         assert _resolve_values("${env:MY_HOST}") == "10.0.0.1"
 
     def test_explicit_env_prefix_missing_strict(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_MISSING", raising=False)
@@ -316,7 +316,7 @@ class TestResolveValuesExplicitEnvPrefix:
             _resolve_values("${env:NF_MISSING}")
 
     def test_explicit_env_prefix_missing_passthrough(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_MISSING", raising=False)
@@ -324,14 +324,14 @@ class TestResolveValuesExplicitEnvPrefix:
         assert result == "${env:NF_MISSING}"
 
     def test_bare_and_explicit_are_equivalent(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.setenv("MY_VAL", "hello")
         assert _resolve_values("${MY_VAL}") == _resolve_values("${env:MY_VAL}")
 
     def test_explicit_env_prefix_in_nested_dict(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.setenv("DB_HOST", "db.internal")
@@ -349,7 +349,7 @@ class TestResolveValuesFilePrefix:
     """${file:/path} reads the file and returns its contents (trailing newline stripped)."""
 
     def test_file_resolver_reads_file(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         key_file = tmp_path / "admin.pub"
@@ -358,7 +358,7 @@ class TestResolveValuesFilePrefix:
         assert result == "ssh-ed25519 AAAA...pubkey"
 
     def test_file_resolver_in_list_value(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         key_file = tmp_path / "key.pub"
@@ -368,7 +368,7 @@ class TestResolveValuesFilePrefix:
         assert result["pubkeys"] == ["ssh-rsa BBBB..."]
 
     def test_file_resolver_missing_strict(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         missing = tmp_path / "nonexistent.pub"
@@ -376,7 +376,7 @@ class TestResolveValuesFilePrefix:
             _resolve_values(f"${{file:{missing}}}")
 
     def test_file_resolver_missing_passthrough(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         missing = tmp_path / "nonexistent.pub"
@@ -385,7 +385,7 @@ class TestResolveValuesFilePrefix:
         assert result == token
 
     def test_file_resolver_strips_exactly_one_trailing_newline(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         f = tmp_path / "val.txt"
@@ -404,7 +404,7 @@ class TestResolveValuesDefaults:
     """${VAR:-default} uses default when the resolver returns None."""
 
     def test_default_used_when_var_missing(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_PORT", raising=False)
@@ -412,7 +412,7 @@ class TestResolveValuesDefaults:
         assert result == "2222"
 
     def test_default_not_used_when_var_set(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.setenv("NF_PORT", "8080")
@@ -420,7 +420,7 @@ class TestResolveValuesDefaults:
         assert result == "8080"
 
     def test_default_with_explicit_prefix(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_HOST", raising=False)
@@ -428,7 +428,7 @@ class TestResolveValuesDefaults:
         assert result == "localhost"
 
     def test_empty_default_is_valid(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_EMPTY_DEFAULT", raising=False)
@@ -437,7 +437,7 @@ class TestResolveValuesDefaults:
 
     def test_default_with_colon_inside(self, monkeypatch):
         """Default value itself may contain colons."""
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_URL", raising=False)
@@ -445,7 +445,7 @@ class TestResolveValuesDefaults:
         assert result == "http://localhost:8080"
 
     def test_default_in_nested_dict(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.delenv("NF_SSH_PORT", raising=False)
@@ -454,7 +454,7 @@ class TestResolveValuesDefaults:
         assert result["ssh"]["port"] == "22"
 
     def test_default_with_file_resolver_missing(self, tmp_path):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         missing = tmp_path / "optional.pub"
@@ -469,7 +469,7 @@ class TestResolveValuesDefaults:
 
 class TestResolveValuesUnknownPrefix:
     def test_unknown_prefix_raises_with_registered_list(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         with pytest.raises(SpecLoadError) as exc_info:
@@ -480,7 +480,7 @@ class TestResolveValuesUnknownPrefix:
         assert "env" in msg
 
     def test_unknown_prefix_includes_field_path(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         data = {"postgres": {"password": "${vault:secret/db#pass}"}}
@@ -499,7 +499,7 @@ class TestBackwardCompatAlias:
     """_resolve_env_vars is a permanent alias for _resolve_values."""
 
     def test_alias_resolves_bare_var(self, monkeypatch):
-        from nodeforge.registry import load_addons
+        from nodeforge_core.registry import load_addons
 
         load_addons()
         monkeypatch.setenv("ALIAS_TEST", "works")

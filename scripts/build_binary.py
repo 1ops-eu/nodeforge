@@ -7,13 +7,6 @@ Usage:
 
 Output:
     dist/nodeforge          (Linux / macOS)
-
-Prerequisites:
-    Linux:   apt-get install libsqlcipher-dev
-    macOS:   brew install sqlcipher
-
-Note: The sqlcipher3 dependency requires the SQLCipher shared library to be
-present on the build host. The resulting binary links against it dynamically.
 """
 
 from __future__ import annotations
@@ -52,10 +45,23 @@ def main() -> None:
     run([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
     run([sys.executable, "-m", "pip", "install", "build", "pyinstaller"])
 
+    # Install all three packages so PyInstaller can resolve imports.
+    run(
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "packages/core",
+            "packages/client",
+            "packages/agent",
+        ]
+    )
+
     # Build single-file executable.
-    # --paths . ensures the root-level nodeforge/ package is on sys.path.
-    # Hidden imports cover fabric's paramiko/invoke internals and sqlcipher3
-    # C-extension which PyInstaller may not detect automatically.
+    # --paths ensures packages are on sys.path for PyInstaller analysis.
+    # Hidden imports cover fabric's paramiko/invoke internals which
+    # PyInstaller may not detect automatically.
     run(
         [
             "pyinstaller",
@@ -64,9 +70,13 @@ def main() -> None:
             APP_NAME,
             "--clean",
             "--paths",
-            ".",
+            "packages/core",
+            "--paths",
+            "packages/client",
             "--hidden-import",
-            "sqlcipher3",
+            "nodeforge_core",
+            "--hidden-import",
+            "nodeforge",
             "--hidden-import",
             "paramiko",
             "--hidden-import",

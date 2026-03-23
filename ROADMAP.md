@@ -4,7 +4,7 @@ This document tracks the planned evolution of `nodeforge` from its current v0.2 
 
 The roadmap is organized around milestones. Each milestone corresponds to a meaningful capability jump. Future infrastructure and design decisions are captured in the RFC series below.
 
-**Architectural pivot (v0.3):** Starting with v0.3, nodeforge transitions from a client-driven remote orchestrator to a **server-local agent model**. The `nodeforge-agent` binary is installed as the first step of every bootstrap. The client becomes a thin transporter; the agent is the operator. See [PIVOT.md](PIVOT.md) for the full decision document.
+**Architectural pivot (v0.3):** Starting with v0.3, nodeforge transitions from a client-driven remote orchestrator to a **server-local agent model**. The `nodeforge-agent` binary is installed as the first step of every bootstrap. The client becomes a thin transporter; the agent is the operator.
 
 ---
 
@@ -110,74 +110,121 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 ---
 
-## v0.4 -- Logic Migration + UX
+## v0.4 -- Logic Migration + UX ✅
 
 **Goal:** Complete the migration of all spec kinds to agent-side execution, and improve daily-use ergonomics.
 
 ### Logic Migration
 
-| Item | Description |
-|---|---|
-| All spec kinds via agent | Bootstrap, service (PostgreSQL, Nginx, Docker, containers), file_template, compose_project — all execute through the agent |
-| Server-side plan/apply | Plan generation and apply run on the agent, not the client |
-| Idempotent re-apply | Agent skips unchanged resources on re-apply |
-| Deprecate old Fabric path | Mark the direct-Fabric execution path as deprecated |
+| Item | Description | Status |
+|---|---|---|
+| All spec kinds via agent | Bootstrap, service (PostgreSQL, Nginx, Docker, containers), file_template, compose_project — all execute through the agent | Done |
+| Server-side plan/apply | Plan generation and apply run on the agent, not the client | Done |
+| Idempotent re-apply | Agent skips unchanged resources on re-apply (hash-based content comparison) | Done |
+| Deprecate old Fabric path | Mark the direct-Fabric execution path as deprecated (`DeprecationWarning` on `ssh_session=`) | Done |
 
 ### UX Improvements
 
-| Item | Description |
-|---|---|
-| `nodeforge version` | Print current version (client + agent) |
-| `nodeforge update` | Self-update client from GitHub Releases; `nodeforge agent-update <host>` for the agent |
-| Shell completion | Enable `typer` completion install |
-| Spec dry-run diff | Show exactly what would change on the server before applying |
-| Multiple YAML documents | Allow `---` documents in a single file |
+| Item | Description | Status |
+|---|---|---|
+| `nodeforge version` | Print current version (client + agent via `--host`) | Done |
+| `nodeforge update` | Self-update client from GitHub Releases; `nodeforge agent-update <host>` for the agent | Done |
+| Shell completion | Enable `typer` completion (`add_completion=True`) | Done |
+| Spec dry-run diff | `nodeforge diff` shows exactly what would change on the server before applying | Done |
+| Multiple YAML documents | `yaml.safe_load_all()` with `---` separator support; backward-compatible | Done |
+
+**New capabilities:**
+- Transport protocol abstraction (`Transport` protocol decouples executor from Fabric)
+- Agent executor with subprocess-based local execution
+- Mutation locking via `fcntl.flock` (one apply at a time)
+- Runtime state tracking with atomic save (`runtime-state.json`)
+- Agent binary entry point (`nodeforge-agent apply|status|version`)
+- Agent detection and auto/manual mode selection (`--mode auto|agent|client`)
+- Dry-run diff with added/changed/unchanged/always-run classification
+- Multi-document YAML with per-document error reporting
 
 **Acceptance criteria:**
-- All existing spec kinds execute through the agent — no direct Fabric orchestration for provisioning steps
-- `nodeforge apply` is idempotent — re-running produces no changes if state matches
-- Plans are reviewable and stable
-- Operators can inspect intended changes before execution
+- All existing spec kinds execute through the agent — no direct Fabric orchestration for provisioning steps -- **met**
+- `nodeforge apply` is idempotent — re-running produces no changes if state matches -- **met**
+- Plans are reviewable and stable -- **met**
+- Operators can inspect intended changes before execution (`nodeforge diff`) -- **met**
 
 ---
 
-## v0.5 -- Declarative Reconciliation + Policy Engine
+## v0.5 -- Declarative Reconciliation + Policy Engine + Package Split ✅
 
-**Goal:** Make the agent truly declarative (desired state vs. actual state) and ship the policy engine in OSS core.
+**Goal:** Make the agent truly declarative (desired state vs. actual state), ship the policy engine in OSS core, and split the codebase into three clean packages.
 
 ### Reconciliation
 
-| Item | Description |
-|---|---|
-| Desired vs. runtime state comparison | Agent compares `desired-state.yaml` against `runtime-state.json` |
-| Partial apply | Only changed resources are applied — unchanged resources are skipped |
-| Drift detection | `nodeforge doctor <host>` reports divergence between desired and actual state |
-| `nodeforge reconcile <host>` | Bring server back to desired state |
+| Item | Description | Status |
+|---|---|---|
+| Desired vs. runtime state comparison | Agent compares `desired-state.json` against `runtime-state.json` | Done |
+| Partial apply | Only changed resources are applied — unchanged resources are skipped (hash-based) | Done |
+| Drift detection | `nodeforge doctor <spec>` reports divergence between desired and actual state | Done |
+| `nodeforge reconcile <spec>` | Bring server back to desired state by re-applying drifted resources | Done |
+| Desired state storage | Agent persists last-applied plan to `/var/lib/nodeforge/desired/desired-state.json` | Done |
 
 ### Policy Engine (OSS Core)
 
-| Item | Description |
-|---|---|
-| Policy engine | Enforce `policy.yaml` rules: auto_apply, require_approval, deny |
-| Policy inert by default | No `policy.yaml` = no policy checks = agent executes what it's told |
-| Manual policy option | OSS users can optionally write their own `policy.yaml` to constrain the agent |
-| Temporary approvals | One-off critical operations with auto-expiring approval tokens |
+| Item | Description | Status |
+|---|---|---|
+| Policy engine | Enforce `policy.yaml` rules: auto_apply, require_approval, deny | Done |
+| Policy inert by default | No `policy.yaml` = no policy checks = agent executes what it's told | Done |
+| Manual policy option | OSS users can optionally write their own `policy.yaml` to constrain the agent | Done |
+| Temporary approvals | HMAC-SHA256 time-limited approval tokens for `require_approval` steps | Done |
+| Policy integration in agent | Agent executor loads policy and evaluates each step before execution | Done |
 
 ### Stack Foundations
 
-| Item | Description |
-|---|---|
-| Addon registry | Formalize external addon discovery and lifecycle |
-| Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` |
-| `kind: stack` | Group related resources into a single deployable application boundary |
-| Apply ordering | Stack-aware dependency-ordered execution |
-| Overlay / env-file layering | Multiple `.env` file layers with explicit precedence order (RFC 008) |
+| Item | Description | Status |
+|---|---|---|
+| Addon registry | 7 open registries + `load_addons()` via entry_points | Done |
+| Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` | Done |
+| `kind: stack` | Group related resources into a single deployable application boundary | Done |
+| Apply ordering | Stack-aware dependency-ordered execution via topological sort | Done |
+| Overlay / env-file layering | Multiple `--env-file` flags with explicit precedence order (RFC 008) | Done |
+
+### Package Split (Monorepo)
+
+| Item | Description | Status |
+|---|---|---|
+| `nodeforge-core` package | `plan/`, `specs/`, `registry/` (infrastructure), `utils/` — shared by client and agent | Done |
+| `nodeforge` package | Client: `compiler/`, `runtime/`, `local/`, `logs/`, `checks/`, `addons/`, `cli.py` | Done |
+| `nodeforge-agent` package | Agent: `executor.py`, `state.py`, `lock.py`, `paths.py`, `cli.py` | Done |
+| Import boundaries enforced | Agent may not import from client; client may not import from agent | Done |
+| Monorepo layout | All three packages under `packages/` in the same git repo | Done |
+
+### Agent Binary Pipeline
+
+| Item | Description | Status |
+|---|---|---|
+| Agent binary build script | `scripts/build_agent_binary.py` — PyInstaller build with only core + agent deps (no Fabric/sqlcipher/paramiko) | Done |
+| Agent PyInstaller entrypoint | `scripts/agent_entrypoint.py` — delegates to `nodeforge_agent.cli:app` | Done |
+| Release workflow: agent jobs | `release.yml` split into `build-client` and `build-agent` jobs; agent builds `nodeforge-agent-linux-{amd64,arm64}` | Done |
+| Makefile target | `make build-agent-binary` for local agent binary builds | Done |
+| Updater compatibility | `updater.py` `update_agent()` already expects `agent-{suffix}` assets in GitHub Releases — now produced by the pipeline | Done |
+
+**New capabilities:**
+- Doctor command (`nodeforge doctor`) compares desired plan against runtime state, writes doctor-result.json
+- Reconcile command (`nodeforge reconcile`) re-applies only drifted resources
+- Policy engine with per-step evaluation, fnmatch-based rule matching, AND logic for multi-condition rules
+- HMAC-SHA256 approval tokens with configurable TTL for `require_approval` steps
+- `kind: stack` schema with resources, dependency ordering, and circular dependency detection at validation time
+- Stack planner with topological sort and step ID prefixing for traceability
+- Repeatable `--env-file` CLI option for overlay layering; `env_files` parameter in loader
+- Stack inventory recording (`record_stack_apply`) tracks each resource as a stack_resource entry
+- Agent binary pipeline — `nodeforge-agent` standalone binaries (Linux amd64/arm64) built and published alongside client binaries in GitHub Releases
+- Agent binary is minimal: only `nodeforge-core` + `nodeforge-agent` deps (no Fabric, sqlcipher, paramiko)
 
 **Acceptance criteria:**
-- `nodeforge apply` is safe to re-run at any time — only applies what changed
-- `nodeforge doctor` reports drift accurately
-- Policy engine is testable, auditable, and inert by default
-- Stacks group resources with dependency-ordered execution
+- `nodeforge apply` is safe to re-run at any time — only applies what changed -- **met** (hash-based idempotent skip)
+- `nodeforge doctor` reports drift accurately -- **met** (compares desired plan hashes against runtime state)
+- Policy engine is testable, auditable, and inert by default -- **met** (22 tests, no policy = no checks)
+- Stacks group resources with dependency-ordered execution -- **met** (topological sort, circular dep detection)
+- `pip install nodeforge-core` / `nodeforge` / `nodeforge-agent` each work independently -- **met** (three pyproject.toml, editable installs)
+- Agent binary only includes agent + core code, not compiler/runtime/Fabric -- **met** (import boundaries enforced)
+- Agent binary assets (`agent-linux-amd64`, `agent-linux-arm64`) produced in release pipeline -- **met** (`build-agent` job in `release.yml`)
 
 ---
 
@@ -317,6 +364,31 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 | RFC 014 | Agent Architecture and Bootstrap Sequence | **New** | v0.3 |
 | RFC 015 | Policy Engine Design | **New** | v0.5 |
 | RFC 016 | Companion App and Credential Store | **New** | v0.8 |
+
+---
+
+## Binary Distribution Architecture
+
+nodeforge ships two standalone binaries:
+
+| Binary | Targets | Contents | Build Script |
+|---|---|---|---|
+| `nodeforge` | Linux amd64/arm64, macOS amd64/arm64 | Client + core (includes Fabric, paramiko, sqlcipher3) | `scripts/build_binary.py` |
+| `nodeforge-agent` | Linux amd64/arm64 only | Agent + core (minimal — no Fabric, no sqlcipher, no paramiko) | `scripts/build_agent_binary.py` |
+
+Both binaries are built via PyInstaller and published as GitHub Release assets. The client binary includes `nodeforge update` (self-update) and `nodeforge agent-update <host>` (remote agent update). The `updater.py` module downloads the correct platform-specific asset from the latest GitHub Release.
+
+### Future: OSS-to-Pro Upgrade Path
+
+The Pro variant (`nodeforge-pro`) is a separate binary distributed from self-hosted infrastructure (Minio/S3-compatible, bootstrapped with nodeforge itself). The upgrade flow is planned but not yet built:
+
+| Item | Description | Target |
+|---|---|---|
+| `nodeforge upgrade-to-pro --token <TOKEN>` | CLI command that downloads the Pro binary from a presigned URL and replaces the OSS binary | pro-v0.1 |
+| Presigned URL support in updater | `updater.py` gains a `download_from_url()` path alongside the existing GitHub Releases path | pro-v0.1 |
+| Localhost callback upgrade | Browser-to-localhost handoff (like Spotify auth) — platform sends upgrade token to companion | pro-v0.2 |
+| Self-hosted binary hosting | API endpoint returns presigned S3/Minio URLs; no private GitHub Releases | pro-v0.1 |
+| Auto-install agent during apply | Client automatically installs/updates the agent binary on the target server as part of `nodeforge apply` | v0.6 |
 
 ---
 

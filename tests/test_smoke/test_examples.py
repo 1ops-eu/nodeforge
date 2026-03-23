@@ -29,12 +29,20 @@ _ENV_VAR_SPECS = {
     "bootstrap-password-login.yaml",
 }
 
+# Non-spec YAML files in examples/ that should not be parsed as nodeforge specs
+# (e.g. agent policy configs, plain config examples)
+_NON_SPEC_FILES = {
+    "policy.yaml",
+}
+
 
 def _discover_example_specs() -> list[Path]:
-    """Return all .yaml spec files under examples/, excluding goss specs."""
+    """Return all .yaml spec files under examples/, excluding goss specs and non-spec files."""
     specs = []
     for p in sorted(EXAMPLES_ROOT.rglob("*.yaml")):
         if ".goss." in p.name:
+            continue
+        if p.name in _NON_SPEC_FILES:
             continue
         specs.append(p)
     return specs
@@ -68,7 +76,7 @@ class TestSmokeValidate:
 
     def test_parse_and_validate(self, example_spec: Path):
         from nodeforge.compiler.parser import parse
-        from nodeforge.specs.validators import validate_spec
+        from nodeforge_core.specs.validators import validate_spec
 
         strict = example_spec.name not in _ENV_VAR_SPECS
         spec = parse(example_spec, strict_env=strict)
@@ -88,8 +96,10 @@ class TestSmokePlan:
         strict = example_spec.name not in _ENV_VAR_SPECS
         spec = parse(example_spec, strict_env=strict)
         ctx = normalize(spec, spec_dir=example_spec.parent)
-        p = plan(ctx)
-        assert len(p.steps) > 0, f"Plan for {example_spec.name} has no steps"
+        ctxs = ctx if isinstance(ctx, list) else [ctx]
+        for c in ctxs:
+            p = plan(c)
+            assert len(p.steps) > 0, f"Plan for {example_spec.name} has no steps"
 
 
 class TestSmokeDocs:
@@ -99,12 +109,14 @@ class TestSmokeDocs:
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.parser import parse
         from nodeforge.compiler.planner import plan
-        from nodeforge.plan.render_markdown import render_markdown
+        from nodeforge_core.plan.render_markdown import render_markdown
 
         strict = example_spec.name not in _ENV_VAR_SPECS
         spec = parse(example_spec, strict_env=strict)
         ctx = normalize(spec, spec_dir=example_spec.parent)
-        p = plan(ctx)
-        md = render_markdown(p)
-        assert len(md) > 100, f"Docs for {example_spec.name} suspiciously short"
-        assert p.spec_name in md
+        ctxs = ctx if isinstance(ctx, list) else [ctx]
+        for c in ctxs:
+            p = plan(c)
+            md = render_markdown(p)
+            assert len(md) > 100, f"Docs for {example_spec.name} suspiciously short"
+            assert p.spec_name in md

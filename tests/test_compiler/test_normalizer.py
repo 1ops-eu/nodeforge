@@ -3,8 +3,8 @@
 import pytest
 
 from nodeforge.compiler.normalizer import normalize
-from nodeforge.registry.local_paths import LocalPathsConfig, register_local_paths
-from nodeforge.specs.loader import load_spec
+from nodeforge_core.registry.local_paths import LocalPathsConfig, register_local_paths
+from nodeforge_core.specs.loader import load_spec
 
 
 @pytest.fixture(autouse=True)

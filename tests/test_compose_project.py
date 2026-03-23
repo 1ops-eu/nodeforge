@@ -13,14 +13,14 @@ from nodeforge.runtime.steps.compose import (
     compose_up,
     mkdir_with_permissions,
 )
-from nodeforge.specs.compose_project_schema import (
+from nodeforge_core.specs.compose_project_schema import (
     ComposeHealthCheckBlock,
     ComposeProjectBlock,
     ComposeProjectSpec,
     ComposeTemplateBlock,
     ManagedDirectoryBlock,
 )
-from nodeforge.specs.validators import has_errors, validate_compose_project
+from nodeforge_core.specs.validators import has_errors, validate_compose_project
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -349,11 +349,11 @@ class TestComposeProjectPlanner:
         """Create a compose_project spec with real template and compose files."""
         tpl_dir = tmp_path / "templates"
         tpl_dir.mkdir()
-        tpl = tpl_dir / "nginx.conf.j2"
-        tpl.write_text("server_name {{ domain }};\n")
+        tpl = tpl_dir / "app.conf.j2"
+        tpl.write_text("domain = {{ domain }}\n")
 
         dc = tmp_path / "docker-compose.yml"
-        dc.write_text("services:\n  app:\n    image: nginx:alpine\n")
+        dc.write_text("services:\n  app:\n    image: httpd:alpine\n")
 
         content = textwrap.dedent("""\
             kind: compose_project
@@ -373,8 +373,8 @@ class TestComposeProjectPlanner:
               directory: /opt/demo-stack
               compose_file: docker-compose.yml
               templates:
-                - src: templates/nginx.conf.j2
-                  dest: nginx.conf
+                - src: templates/app.conf.j2
+                  dest: app.conf
               variables:
                 domain: example.com
               directories:
@@ -399,7 +399,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_compose_steps(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -411,7 +411,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_preflight(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -423,7 +423,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_project_dir_step(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -435,7 +435,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_managed_directory_step(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -451,7 +451,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_template_upload(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -465,7 +465,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_compose_file_upload(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -475,12 +475,12 @@ class TestComposeProjectPlanner:
         assert "upload_compose_file" in step_ids
         # Compose file content should be the raw docker-compose.yml
         upload_step = [s for s in p.steps if s.id == "upload_compose_file"][0]
-        assert "nginx:alpine" in upload_step.file_content
+        assert "httpd:alpine" in upload_step.file_content
 
     def test_plan_has_compose_lifecycle_steps(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -494,7 +494,7 @@ class TestComposeProjectPlanner:
     def test_plan_has_health_check(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -511,7 +511,7 @@ class TestComposeProjectPlanner:
     def test_compose_remote_steps_are_sudo(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -524,7 +524,7 @@ class TestComposeProjectPlanner:
     def test_step_indices_sequential(self, compose_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -537,7 +537,7 @@ class TestComposeProjectPlanner:
     def compose_yaml_no_pull(self, tmp_path) -> Path:
         """Spec with pull_before_up=false."""
         dc = tmp_path / "docker-compose.yml"
-        dc.write_text("services:\n  app:\n    image: nginx:alpine\n")
+        dc.write_text("services:\n  app:\n    image: httpd:alpine\n")
 
         content = textwrap.dedent("""\
             kind: compose_project
@@ -567,7 +567,7 @@ class TestComposeProjectPlanner:
     def test_plan_without_pull(self, compose_yaml_no_pull):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml_no_pull)
         ctx = normalize(spec, spec_dir=compose_yaml_no_pull.parent)
@@ -583,7 +583,7 @@ class TestComposeProjectPlanner:
     def compose_yaml_with_inventory(self, tmp_path) -> Path:
         """Spec with inventory enabled."""
         dc = tmp_path / "docker-compose.yml"
-        dc.write_text("services:\n  app:\n    image: nginx:alpine\n")
+        dc.write_text("services:\n  app:\n    image: httpd:alpine\n")
 
         content = textwrap.dedent("""\
             kind: compose_project
@@ -612,7 +612,7 @@ class TestComposeProjectPlanner:
     def test_plan_with_inventory_has_local_steps(self, compose_yaml_with_inventory):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml_with_inventory)
         ctx = normalize(spec, spec_dir=compose_yaml_with_inventory.parent)

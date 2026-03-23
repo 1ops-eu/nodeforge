@@ -11,7 +11,7 @@ import pytest
 @pytest.fixture(scope="session", autouse=True)
 def _load_nodeforge_addons():
     """Ensure all built-in registries (step handlers, etc.) are loaded for tests."""
-    from nodeforge.registry import load_addons
+    from nodeforge_core.registry import load_addons
 
     load_addons()
 

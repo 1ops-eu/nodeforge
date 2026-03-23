@@ -17,12 +17,12 @@ from nodeforge.runtime.steps.nginx import (
     site_config_path,
     validate_nginx_config,
 )
-from nodeforge.specs.service_schema import (
+from nodeforge_core.specs.service_schema import (
     NginxBlock,
     NginxSiteBlock,
     ServiceSpec,
 )
-from nodeforge.specs.validators import has_errors, validate_service
+from nodeforge_core.specs.validators import has_errors, validate_service
 
 # ---------------------------------------------------------------------------
 # Schema
@@ -292,7 +292,7 @@ class TestNginxPlanner:
     def test_plan_has_nginx_steps(self, nginx_service_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -304,7 +304,7 @@ class TestNginxPlanner:
     def test_plan_has_install_enable_reload(self, nginx_service_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -321,7 +321,7 @@ class TestNginxPlanner:
     def test_plan_has_per_site_steps(self, nginx_service_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -336,7 +336,7 @@ class TestNginxPlanner:
     def test_nginx_steps_are_sudo(self, nginx_service_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -349,7 +349,7 @@ class TestNginxPlanner:
     def test_step_indices_sequential(self, nginx_service_yaml):
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
-        from nodeforge.specs.loader import load_spec
+        from nodeforge_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
