@@ -26,7 +26,7 @@ jobs:
         run: pip install -e packages/core -e packages/client -e packages/agent -e ".[dev]"
 
       - name: Run unit tests
-        run: pytest tests/ -x -q
+        run: pytest tests/ --ignore=tests/test_smoke -v
 
       - name: Run smoke tests (validate + plan + docs for all examples)
         run: pytest tests/test_smoke/ -v

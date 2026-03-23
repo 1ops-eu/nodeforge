@@ -8,7 +8,7 @@ Deploys a multi-service Docker Compose stack with template rendering and health 
 2. Installs Docker (if not already present)
 3. Creates the project directory `/opt/demo-stack`
 4. Creates managed subdirectory `data/`
-5. Renders `templates/nginx.conf.j2` with variables and uploads to the project directory
+5. Renders `templates/app.conf.j2` with variables and uploads to the project directory
 6. Uploads `docker-compose.yml` to the project directory
 7. Validates the compose configuration (`docker compose config`)
 8. Pulls container images (`docker compose pull`)

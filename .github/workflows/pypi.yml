@@ -26,10 +26,20 @@ jobs:
       - name: Install build tools
         run: pip install build twine
 
-      - name: Build sdist and wheel
-        run: python -m build
+      - name: Build all packages
+        run: |
+          python -m build packages/core
+          python -m build packages/client
+          python -m build packages/agent
 
-      - name: Check distribution
+      - name: Collect distributions
+        run: |
+          mkdir -p dist
+          cp packages/core/dist/* dist/
+          cp packages/client/dist/* dist/
+          cp packages/agent/dist/* dist/
+
+      - name: Check distributions
         run: twine check dist/*
 
       - name: Publish to PyPI

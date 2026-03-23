@@ -708,7 +708,7 @@ make docs-example
 ### Building standalone binaries locally
 
 ```bash
-make build-binary         # Client binary (requires sqlcipher dev libs)
+make build-binary         # Client binary (no system deps needed)
 make build-agent-binary   # Agent binary (no system deps needed)
 ```
 
@@ -725,22 +725,22 @@ make build-docker
 Releases are triggered by Git tags:
 
 ```bash
-# Bump version in pyproject.toml and nodeforge/__init__.py, then:
-git add pyproject.toml nodeforge/__init__.py
-git commit -m "chore(release): bump version to 0.2.0"
+# Bump version in all three packages' pyproject.toml files, then:
+git add packages/core/pyproject.toml packages/client/pyproject.toml packages/agent/pyproject.toml
+git commit -m "chore(release): bump version to 0.5.0"
 git push origin main
 
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.5.0
+git push origin v0.5.0
 ```
 
 GitHub Actions will automatically:
-1. Build client binaries for Linux (amd64, arm64) and macOS (Intel, Apple Silicon)
+1. Build client binaries for Linux (amd64, arm64) and macOS (Apple Silicon)
 2. Build agent binaries for Linux (amd64, arm64) — agent is Linux-only
 3. Generate `checksums.txt` covering all binaries
 4. Create a GitHub Release with all assets
 5. Build and push the Docker image to `ghcr.io/1ops-eu/nodeforge`
-6. Publish the wheel to PyPI
+6. Publish all three packages (nodeforge-core, nodeforge, nodeforge-agent) to PyPI
 
 ---
 

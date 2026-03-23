@@ -20,8 +20,8 @@ project:
   compose_file: docker-compose.yml
 
   templates:
-    - src: templates/nginx.conf.j2
-      dest: nginx.conf
+    - src: templates/app.conf.j2
+      dest: app.conf
 
   variables:
     domain: app.example.com
