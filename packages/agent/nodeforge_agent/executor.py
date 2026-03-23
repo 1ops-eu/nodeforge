@@ -330,6 +330,9 @@ class AgentExecutor:
                     error=f"Port {port_str} unreachable on {host}: {e}",
                 )
 
+        if step.command and step.command.startswith("http_check:"):
+            return self._execute_http_check(step)
+
         # Fallback: run as command
         return self._execute_command(step)
 
@@ -415,6 +418,53 @@ class AgentExecutor:
             status="success" if passed else "failed",
             output=message if passed else "",
             error="" if passed else message,
+        )
+
+    def _execute_http_check(self, step: Step) -> AgentStepResult:
+        """Execute an HTTP readiness check with retry loop."""
+        import urllib.request
+
+        parts = step.command.split(":", 5)
+        if len(parts) != 6:
+            return AgentStepResult(
+                step_index=step.index,
+                step_id=step.id,
+                scope=step.scope.value,
+                status="failed",
+                error=f"Malformed http_check command: {step.command}",
+            )
+
+        _, url, status_str, retries_str, interval_str, timeout_str = parts
+        expected = int(status_str)
+        retries = int(retries_str)
+        interval = int(interval_str)
+        req_timeout = int(timeout_str)
+
+        last_error = ""
+        for attempt in range(retries):
+            try:
+                resp = urllib.request.urlopen(url, timeout=req_timeout)  # noqa: S310
+                if resp.status == expected:
+                    return AgentStepResult(
+                        step_index=step.index,
+                        step_id=step.id,
+                        scope=step.scope.value,
+                        status="success",
+                        output=f"HTTP {url}: {resp.status} (expected {expected}) "
+                        f"on attempt {attempt + 1}/{retries}",
+                    )
+                last_error = f"HTTP {url}: got {resp.status}, expected {expected}"
+            except Exception as e:
+                last_error = f"HTTP {url}: {e}"
+            if attempt < retries - 1:
+                time.sleep(interval)
+
+        return AgentStepResult(
+            step_index=step.index,
+            step_id=step.id,
+            scope=step.scope.value,
+            status="failed",
+            error=f"HTTP check failed after {retries} attempts: {last_error}",
         )
 
     def _execute_compose_health(self, step: Step) -> AgentStepResult:

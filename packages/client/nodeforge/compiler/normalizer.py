@@ -7,14 +7,30 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from nodeforge_core.specs.backup_job_schema import BackupJobSpec
 from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
 from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
 from nodeforge_core.specs.file_template_schema import FileTemplateSpec
+from nodeforge_core.specs.http_check_schema import HttpCheckSpec
+from nodeforge_core.specs.postgres_ensure_schema import PostgresEnsureSpec
 from nodeforge_core.specs.service_schema import ServiceSpec
 from nodeforge_core.specs.stack_schema import StackSpec
+from nodeforge_core.specs.systemd_timer_schema import SystemdTimerSpec
+from nodeforge_core.specs.systemd_unit_schema import SystemdUnitSpec
 from nodeforge_core.utils.files import expand_path, resolve_path
 
-AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec | StackSpec
+AnySpec = (
+    BootstrapSpec
+    | ServiceSpec
+    | FileTemplateSpec
+    | ComposeProjectSpec
+    | StackSpec
+    | HttpCheckSpec
+    | SystemdUnitSpec
+    | SystemdTimerSpec
+    | BackupJobSpec
+    | PostgresEnsureSpec
+)
 
 
 @dataclass
@@ -292,6 +308,85 @@ def _normalize_compose_project(spec: ComposeProjectSpec, ctx: NormalizedContext)
         ctx.compose_file_content = compose_path.read_text(encoding="utf-8")
     else:
         ctx.compose_file_content = f"<compose file not found: {compose_path}>"
+
+
+def _normalize_postgres_ensure(spec: PostgresEnsureSpec, ctx: NormalizedContext) -> None:
+    """Normalize a postgres_ensure spec: resolve login, paths, passwords."""
+    spec_dir = ctx.spec_dir
+
+    _apply_state_dir(spec)
+
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    ctx.db_path = _resolve_db_path(spec)
+
+    # Resolve password_env for each user
+    for user in spec.users:
+        if user.password_env:
+            pw = os.environ.get(user.password_env, "")
+            user.password_env = pw  # store resolved value
+
+
+def _normalize_backup_job(spec: BackupJobSpec, ctx: NormalizedContext) -> None:
+    """Normalize a backup_job spec: resolve login, paths, state_dir."""
+    spec_dir = ctx.spec_dir
+
+    _apply_state_dir(spec)
+
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    ctx.db_path = _resolve_db_path(spec)
+
+
+def _normalize_systemd_unit(spec: SystemdUnitSpec, ctx: NormalizedContext) -> None:
+    """Normalize a systemd_unit spec: resolve login, paths, state_dir."""
+    spec_dir = ctx.spec_dir
+
+    _apply_state_dir(spec)
+
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    ctx.db_path = _resolve_db_path(spec)
+
+
+def _normalize_systemd_timer(spec: SystemdTimerSpec, ctx: NormalizedContext) -> None:
+    """Normalize a systemd_timer spec: resolve login, paths, state_dir."""
+    spec_dir = ctx.spec_dir
+
+    _apply_state_dir(spec)
+
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    ctx.db_path = _resolve_db_path(spec)
+
+
+def _normalize_http_check(spec: HttpCheckSpec, ctx: NormalizedContext) -> None:
+    """Normalize an http_check spec: resolve login, paths, state_dir."""
+    spec_dir = ctx.spec_dir
+
+    # Apply state_dir override before resolving any local paths
+    _apply_state_dir(spec)
+
+    # Resolve login key
+    ctx.login_key_path = (
+        resolve_path(spec.login.private_key, spec_dir) if spec.login.private_key else None
+    )
+    ctx.login_password = spec.login.password or None
+
+    # Resolve inventory (state_dir-aware)
+    ctx.db_path = _resolve_db_path(spec)
 
 
 def _normalize_stack(spec: StackSpec, ctx: NormalizedContext) -> None:

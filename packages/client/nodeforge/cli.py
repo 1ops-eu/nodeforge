@@ -828,6 +828,91 @@ def _apply_single(parsed_spec, ctx, p, mode, dry_run, console) -> None:
 
 
 # ------------------------------------------------------------------ #
+# rotate-secret
+# ------------------------------------------------------------------ #
+
+
+@app.command(name="rotate-secret")
+def rotate_secret_cmd(
+    spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
+    secret: str = typer.Option(..., "--secret", help="Environment variable name to rotate"),
+    value: str | None = typer.Option(None, "--value", help="New secret value (generated if omitted)"),
+    env_file: list[Path] | None = typer.Option(
+        None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
+    ),
+    passthrough: bool = typer.Option(
+        False,
+        "--passthrough",
+        help="Leave unresolved ${VAR} references unchanged instead of erroring",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would change without applying"
+    ),
+) -> None:
+    """Rotate a secret (password_env) and re-apply affected steps."""
+    from nodeforge.compiler.parser import parse
+    from nodeforge.runtime.secret_rotation import rotate_secret
+
+    console.print(f"[bold]Rotating secret:[/bold] {secret}")
+
+    # Parse the spec first to find references
+    try:
+        parsed = parse(spec, strict_env=not passthrough, env_files=env_file)
+    except Exception as e:
+        console.print(f"[bold red]Parse error:[/bold red] {e}")
+        raise typer.Exit(1) from None
+
+    specs_list = parsed if isinstance(parsed, list) else [parsed]
+
+    # Find and rotate the secret
+    all_refs = []
+    for s in specs_list:
+        result = rotate_secret(s, secret, value)
+        all_refs.extend(result.refs_found)
+
+    if not all_refs:
+        console.print(f"[bold red]No references to '{secret}' found in spec.[/bold red]")
+        raise typer.Exit(1)
+
+    console.print(f"  Found {len(all_refs)} reference(s):")
+    for ref in all_refs:
+        console.print(f"    • {ref.field_path} (kind: {ref.kind})")
+
+    generated = value is None
+    if generated:
+        console.print("  [dim]Generated new password (32 chars)[/dim]")
+
+    if dry_run:
+        console.print("\n[yellow]Dry run — no changes applied.[/yellow]")
+        return
+
+    # Re-run the full pipeline with the new secret in the environment
+    console.print("\n[bold]Re-applying with rotated secret...[/bold]")
+    try:
+        pipeline_result = _build_pipeline(
+            spec, ensure_keys=True, strict_env=not passthrough, env_file=env_file
+        )
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        raise typer.Exit(1) from None
+
+    specs_r, ctxs_r, plans_r, issues = pipeline_result
+
+    if issues:
+        _print_issues(issues, stop_on_error=True)
+
+    if isinstance(specs_r, list):
+        spec_list = list(zip(specs_r, ctxs_r, plans_r, strict=True))
+    else:
+        spec_list = [(specs_r, ctxs_r, plans_r)]
+
+    for parsed_spec, ctx, p in spec_list:
+        _apply_single(parsed_spec, ctx, p, "agent", False, console)
+
+    console.print(f"\n[bold green]Secret '{secret}' rotated successfully.[/bold green]")
+
+
+# ------------------------------------------------------------------ #
 # inspect run <run-id>
 # ------------------------------------------------------------------ #
 

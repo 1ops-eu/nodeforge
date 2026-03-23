@@ -84,7 +84,7 @@ The `AgentExecutor` processes a plan as follows:
 3. **For each step:**
    a. Check if step is idempotent-skippable (content hash matches runtime state)
    b. Evaluate policy — `auto_apply`, `require_approval`, or `deny`
-   c. Execute via subprocess (shell commands) or direct file write
+   c. Execute via subprocess (shell commands), direct file write, or built-in handler (e.g. `http_check:` gate)
    d. Update runtime state with new hash and timestamp
 4. **Save runtime state** — atomic write to `runtime-state.json`
 5. **Save desired state** — persist plan to `desired-state.json`

@@ -6,13 +6,29 @@ import re
 from dataclasses import dataclass
 from typing import Literal
 
+from nodeforge_core.specs.backup_job_schema import BackupJobSpec
 from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
 from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
 from nodeforge_core.specs.file_template_schema import FileTemplateSpec
+from nodeforge_core.specs.http_check_schema import HttpCheckSpec
+from nodeforge_core.specs.postgres_ensure_schema import PostgresEnsureSpec
 from nodeforge_core.specs.service_schema import ServiceSpec
 from nodeforge_core.specs.stack_schema import StackSpec
+from nodeforge_core.specs.systemd_timer_schema import SystemdTimerSpec
+from nodeforge_core.specs.systemd_unit_schema import SystemdUnitSpec
 
-AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec | StackSpec
+AnySpec = (
+    BootstrapSpec
+    | ServiceSpec
+    | FileTemplateSpec
+    | ComposeProjectSpec
+    | StackSpec
+    | HttpCheckSpec
+    | SystemdUnitSpec
+    | SystemdTimerSpec
+    | BackupJobSpec
+    | PostgresEnsureSpec
+)
 
 
 @dataclass
@@ -329,6 +345,316 @@ def validate_compose_project(spec: ComposeProjectSpec) -> list[ValidationIssue]:
                     f"Invalid directory mode '{d.mode}' — expected octal like '0755'",
                 )
             )
+
+    return issues
+
+
+def validate_postgres_ensure(spec: PostgresEnsureSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    # Must have at least one declaration
+    if not spec.users and not spec.databases and not spec.extensions and not spec.grants:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "postgres_ensure",
+                "At least one user, database, extension, or grant must be declared",
+            )
+        )
+
+    # User names must be non-empty and unique
+    user_names: set[str] = set()
+    for i, u in enumerate(spec.users):
+        if not u.name:
+            issues.append(
+                ValidationIssue("error", f"users[{i}].name", "User name must not be empty")
+            )
+        if u.name in user_names:
+            issues.append(
+                ValidationIssue(
+                    "error", f"users[{i}].name", f"Duplicate user name: {u.name}"
+                )
+            )
+        user_names.add(u.name)
+
+    # Database names must be non-empty and unique
+    db_names: set[str] = set()
+    for i, d in enumerate(spec.databases):
+        if not d.name:
+            issues.append(
+                ValidationIssue(
+                    "error", f"databases[{i}].name", "Database name must not be empty"
+                )
+            )
+        if d.name in db_names:
+            issues.append(
+                ValidationIssue(
+                    "error", f"databases[{i}].name", f"Duplicate database name: {d.name}"
+                )
+            )
+        db_names.add(d.name)
+
+    # Extension names must be non-empty
+    for i, e in enumerate(spec.extensions):
+        if not e.name:
+            issues.append(
+                ValidationIssue(
+                    "error", f"extensions[{i}].name", "Extension name must not be empty"
+                )
+            )
+        if not e.database:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    f"extensions[{i}].database",
+                    "Extension database must not be empty",
+                )
+            )
+
+    # Grant fields must be non-empty
+    for i, g in enumerate(spec.grants):
+        if not g.privilege:
+            issues.append(
+                ValidationIssue(
+                    "error", f"grants[{i}].privilege", "Privilege must not be empty"
+                )
+            )
+        if not g.on_database:
+            issues.append(
+                ValidationIssue(
+                    "error", f"grants[{i}].on_database", "on_database must not be empty"
+                )
+            )
+        if not g.to_user:
+            issues.append(
+                ValidationIssue(
+                    "error", f"grants[{i}].to_user", "to_user must not be empty"
+                )
+            )
+
+    return issues
+
+
+def validate_backup_job(spec: BackupJobSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    b = spec.backup
+
+    if not b.name:
+        issues.append(
+            ValidationIssue("error", "backup.name", "Backup job name must not be empty")
+        )
+
+    if not b.destination.path or not b.destination.path.startswith("/"):
+        issues.append(
+            ValidationIssue(
+                "error",
+                "backup.destination.path",
+                f"Destination path must be an absolute path, got '{b.destination.path}'",
+            )
+        )
+
+    if b.retention.count < 1:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "backup.retention.count",
+                f"Retention count must be at least 1, got {b.retention.count}",
+            )
+        )
+
+    if not b.schedule:
+        issues.append(
+            ValidationIssue("error", "backup.schedule", "Schedule must not be empty")
+        )
+
+    src = b.source
+    if src.type == "postgres_dump":
+        if not src.database:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "backup.source.database",
+                    "Database name is required for postgres_dump backups",
+                )
+            )
+    elif src.type == "directory":
+        if not src.path:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "backup.source.path",
+                    "Source path is required for directory backups",
+                )
+            )
+        elif not src.path.startswith("/"):
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "backup.source.path",
+                    f"Source path must be absolute, got '{src.path}'",
+                )
+            )
+
+    return issues
+
+
+def validate_systemd_unit(spec: SystemdUnitSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    u = spec.unit
+
+    if not u.unit_name:
+        issues.append(
+            ValidationIssue("error", "unit.unit_name", "Unit name must not be empty")
+        )
+
+    if not u.exec_start:
+        issues.append(
+            ValidationIssue("error", "unit.exec_start", "ExecStart must not be empty")
+        )
+
+    valid_restart = ("no", "always", "on-failure", "on-abnormal", "on-abort", "on-success")
+    if u.restart not in valid_restart:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "unit.restart",
+                f"Invalid restart policy '{u.restart}'. "
+                f"Must be one of: {', '.join(valid_restart)}",
+            )
+        )
+
+    valid_types = ("simple", "forking", "oneshot", "notify", "dbus", "idle")
+    if u.type not in valid_types:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "unit.type",
+                f"Invalid service type '{u.type}'. "
+                f"Must be one of: {', '.join(valid_types)}",
+            )
+        )
+
+    if u.restart_sec < 0:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "unit.restart_sec",
+                f"RestartSec must be non-negative, got {u.restart_sec}",
+            )
+        )
+
+    # Logrotate validation
+    lr = spec.logrotate
+    if lr and lr.enabled:
+        if not lr.path:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "logrotate.path",
+                    "Logrotate path must not be empty when enabled",
+                )
+            )
+        valid_freq = ("daily", "weekly", "monthly")
+        if lr.frequency not in valid_freq:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "logrotate.frequency",
+                    f"Invalid frequency '{lr.frequency}'. "
+                    f"Must be one of: {', '.join(valid_freq)}",
+                )
+            )
+        if lr.rotate < 1:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "logrotate.rotate",
+                    f"Rotate count must be at least 1, got {lr.rotate}",
+                )
+            )
+
+    return issues
+
+
+def validate_systemd_timer(spec: SystemdTimerSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    t = spec.timer
+    s = spec.service
+
+    if not t.timer_name:
+        issues.append(
+            ValidationIssue("error", "timer.timer_name", "Timer name must not be empty")
+        )
+
+    if not t.on_calendar:
+        issues.append(
+            ValidationIssue("error", "timer.on_calendar", "OnCalendar must not be empty")
+        )
+
+    if not s.exec_start:
+        issues.append(
+            ValidationIssue("error", "service.exec_start", "ExecStart must not be empty")
+        )
+
+    return issues
+
+
+def validate_http_check(spec: HttpCheckSpec) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    c = spec.check
+
+    if not c.url:
+        issues.append(
+            ValidationIssue("error", "check.url", "URL must not be empty")
+        )
+    elif not c.url.startswith(("http://", "https://")):
+        issues.append(
+            ValidationIssue(
+                "error",
+                "check.url",
+                f"URL must start with http:// or https://, got '{c.url}'",
+            )
+        )
+
+    if not (100 <= c.expected_status <= 599):
+        issues.append(
+            ValidationIssue(
+                "error",
+                "check.expected_status",
+                f"Expected status must be 100-599, got {c.expected_status}",
+            )
+        )
+
+    if c.retries < 1:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "check.retries",
+                f"Retries must be at least 1, got {c.retries}",
+            )
+        )
+
+    if c.interval < 0:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "check.interval",
+                f"Interval must be non-negative, got {c.interval}",
+            )
+        )
+
+    if c.timeout <= 0:
+        issues.append(
+            ValidationIssue(
+                "error",
+                "check.timeout",
+                f"Timeout must be positive, got {c.timeout}",
+            )
+        )
 
     return issues
 

@@ -67,6 +67,11 @@ nodeforge_core/
     loader.py               load_spec(), load_env_file(), SpecLoadError
     service_schema.py       ServiceSpec Pydantic model
     stack_schema.py         StackSpec Pydantic model + stack validator/planner
+    http_check_schema.py    HttpCheckSpec Pydantic model
+    systemd_unit_schema.py  SystemdUnitSpec Pydantic model
+    systemd_timer_schema.py SystemdTimerSpec Pydantic model
+    backup_job_schema.py    BackupJobSpec Pydantic model
+    postgres_ensure_schema.py PostgresEnsureSpec Pydantic model
     validators.py           Kind-specific validation logic
   utils/
     __init__.py

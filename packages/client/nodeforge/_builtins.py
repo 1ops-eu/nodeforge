@@ -21,26 +21,41 @@ def _register_builtins() -> None:
 
 def _register_specs() -> None:
     from nodeforge_core.registry.specs import register_spec_kind
+    from nodeforge_core.specs.backup_job_schema import BackupJobSpec
     from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
     from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
     from nodeforge_core.specs.file_template_schema import FileTemplateSpec
+    from nodeforge_core.specs.http_check_schema import HttpCheckSpec
+    from nodeforge_core.specs.postgres_ensure_schema import PostgresEnsureSpec
     from nodeforge_core.specs.service_schema import ServiceSpec
     from nodeforge_core.specs.stack_schema import StackSpec
+    from nodeforge_core.specs.systemd_timer_schema import SystemdTimerSpec
+    from nodeforge_core.specs.systemd_unit_schema import SystemdUnitSpec
 
     register_spec_kind("bootstrap", BootstrapSpec)
     register_spec_kind("service", ServiceSpec)
     register_spec_kind("file_template", FileTemplateSpec)
     register_spec_kind("compose_project", ComposeProjectSpec)
     register_spec_kind("stack", StackSpec)
+    register_spec_kind("http_check", HttpCheckSpec)
+    register_spec_kind("backup_job", BackupJobSpec)
+    register_spec_kind("systemd_unit", SystemdUnitSpec)
+    register_spec_kind("systemd_timer", SystemdTimerSpec)
+    register_spec_kind("postgres_ensure", PostgresEnsureSpec)
 
 
 def _register_normalizers() -> None:
     from nodeforge.compiler.normalizer import (
+        _normalize_backup_job,
         _normalize_bootstrap,
         _normalize_compose_project,
         _normalize_file_template,
+        _normalize_http_check,
+        _normalize_postgres_ensure,
         _normalize_service,
         _normalize_stack,
+        _normalize_systemd_timer,
+        _normalize_systemd_unit,
     )
     from nodeforge_core.registry.normalizers import register_normalizer
 
@@ -49,16 +64,26 @@ def _register_normalizers() -> None:
     register_normalizer("file_template", _normalize_file_template)
     register_normalizer("compose_project", _normalize_compose_project)
     register_normalizer("stack", _normalize_stack)
+    register_normalizer("http_check", _normalize_http_check)
+    register_normalizer("backup_job", _normalize_backup_job)
+    register_normalizer("postgres_ensure", _normalize_postgres_ensure)
+    register_normalizer("systemd_unit", _normalize_systemd_unit)
+    register_normalizer("systemd_timer", _normalize_systemd_timer)
 
 
 def _register_validators() -> None:
     from nodeforge_core.registry.validators import register_validator
     from nodeforge_core.specs.validators import (
+        validate_backup_job,
         validate_bootstrap,
         validate_compose_project,
         validate_file_template,
+        validate_http_check,
+        validate_postgres_ensure,
         validate_service,
         validate_stack,
+        validate_systemd_timer,
+        validate_systemd_unit,
     )
 
     register_validator("bootstrap", validate_bootstrap)
@@ -66,15 +91,25 @@ def _register_validators() -> None:
     register_validator("file_template", validate_file_template)
     register_validator("compose_project", validate_compose_project)
     register_validator("stack", validate_stack)
+    register_validator("http_check", validate_http_check)
+    register_validator("backup_job", validate_backup_job)
+    register_validator("postgres_ensure", validate_postgres_ensure)
+    register_validator("systemd_unit", validate_systemd_unit)
+    register_validator("systemd_timer", validate_systemd_timer)
 
 
 def _register_planners() -> None:
     from nodeforge.compiler.planner import (
+        _plan_backup_job,
         _plan_bootstrap,
         _plan_compose_project,
         _plan_file_template,
+        _plan_http_check,
+        _plan_postgres_ensure,
         _plan_service,
         _plan_stack,
+        _plan_systemd_timer,
+        _plan_systemd_unit,
     )
     from nodeforge_core.registry.planners import register_planner
 
@@ -83,6 +118,11 @@ def _register_planners() -> None:
     register_planner("file_template", _plan_file_template)
     register_planner("compose_project", _plan_compose_project)
     register_planner("stack", _plan_stack)
+    register_planner("http_check", _plan_http_check)
+    register_planner("backup_job", _plan_backup_job)
+    register_planner("postgres_ensure", _plan_postgres_ensure)
+    register_planner("systemd_unit", _plan_systemd_unit)
+    register_planner("systemd_timer", _plan_systemd_timer)
 
 
 def _register_step_handlers() -> None:
@@ -110,11 +150,16 @@ def _register_step_handlers() -> None:
 
 def _register_hooks() -> None:
     from nodeforge.local.inventory import (
+        record_backup_job_apply,
         record_bootstrap,
         record_compose_project_apply,
         record_file_template_apply,
+        record_http_check_apply,
+        record_postgres_ensure_apply,
         record_service_apply,
         record_stack_apply,
+        record_systemd_timer_apply,
+        record_systemd_unit_apply,
     )
     from nodeforge_core.registry.hooks import KindHooks, register_kind_hooks
 
@@ -156,6 +201,46 @@ def _register_hooks() -> None:
             needs_key_generation=False,
             ssh_port_fallback=False,
             on_inventory_record=record_stack_apply,
+        ),
+    )
+    register_kind_hooks(
+        "http_check",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_http_check_apply,
+        ),
+    )
+    register_kind_hooks(
+        "backup_job",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_backup_job_apply,
+        ),
+    )
+    register_kind_hooks(
+        "postgres_ensure",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_postgres_ensure_apply,
+        ),
+    )
+    register_kind_hooks(
+        "systemd_unit",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_systemd_unit_apply,
+        ),
+    )
+    register_kind_hooks(
+        "systemd_timer",
+        KindHooks(
+            needs_key_generation=False,
+            ssh_port_fallback=False,
+            on_inventory_record=record_systemd_timer_apply,
         ),
     )
 

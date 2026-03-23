@@ -1,0 +1,32 @@
+kind: systemd_timer
+
+meta:
+  name: cleanup-timer
+  description: Run a cleanup script every day at 2am
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: admin
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+timer:
+  timer_name: nodeforge-cleanup
+  description: Daily cleanup of temporary files
+  on_calendar: "*-*-* 02:00:00"
+  persistent: true
+  accuracy_sec: 1min
+
+service:
+  exec_start: /usr/local/bin/cleanup.sh
+  user: root
+  group: root
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
