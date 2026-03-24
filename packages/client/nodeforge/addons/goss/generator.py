@@ -83,10 +83,17 @@ def generate_goss_yaml(spec: BootstrapSpec) -> str:
         }
 
     # ------------------------------------------------------------------ #
-    # service: ssh must be enabled and running; ufw and wg-quick if active
+    # service: ssh must be running; ufw and wg-quick if active.
+    #
+    # We intentionally do NOT check ``enabled`` on the ssh service here.
+    # Ubuntu 24.04+ uses systemd socket activation (``ssh.socket``) where
+    # ``ssh.service`` is *not* enabled — ``ssh.socket`` is.  Traditional
+    # distros (Ubuntu 22.04, Debian) have ``ssh.service`` enabled instead.
+    # Fedora/RHEL use ``sshd.service``.  The ``enabled`` assertion is
+    # handled via a cross-distro command check below.
     # ------------------------------------------------------------------ #
     doc["service"] = {
-        "ssh": {"enabled": True, "running": True},
+        "ssh": {"running": True},
     }
 
     if spec.firewall.provider == "ufw":
@@ -122,9 +129,20 @@ def generate_goss_yaml(spec: BootstrapSpec) -> str:
         }
 
     # ------------------------------------------------------------------ #
-    # command: UFW status and WireGuard interface checks
+    # command: SSH enabled check, UFW status, and WireGuard interface checks
     # ------------------------------------------------------------------ #
     commands: dict = {}
+
+    # Cross-distro SSH enabled check: covers socket-activated sshd
+    # (Ubuntu 24.04+ ssh.socket), traditional Debian/Ubuntu (ssh.service),
+    # and Fedora/RHEL (sshd.service).  The first ``is-enabled`` that
+    # succeeds makes the command exit 0.
+    commands[
+        "systemctl is-enabled ssh.socket 2>/dev/null || systemctl is-enabled ssh 2>/dev/null || systemctl is-enabled sshd"
+    ] = {
+        "exit-status": 0,
+        "timeout": 5000,
+    }
 
     if spec.firewall.provider == "ufw":
         ufw_stdout = [
@@ -170,8 +188,7 @@ def generate_goss_yaml(spec: BootstrapSpec) -> str:
             "timeout": 5000,
         }
 
-    if commands:
-        doc["command"] = commands
+    doc["command"] = commands
 
     # ------------------------------------------------------------------ #
     # Serialise — use a header comment so the file is self-documenting
