@@ -299,7 +299,7 @@ class Executor:
         if step.command and step.command.startswith("http_check:"):
             # The URL may contain colons (e.g. http://host:port/), so parse
             # from the right: the trailing 4 fields are always integers.
-            rest = step.command[len("http_check:"):]
+            rest = step.command[len("http_check:") :]
             parts = rest.rsplit(":", 4)
             if len(parts) == 5:
                 url, status_str, retries_str, interval_str, timeout_str = parts

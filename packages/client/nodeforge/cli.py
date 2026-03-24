@@ -836,7 +836,9 @@ def _apply_single(parsed_spec, ctx, p, mode, dry_run, console) -> None:
 def rotate_secret_cmd(
     spec: Path = typer.Argument(..., help="Path to YAML spec file", exists=True),
     secret: str = typer.Option(..., "--secret", help="Environment variable name to rotate"),
-    value: str | None = typer.Option(None, "--value", help="New secret value (generated if omitted)"),
+    value: str | None = typer.Option(
+        None, "--value", help="New secret value (generated if omitted)"
+    ),
     env_file: list[Path] | None = typer.Option(
         None, "--env-file", help="Load environment variables from .env file(s) (repeatable)"
     ),

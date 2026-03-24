@@ -370,9 +370,7 @@ def validate_postgres_ensure(spec: PostgresEnsureSpec) -> list[ValidationIssue]:
             )
         if u.name in user_names:
             issues.append(
-                ValidationIssue(
-                    "error", f"users[{i}].name", f"Duplicate user name: {u.name}"
-                )
+                ValidationIssue("error", f"users[{i}].name", f"Duplicate user name: {u.name}")
             )
         user_names.add(u.name)
 
@@ -381,9 +379,7 @@ def validate_postgres_ensure(spec: PostgresEnsureSpec) -> list[ValidationIssue]:
     for i, d in enumerate(spec.databases):
         if not d.name:
             issues.append(
-                ValidationIssue(
-                    "error", f"databases[{i}].name", "Database name must not be empty"
-                )
+                ValidationIssue("error", f"databases[{i}].name", "Database name must not be empty")
             )
         if d.name in db_names:
             issues.append(
@@ -414,9 +410,7 @@ def validate_postgres_ensure(spec: PostgresEnsureSpec) -> list[ValidationIssue]:
     for i, g in enumerate(spec.grants):
         if not g.privilege:
             issues.append(
-                ValidationIssue(
-                    "error", f"grants[{i}].privilege", "Privilege must not be empty"
-                )
+                ValidationIssue("error", f"grants[{i}].privilege", "Privilege must not be empty")
             )
         if not g.on_database:
             issues.append(
@@ -426,9 +420,7 @@ def validate_postgres_ensure(spec: PostgresEnsureSpec) -> list[ValidationIssue]:
             )
         if not g.to_user:
             issues.append(
-                ValidationIssue(
-                    "error", f"grants[{i}].to_user", "to_user must not be empty"
-                )
+                ValidationIssue("error", f"grants[{i}].to_user", "to_user must not be empty")
             )
 
     return issues
@@ -440,9 +432,7 @@ def validate_backup_job(spec: BackupJobSpec) -> list[ValidationIssue]:
     b = spec.backup
 
     if not b.name:
-        issues.append(
-            ValidationIssue("error", "backup.name", "Backup job name must not be empty")
-        )
+        issues.append(ValidationIssue("error", "backup.name", "Backup job name must not be empty"))
 
     if not b.destination.path or not b.destination.path.startswith("/"):
         issues.append(
@@ -463,9 +453,7 @@ def validate_backup_job(spec: BackupJobSpec) -> list[ValidationIssue]:
         )
 
     if not b.schedule:
-        issues.append(
-            ValidationIssue("error", "backup.schedule", "Schedule must not be empty")
-        )
+        issues.append(ValidationIssue("error", "backup.schedule", "Schedule must not be empty"))
 
     src = b.source
     if src.type == "postgres_dump":
@@ -504,14 +492,10 @@ def validate_systemd_unit(spec: SystemdUnitSpec) -> list[ValidationIssue]:
     u = spec.unit
 
     if not u.unit_name:
-        issues.append(
-            ValidationIssue("error", "unit.unit_name", "Unit name must not be empty")
-        )
+        issues.append(ValidationIssue("error", "unit.unit_name", "Unit name must not be empty"))
 
     if not u.exec_start:
-        issues.append(
-            ValidationIssue("error", "unit.exec_start", "ExecStart must not be empty")
-        )
+        issues.append(ValidationIssue("error", "unit.exec_start", "ExecStart must not be empty"))
 
     valid_restart = ("no", "always", "on-failure", "on-abnormal", "on-abort", "on-success")
     if u.restart not in valid_restart:
@@ -530,8 +514,7 @@ def validate_systemd_unit(spec: SystemdUnitSpec) -> list[ValidationIssue]:
             ValidationIssue(
                 "error",
                 "unit.type",
-                f"Invalid service type '{u.type}'. "
-                f"Must be one of: {', '.join(valid_types)}",
+                f"Invalid service type '{u.type}'. " f"Must be one of: {', '.join(valid_types)}",
             )
         )
 
@@ -584,19 +567,13 @@ def validate_systemd_timer(spec: SystemdTimerSpec) -> list[ValidationIssue]:
     s = spec.service
 
     if not t.timer_name:
-        issues.append(
-            ValidationIssue("error", "timer.timer_name", "Timer name must not be empty")
-        )
+        issues.append(ValidationIssue("error", "timer.timer_name", "Timer name must not be empty"))
 
     if not t.on_calendar:
-        issues.append(
-            ValidationIssue("error", "timer.on_calendar", "OnCalendar must not be empty")
-        )
+        issues.append(ValidationIssue("error", "timer.on_calendar", "OnCalendar must not be empty"))
 
     if not s.exec_start:
-        issues.append(
-            ValidationIssue("error", "service.exec_start", "ExecStart must not be empty")
-        )
+        issues.append(ValidationIssue("error", "service.exec_start", "ExecStart must not be empty"))
 
     return issues
 
@@ -607,9 +584,7 @@ def validate_http_check(spec: HttpCheckSpec) -> list[ValidationIssue]:
     c = spec.check
 
     if not c.url:
-        issues.append(
-            ValidationIssue("error", "check.url", "URL must not be empty")
-        )
+        issues.append(ValidationIssue("error", "check.url", "URL must not be empty"))
     elif not c.url.startswith(("http://", "https://")):
         issues.append(
             ValidationIssue(

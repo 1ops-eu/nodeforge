@@ -200,13 +200,9 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
             # Auto-generate: reuse persisted key or generate fresh (write-once)
             from nodeforge_core.registry.local_paths import get_local_paths
 
-            server_key_path = (
-                get_local_paths().wg_state_base / spec.host.name / "private.key"
-            )
+            server_key_path = get_local_paths().wg_state_base / spec.host.name / "private.key"
             if server_key_path.exists():
-                ctx.wireguard_private_key = server_key_path.read_text(
-                    encoding="utf-8"
-                ).strip()
+                ctx.wireguard_private_key = server_key_path.read_text(encoding="utf-8").strip()
             else:
                 ctx.wireguard_private_key = _generate_wg_private_key()
             ctx.wireguard_public_key = _derive_wg_public_key(ctx.wireguard_private_key)

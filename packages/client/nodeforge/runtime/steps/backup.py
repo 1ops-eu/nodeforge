@@ -32,7 +32,7 @@ def render_backup_script(
         f'BACKUP_DIR="{destination_path}"',
         'TIMESTAMP="$(date +%Y%m%d-%H%M%S)"',
         "",
-        '# Ensure backup directory exists',
+        "# Ensure backup directory exists",
         'mkdir -p "$BACKUP_DIR"',
         "",
     ]
@@ -40,29 +40,33 @@ def render_backup_script(
     if source_type == "postgres_dump":
         backup_file = f'"$BACKUP_DIR/{name}-$TIMESTAMP.sql.gz"'
         if docker_exec:
-            lines.append('# Dump PostgreSQL database via docker exec')
+            lines.append("# Dump PostgreSQL database via docker exec")
             lines.append(
-                f'docker exec {docker_exec} pg_dump -U {pg_user} {database} '
-                f'| gzip > {backup_file}'
+                f"docker exec {docker_exec} pg_dump -U {pg_user} {database} "
+                f"| gzip > {backup_file}"
             )
         else:
-            lines.append('# Dump PostgreSQL database')
+            lines.append("# Dump PostgreSQL database")
             lines.append(
-                f'pg_dump -h {pg_host} -p {pg_port} -U {pg_user} {database} '
-                f'| gzip > {backup_file}'
+                f"pg_dump -h {pg_host} -p {pg_port} -U {pg_user} {database} "
+                f"| gzip > {backup_file}"
             )
     elif source_type == "directory":
         backup_file = f'"$BACKUP_DIR/{name}-$TIMESTAMP.tar.gz"'
-        lines.append('# Archive directory')
-        lines.append(f'tar czf {backup_file} -C "$(dirname {source_path})" "$(basename {source_path})"')
+        lines.append("# Archive directory")
+        lines.append(
+            f'tar czf {backup_file} -C "$(dirname {source_path})" "$(basename {source_path})"'
+        )
 
-    lines.extend([
-        "",
-        f"# Retention: keep {retention_count} most recent backups",
-        'cd "$BACKUP_DIR"',
-        f'ls -1t {name}-*.* 2>/dev/null | tail -n +{retention_count + 1} | xargs -r rm -f',
-        "",
-        f'echo "Backup completed: {name} at $TIMESTAMP"',
-    ])
+    lines.extend(
+        [
+            "",
+            f"# Retention: keep {retention_count} most recent backups",
+            'cd "$BACKUP_DIR"',
+            f"ls -1t {name}-*.* 2>/dev/null | tail -n +{retention_count + 1} | xargs -r rm -f",
+            "",
+            f'echo "Backup completed: {name} at $TIMESTAMP"',
+        ]
+    )
 
     return "\n".join(lines) + "\n"

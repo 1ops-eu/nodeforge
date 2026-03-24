@@ -100,9 +100,7 @@ class TestPostgresEnsureValidation:
         assert has_errors(issues)
 
     def test_duplicate_user_names(self):
-        spec = _make_postgres_ensure_spec(
-            users=[{"name": "app"}, {"name": "app"}]
-        )
+        spec = _make_postgres_ensure_spec(users=[{"name": "app"}, {"name": "app"}])
         issues = validate_postgres_ensure(spec)
         assert has_errors(issues)
 
@@ -112,23 +110,17 @@ class TestPostgresEnsureValidation:
         assert has_errors(issues)
 
     def test_duplicate_database_names(self):
-        spec = _make_postgres_ensure_spec(
-            databases=[{"name": "db"}, {"name": "db"}]
-        )
+        spec = _make_postgres_ensure_spec(databases=[{"name": "db"}, {"name": "db"}])
         issues = validate_postgres_ensure(spec)
         assert has_errors(issues)
 
     def test_empty_extension_name(self):
-        spec = _make_postgres_ensure_spec(
-            extensions=[{"name": "", "database": "db"}]
-        )
+        spec = _make_postgres_ensure_spec(extensions=[{"name": "", "database": "db"}])
         issues = validate_postgres_ensure(spec)
         assert has_errors(issues)
 
     def test_empty_extension_database(self):
-        spec = _make_postgres_ensure_spec(
-            extensions=[{"name": "ext", "database": ""}]
-        )
+        spec = _make_postgres_ensure_spec(extensions=[{"name": "ext", "database": ""}])
         issues = validate_postgres_ensure(spec)
         assert has_errors(issues)
 
@@ -148,31 +140,43 @@ class TestPostgresEnsureValidation:
 class TestPostgresEnsureStepHelpers:
     def test_ensure_user_no_password(self):
         cmd = ensure_user_cmd(
-            "app", None,
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            "app",
+            None,
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
         )
         assert "CREATE ROLE app LOGIN" in cmd
         assert "psql" in cmd
 
     def test_ensure_user_with_password(self):
         cmd = ensure_user_cmd(
-            "app", "secret",
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            "app",
+            "secret",
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
         )
         assert "PASSWORD" in cmd
 
     def test_ensure_user_docker_exec(self):
         cmd = ensure_user_cmd(
-            "app", None,
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            "app",
+            None,
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
             docker_exec="pg-container",
         )
         assert "docker exec pg-container" in cmd
 
     def test_ensure_database(self):
         cmd = ensure_database_cmd(
-            "mydb", "app",
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            "mydb",
+            "app",
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
         )
         assert "createdb" in cmd
         assert "mydb" in cmd
@@ -180,27 +184,38 @@ class TestPostgresEnsureStepHelpers:
 
     def test_ensure_extension(self):
         cmd = ensure_extension_cmd(
-            "uuid-ossp", "mydb",
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            "uuid-ossp",
+            "mydb",
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
         )
         assert 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"' in cmd
 
     def test_ensure_grant(self):
         cmd = ensure_grant_cmd(
-            "ALL", "mydb", "app",
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            "ALL",
+            "mydb",
+            "app",
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
         )
         assert "GRANT ALL ON DATABASE mydb TO app" in cmd
 
     def test_pg_isready(self):
         cmd = pg_isready_cmd(
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
         )
         assert "pg_isready" in cmd
 
     def test_pg_isready_docker(self):
         cmd = pg_isready_cmd(
-            conn_host="localhost", conn_port=5432, admin_user="postgres",
+            conn_host="localhost",
+            conn_port=5432,
+            admin_user="postgres",
             docker_exec="pg",
         )
         assert "docker exec pg" in cmd
