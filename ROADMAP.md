@@ -324,6 +324,30 @@ These primitives are **general-purpose building blocks**. In the OSS agent, they
 
 ---
 
+## v0.6.1 -- WireGuard Server Key Auto-Generation
+
+**Goal:** Eliminate the manual `wg genkey` step by auto-generating the server private key when `private_key_file` is omitted.
+
+| Item | Description |
+|---|---|
+| Auto-generate server keypair | When `wireguard.enabled: true` and `private_key_file` is omitted, generate the server Curve25519 private key via PyNaCl (same as client key) — no subprocess, fully cross-platform |
+| Write-once server key | Auto-generated `private.key` in local state uses write-once semantics (same as `client.key`) — prevents accidental key rotation on re-runs |
+| Validator update | `private_key_file` is no longer required when `wireguard.enabled: true`; omitting it triggers auto-generation |
+| Backward compatible | Existing specs with explicit `private_key_file` behave identically to before |
+
+**New capabilities:**
+- Zero-step WireGuard setup: `wireguard.enabled: true` is all that's needed — both server and client keypairs are auto-managed
+- Fully cross-platform key generation via PyNaCl (no `wg genkey` subprocess required)
+- Stable server identity across re-runs via write-once local state
+
+**Acceptance criteria:**
+- `nodeforge apply` with `wireguard.enabled: true` and no `private_key_file` auto-generates the server key, deploys WireGuard, and produces a working `client.conf`
+- Re-running reuses the same server key from local state
+- Existing specs with explicit `private_key_file` are unaffected
+- Works on Linux, macOS, and Windows (PyNaCl only, no shell subprocess)
+
+---
+
 ## v0.7 -- Light Blueprints
 
 **Goal:** Introduce reusable composition primitives for common stack patterns.

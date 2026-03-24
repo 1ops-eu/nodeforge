@@ -424,8 +424,11 @@ class AgentExecutor:
         """Execute an HTTP readiness check with retry loop."""
         import urllib.request
 
-        parts = step.command.split(":", 5)
-        if len(parts) != 6:
+        # The URL may contain colons (e.g. http://host:port/), so parse
+        # from the right: the trailing 4 fields are always integers.
+        rest = step.command[len("http_check:"):]
+        parts = rest.rsplit(":", 4)
+        if len(parts) != 5:
             return AgentStepResult(
                 step_index=step.index,
                 step_id=step.id,
@@ -434,7 +437,7 @@ class AgentExecutor:
                 error=f"Malformed http_check command: {step.command}",
             )
 
-        _, url, status_str, retries_str, interval_str, timeout_str = parts
+        url, status_str, retries_str, interval_str, timeout_str = parts
         expected = int(status_str)
         retries = int(retries_str)
         interval = int(interval_str)

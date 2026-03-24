@@ -297,9 +297,12 @@ class Executor:
                 error="" if check.passed else check.message,
             )
         if step.command and step.command.startswith("http_check:"):
-            parts = step.command.split(":", 5)
-            if len(parts) == 6:
-                _, url, status_str, retries_str, interval_str, timeout_str = parts
+            # The URL may contain colons (e.g. http://host:port/), so parse
+            # from the right: the trailing 4 fields are always integers.
+            rest = step.command[len("http_check:"):]
+            parts = rest.rsplit(":", 4)
+            if len(parts) == 5:
+                url, status_str, retries_str, interval_str, timeout_str = parts
                 # Translate to a bash retry loop executed via SSH on the target.
                 curl_cmd = (
                     f"for i in $(seq 1 {retries_str}); do "
