@@ -69,7 +69,6 @@ def validate_bootstrap(spec: BootstrapSpec) -> list[ValidationIssue]:
     wg = spec.wireguard
     if wg.enabled:
         for attr, label in [
-            ("private_key_file", "wireguard.private_key_file"),
             ("endpoint", "wireguard.endpoint"),
             ("address", "wireguard.address"),
             ("peer_address", "wireguard.peer_address"),

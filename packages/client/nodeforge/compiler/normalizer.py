@@ -183,15 +183,33 @@ def _normalize_bootstrap(spec: BootstrapSpec, ctx: NormalizedContext) -> None:
         else:
             ctx.pubkey_contents.append(f"<key not found: {pk_path}>")
 
-    # Read WireGuard server private key and derive public key via PyNaCl (Curve25519)
-    if spec.wireguard.enabled and spec.wireguard.private_key_file:
-        wg_key_path = resolve_path(spec.wireguard.private_key_file, spec_dir)
-        if wg_key_path.exists():
-            ctx.wireguard_private_key = wg_key_path.read_text(encoding="utf-8").strip()
-            ctx.wireguard_public_key = _derive_wg_public_key(ctx.wireguard_private_key)
+    # Read WireGuard server private key and derive public key via PyNaCl (Curve25519).
+    # When private_key_file is omitted, the key is auto-generated using write-once
+    # semantics: reuse from local state if it exists, otherwise generate a fresh key.
+    # The key is persisted by save_wireguard_state after a successful apply.
+    if spec.wireguard.enabled:
+        if spec.wireguard.private_key_file:
+            wg_key_path = resolve_path(spec.wireguard.private_key_file, spec_dir)
+            if wg_key_path.exists():
+                ctx.wireguard_private_key = wg_key_path.read_text(encoding="utf-8").strip()
+                ctx.wireguard_public_key = _derive_wg_public_key(ctx.wireguard_private_key)
+            else:
+                ctx.wireguard_private_key = f"<key not found: {wg_key_path}>"
+                ctx.wireguard_public_key = ""
         else:
-            ctx.wireguard_private_key = f"<key not found: {wg_key_path}>"
-            ctx.wireguard_public_key = ""
+            # Auto-generate: reuse persisted key or generate fresh (write-once)
+            from nodeforge_core.registry.local_paths import get_local_paths
+
+            server_key_path = (
+                get_local_paths().wg_state_base / spec.host.name / "private.key"
+            )
+            if server_key_path.exists():
+                ctx.wireguard_private_key = server_key_path.read_text(
+                    encoding="utf-8"
+                ).strip()
+            else:
+                ctx.wireguard_private_key = _generate_wg_private_key()
+            ctx.wireguard_public_key = _derive_wg_public_key(ctx.wireguard_private_key)
 
     # Auto-generate (or reuse) WireGuard client key pair.
     # The client private key is persisted to ~/.wg/nodeforge/{host}/client.key after

@@ -35,7 +35,7 @@ def test_wireguard_enabled_requires_config():
     issues = validate_bootstrap(spec)
     assert has_errors(issues)
     error_fields = [i.field for i in issues if i.severity == "error"]
-    assert "wireguard.private_key_file" in error_fields
+    assert "wireguard.private_key_file" not in error_fields  # auto-generated when omitted
     assert "wireguard.endpoint" in error_fields
     assert "wireguard.address" in error_fields
     assert "wireguard.peer_address" in error_fields

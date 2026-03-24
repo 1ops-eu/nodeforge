@@ -91,8 +91,10 @@ def save_wireguard_state(
     host_dir = _wg_host_dir(host_name)
     ensure_dir(host_dir, mode=0o700)
 
-    # Server private key — readable only by owner
-    _write(host_dir / "private.key", private_key + "\n", mode=0o600)
+    # Server private key — write-once (stable server identity across re-runs)
+    server_key_path = host_dir / "private.key"
+    if not server_key_path.exists():
+        _write(server_key_path, private_key + "\n", mode=0o600)
 
     # Server public key — not secret
     _write(host_dir / "public.key", public_key + "\n", mode=0o644)
