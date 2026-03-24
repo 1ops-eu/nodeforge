@@ -166,9 +166,7 @@ class TestHttpCheckPlanning:
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
 
-        spec = _make_http_check_spec(
-            local={"inventory": {"enabled": False}}
-        )
+        spec = _make_http_check_spec(local={"inventory": {"enabled": False}})
         ctx = normalize(spec)
         p = plan(ctx)
 

@@ -426,7 +426,7 @@ class AgentExecutor:
 
         # The URL may contain colons (e.g. http://host:port/), so parse
         # from the right: the trailing 4 fields are always integers.
-        rest = step.command[len("http_check:"):]
+        rest = step.command[len("http_check:") :]
         parts = rest.rsplit(":", 4)
         if len(parts) != 5:
             return AgentStepResult(

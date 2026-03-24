@@ -39,21 +39,25 @@ def find_secret_refs(spec) -> list[SecretRef]:
         if hasattr(pg, "roles"):
             for i, role in enumerate(pg.roles):
                 if role.password_env:
-                    refs.append(SecretRef(
-                        env_var=role.password_env,
-                        kind=kind,
-                        field_path=f"postgres.roles[{i}].password_env",
-                    ))
+                    refs.append(
+                        SecretRef(
+                            env_var=role.password_env,
+                            kind=kind,
+                            field_path=f"postgres.roles[{i}].password_env",
+                        )
+                    )
 
     # postgres_ensure spec: users[].password_env
     if hasattr(spec, "users"):
         for i, user in enumerate(spec.users):
             if hasattr(user, "password_env") and user.password_env:
-                refs.append(SecretRef(
-                    env_var=user.password_env,
-                    kind=kind,
-                    field_path=f"users[{i}].password_env",
-                ))
+                refs.append(
+                    SecretRef(
+                        env_var=user.password_env,
+                        kind=kind,
+                        field_path=f"users[{i}].password_env",
+                    )
+                )
 
     return refs
 

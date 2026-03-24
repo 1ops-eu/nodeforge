@@ -65,9 +65,7 @@ class TestSystemdUnitSchema:
         assert spec.logrotate is None
 
     def test_spec_with_logrotate(self):
-        spec = _make_systemd_unit_spec(
-            logrotate={"enabled": True, "path": "/var/log/app/*.log"}
-        )
+        spec = _make_systemd_unit_spec(logrotate={"enabled": True, "path": "/var/log/app/*.log"})
         assert spec.logrotate.enabled is True
         assert spec.logrotate.path == "/var/log/app/*.log"
 
@@ -77,9 +75,7 @@ class TestSystemdUnitSchema:
 
     def test_unit_forbids_extra_fields(self):
         with pytest.raises(ValidationError):
-            _make_systemd_unit_spec(
-                unit={"unit_name": "x", "exec_start": "/bin/x", "bogus": True}
-            )
+            _make_systemd_unit_spec(unit={"unit_name": "x", "exec_start": "/bin/x", "bogus": True})
 
 
 # ---------------------------------------------------------------------------
@@ -94,16 +90,12 @@ class TestSystemdUnitValidation:
         assert not has_errors(issues)
 
     def test_empty_unit_name(self):
-        spec = _make_systemd_unit_spec(
-            unit={"unit_name": "", "exec_start": "/bin/x"}
-        )
+        spec = _make_systemd_unit_spec(unit={"unit_name": "", "exec_start": "/bin/x"})
         issues = validate_systemd_unit(spec)
         assert has_errors(issues)
 
     def test_empty_exec_start(self):
-        spec = _make_systemd_unit_spec(
-            unit={"unit_name": "x", "exec_start": ""}
-        )
+        spec = _make_systemd_unit_spec(unit={"unit_name": "x", "exec_start": ""})
         issues = validate_systemd_unit(spec)
         assert has_errors(issues)
 
@@ -122,9 +114,7 @@ class TestSystemdUnitValidation:
         assert has_errors(issues)
 
     def test_logrotate_empty_path(self):
-        spec = _make_systemd_unit_spec(
-            logrotate={"enabled": True, "path": ""}
-        )
+        spec = _make_systemd_unit_spec(logrotate={"enabled": True, "path": ""})
         issues = validate_systemd_unit(spec)
         assert has_errors(issues)
 
@@ -237,9 +227,7 @@ class TestSystemdUnitPlanning:
         from nodeforge.compiler.normalizer import normalize
         from nodeforge.compiler.planner import plan
 
-        spec = _make_systemd_unit_spec(
-            logrotate={"enabled": True, "path": "/var/log/app/*.log"}
-        )
+        spec = _make_systemd_unit_spec(logrotate={"enabled": True, "path": "/var/log/app/*.log"})
         ctx = normalize(spec)
         p = plan(ctx)
 

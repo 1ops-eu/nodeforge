@@ -1,0 +1,71 @@
+kind: bootstrap
+
+# Example 1.5b: WireGuard VPN hub — server key auto-generated
+# Same as 05-wireguard but omits private_key_file entirely.
+# nodeforge auto-generates the server Curve25519 key pair via PyNaCl on the
+# first apply and persists it under ~/.wg/nodeforge/{host}/private.key.
+# Re-runs reuse the same key (write-once semantics, stable server identity).
+
+meta:
+  name: ubuntu-05b-wireguard-auto-key
+  description: WireGuard VPN hub with auto-generated server key (no manual wg genkey step)
+
+host:
+  name: ubuntu-node-1
+  address: 203.0.113.10
+  os_family: ubuntu
+
+login:
+  user: root
+  private_key: ~/.ssh/id_ed25519
+  port: 22
+
+admin_user:
+  name: admin
+  groups:
+    - sudo
+  pubkeys:
+    - ~/.ssh/id_ed25519.pub
+
+ssh:
+  port: 2222
+  disable_root_login: true
+  disable_password_auth: true
+
+firewall:
+  provider: ufw
+  ssh_only: true
+
+# WireGuard: private_key_file is omitted — nodeforge auto-generates the server
+# key pair via PyNaCl (no wg genkey subprocess needed, fully cross-platform).
+# The key is stored in ~/.wg/nodeforge/ubuntu-node-1/private.key after the
+# first successful apply and reused on every subsequent run.
+wireguard:
+  enabled: true
+  interface: wg0
+  address: 10.10.0.1/24
+  endpoint: 203.0.113.10:51820
+  peer_address: 10.10.0.2/32
+  persistent_keepalive: 25
+
+local:
+  ssh_config:
+    enabled: true
+    host_alias: ubuntu-node-1
+    config_path: ~/.ssh/config
+    preserve_legacy_entry: false
+
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db
+
+checks:
+  - type: ssh_reachable
+    port: 2222
+    user: admin
+
+  - type: port_open
+    port: 2222
+
+  - type: wireguard_up
+    interface: wg0

@@ -1781,9 +1781,7 @@ def _plan_postgres_ensure(spec: PostgresEnsureSpec, ctx: NormalizedContext) -> l
                 f"Grant {g.privilege} on {g.on_database} to {g.to_user}",
                 R,
                 StepKind.SSH_COMMAND,
-                command=ensure_grant_cmd(
-                    g.privilege, g.on_database, g.to_user, **conn_kwargs
-                ),
+                command=ensure_grant_cmd(g.privilege, g.on_database, g.to_user, **conn_kwargs),
                 sudo=True,
                 tags=["postgres_ensure", "grant"],
             )
