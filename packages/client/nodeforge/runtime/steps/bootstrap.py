@@ -100,6 +100,10 @@ def enable_pubkey_auth() -> str:
     reload sshd before running the admin-login gate, otherwise key auth never works.
     The grep+sed pattern handles commented, uncommented, or missing lines.
 
+    On socket-activated systems (Ubuntu 24.04+), ``systemctl reload ssh`` may not
+    have a running service to signal, so we also try ``restart ssh.socket`` which
+    causes new connections to pick up the updated config.
+
     Uses double quotes for the outer ``bash -c`` to avoid conflicts with
     the single-quoted sed expressions inside.
     """
@@ -108,16 +112,28 @@ def enable_pubkey_auth() -> str:
         "grep -q '^#\\\\?PubkeyAuthentication' /etc/ssh/sshd_config "
         "&& sed -i 's/^#\\\\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config "
         "|| echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config; "
-        'systemctl reload ssh || systemctl reload sshd"'
+        "if systemctl is-active ssh.socket >/dev/null 2>&1; then "
+        "systemctl daemon-reload && systemctl restart ssh.socket; "
+        "else "
+        "systemctl reload ssh || systemctl reload sshd; "
+        'fi"'
     )
 
 
 def write_sshd_config_candidate(port: int) -> str:
-    """Configure SSH port. Root login and password auth are deferred until gate passes."""
+    """Configure SSH port. Root login and password auth are deferred until gate passes.
+
+    Uses grep+sed+append pattern: if a ``Port`` line exists (commented or not)
+    it is replaced; otherwise ``Port <port>`` is appended.  This handles
+    Ubuntu 24.04 where the default ``sshd_config`` may not contain a ``Port``
+    line at all (the default is implicit or set via ``sshd_config.d/``).
+    """
     return (
         f"bash -c '"
         f"cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak && "
-        f'sed -i "s/^#\\?Port .*/Port {port}/" /etc/ssh/sshd_config'
+        f'(grep -q "^#\\?Port " /etc/ssh/sshd_config '
+        f'&& sed -i "s/^#\\?Port .*/Port {port}/" /etc/ssh/sshd_config '
+        f'|| echo "Port {port}" >> /etc/ssh/sshd_config)'
         f"'"
     )
 
@@ -127,7 +143,26 @@ def validate_sshd_config() -> str:
 
 
 def reload_sshd() -> str:
-    return "bash -c 'systemctl reload ssh || systemctl reload sshd'"
+    """Reload sshd, handling both socket-activated and traditional modes.
+
+    Ubuntu 24.04+ uses systemd socket activation (``ssh.socket``) by default.
+    When socket activation is active, the ``Port`` directive in ``sshd_config``
+    is ignored for listening — the socket unit controls that.  Changing the port
+    requires ``systemctl daemon-reload`` (which triggers ``sshd-socket-generator``
+    to regenerate ``ListenStream`` from ``sshd_config``) followed by
+    ``systemctl restart ssh.socket`` to re-bind.
+
+    On traditional systems (Ubuntu 22.04, Debian, etc.) a simple
+    ``systemctl reload ssh`` is sufficient.
+    """
+    return (
+        "bash -c '"
+        "if systemctl is-active ssh.socket >/dev/null 2>&1; then "
+        "systemctl daemon-reload && systemctl restart ssh.socket; "
+        "else "
+        "systemctl reload ssh || systemctl reload sshd; "
+        "fi'"
+    )
 
 
 def disable_root_login() -> str:

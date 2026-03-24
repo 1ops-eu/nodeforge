@@ -348,6 +348,31 @@ These primitives are **general-purpose building blocks**. In the OSS agent, they
 
 ---
 
+## v0.6.2 -- Ubuntu 24.04 SSH Socket Activation Fix + Version Housekeeping
+
+**Goal:** Fix bootstrap SSH port change on Ubuntu 24.04+ which uses systemd socket-activated sshd, and correct version reporting across all packages.
+
+| Item | Description |
+|---|---|
+| Socket-aware `reload_sshd()` | Detect `ssh.socket` at runtime; use `systemctl daemon-reload && systemctl restart ssh.socket` on socket-activated systems (Ubuntu 24.04+) instead of `systemctl reload ssh`. Falls back to traditional reload on Ubuntu 22.04 / Debian |
+| Socket-aware `enable_pubkey_auth()` | Same socket detection for the pubkey auth reload — ensures sshd picks up config changes on socket-activated systems |
+| Robust `write_sshd_config_candidate()` | Use grep+sed+append pattern: if no `Port` line exists in `sshd_config` (common on Ubuntu 24.04 where defaults are implicit), append `Port <port>` instead of silently doing nothing |
+| Fix `__version__` | `nodeforge_core.__init__.__version__` was stuck at `"0.4.0"` — `nodeforge version` reported the wrong version. Now reads `"0.6.2"` |
+| Sync all `pyproject.toml` versions | Root workspace, core, client, and agent `pyproject.toml` files all bumped from `"0.6.0"` to `"0.6.2"` |
+
+**Root cause:** Ubuntu 24.04 (Noble) ships with `ssh.socket` active by default. The `Port` directive in `sshd_config` is ignored for listening — systemd's socket unit controls port binding. Changing the port requires `systemctl daemon-reload` (triggers `sshd-socket-generator` to regenerate `ListenStream` from `sshd_config`) followed by `systemctl restart ssh.socket` to re-bind. The previous `systemctl reload ssh` only signaled the sshd process to re-read config, which has no effect on which port the socket listens on.
+
+**Discovered via:** Manual bootstrap testing against a Hetzner Cloud server running Ubuntu 24.04. The SSH lockout prevention gate correctly caught the failure — admin login on the new port was unreachable because the socket was still bound to port 22.
+
+**Acceptance criteria:**
+- `nodeforge apply` bootstrap on Ubuntu 24.04 with socket-activated sshd successfully changes the SSH port and passes the lockout prevention gate
+- Bootstrap on Ubuntu 22.04 / Debian (traditional `ssh.service`) continues to work unchanged
+- `nodeforge version` reports `0.6.2`
+- `make dev && nodeforge version` shows `0.6.2`
+- All unit tests pass including new socket-awareness assertions
+
+---
+
 ## v0.7 -- Light Blueprints
 
 **Goal:** Introduce reusable composition primitives for common stack patterns.

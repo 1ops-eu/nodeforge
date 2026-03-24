@@ -6,6 +6,7 @@ from nodeforge.runtime.steps.bootstrap import (
     delete_open_ssh_rule,
     disable_password_auth,
     disable_root_login,
+    enable_pubkey_auth,
     install_authorized_keys,
     reload_sshd,
     ufw_default_allow_outgoing,
@@ -52,10 +53,32 @@ def test_disable_password_auth_command():
     assert "sshd_config" in cmd
 
 
+def test_enable_pubkey_auth_command():
+    cmd = enable_pubkey_auth()
+    assert "PubkeyAuthentication yes" in cmd
+    assert "sshd_config" in cmd
+
+
+def test_enable_pubkey_auth_socket_aware():
+    """enable_pubkey_auth handles Ubuntu 24.04+ socket-activated sshd."""
+    cmd = enable_pubkey_auth()
+    assert "ssh.socket" in cmd
+    assert "daemon-reload" in cmd
+
+
 def test_sshd_config_candidate_includes_port():
     cmd = write_sshd_config_candidate(2222)
     assert "2222" in cmd
     assert "sshd_config.bak" in cmd
+
+
+def test_sshd_config_candidate_appends_when_missing():
+    """Port line is appended if no Port directive exists in sshd_config."""
+    cmd = write_sshd_config_candidate(1677)
+    assert "1677" in cmd
+    # grep+sed+append pattern: falls back to echo if sed has no match
+    assert "grep" in cmd
+    assert "echo" in cmd
 
 
 def test_ufw_default_deny_incoming():
@@ -75,8 +98,18 @@ def test_ufw_force_enable():
 
 def test_reload_sshd():
     cmd = reload_sshd()
-    assert "systemctl reload" in cmd
+    assert "systemctl" in cmd
     assert "ssh" in cmd
+
+
+def test_reload_sshd_socket_aware():
+    """reload_sshd handles Ubuntu 24.04+ socket-activated sshd."""
+    cmd = reload_sshd()
+    # Must detect ssh.socket and use daemon-reload + restart ssh.socket
+    assert "ssh.socket" in cmd
+    assert "daemon-reload" in cmd
+    # Must fall back to traditional reload on non-socket systems
+    assert "systemctl reload ssh" in cmd
 
 
 def test_generate_server_config():
