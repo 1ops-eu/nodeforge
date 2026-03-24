@@ -183,7 +183,7 @@ class TestPostgresEnsureStepHelpers:
             "uuid-ossp", "mydb",
             conn_host="localhost", conn_port=5432, admin_user="postgres",
         )
-        assert "CREATE EXTENSION IF NOT EXISTS uuid-ossp" in cmd
+        assert 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"' in cmd
 
     def test_ensure_grant(self):
         cmd = ensure_grant_cmd(

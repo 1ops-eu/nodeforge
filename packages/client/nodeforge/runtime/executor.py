@@ -310,8 +310,7 @@ class Executor:
                     f"done; "
                     f'echo "HTTP check failed after {retries_str} attempts: last code=$code"; exit 1'
                 )
-                import dataclasses as _dc
-                step = _dc.replace(step, command=curl_cmd)
+                step = step.model_copy(update={"command": curl_cmd})
             return self._execute_ssh_command(step)
 
         # Default verify: run the command

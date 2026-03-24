@@ -73,7 +73,7 @@ def ensure_extension_cmd(
     docker_exec: str | None = None,
 ) -> str:
     """Generate command to ensure a PostgreSQL extension is installed."""
-    sql = f"CREATE EXTENSION IF NOT EXISTS {name};"
+    sql = f'CREATE EXTENSION IF NOT EXISTS "{name}";'
     return _psql_wrap(sql, conn_host=conn_host, conn_port=conn_port,
                       admin_user=admin_user, docker_exec=docker_exec,
                       database=database)
