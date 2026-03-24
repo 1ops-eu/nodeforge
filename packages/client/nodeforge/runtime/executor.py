@@ -296,6 +296,24 @@ class Executor:
                 output=check.message,
                 error="" if check.passed else check.message,
             )
+        if step.command and step.command.startswith("http_check:"):
+            parts = step.command.split(":", 5)
+            if len(parts) == 6:
+                _, url, status_str, retries_str, interval_str, timeout_str = parts
+                # Translate to a bash retry loop executed via SSH on the target.
+                curl_cmd = (
+                    f"for i in $(seq 1 {retries_str}); do "
+                    f"code=$(curl -s -o /dev/null -w '%{{http_code}}' -m {timeout_str} '{url}' 2>/dev/null); "
+                    f'[ "$code" = "{status_str}" ] && '
+                    f'echo "HTTP {url}: $code (attempt $i/{retries_str})" && exit 0; '
+                    f"[ $i -lt {retries_str} ] && sleep {interval_str}; "
+                    f"done; "
+                    f'echo "HTTP check failed after {retries_str} attempts: last code=$code"; exit 1'
+                )
+                import dataclasses as _dc
+                step = _dc.replace(step, command=curl_cmd)
+            return self._execute_ssh_command(step)
+
         # Default verify: run the command
         return self._execute_ssh_command(step)
 

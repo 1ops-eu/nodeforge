@@ -16,10 +16,9 @@ def _psql_wrap(sql: str, *, conn_host: str, conn_port: int, admin_user: str,
             f"docker exec {docker_exec} psql -U {admin_user} -d {database} "
             f"-c '{escaped_sql}'"
         )
-    return (
-        f"psql -h {conn_host} -p {conn_port} -U {admin_user} -d {database} "
-        f"-c '{escaped_sql}'"
-    )
+    # Use Unix socket via sudo to avoid TCP password auth (scram-sha-256).
+    # The SSH admin user has NOPASSWD sudo (nodeforge bootstrap invariant).
+    return f"sudo -u {admin_user} psql -d {database} -c '{escaped_sql}'"
 
 
 def ensure_user_cmd(
@@ -62,9 +61,9 @@ def ensure_database_cmd(
             f"|| createdb -U {admin_user} -O {owner} {name}\""
         )
     return (
-        f"bash -c \"psql -h {conn_host} -p {conn_port} -U {admin_user} "
-        f"-tc \\\"{check}\\\" | grep -q 1 "
-        f"|| createdb -h {conn_host} -p {conn_port} -U {admin_user} -O {owner} {name}\""
+        f"sudo -u {admin_user} bash -c "
+        f"\"psql -tc \\\"{check}\\\" | grep -q 1 "
+        f"|| createdb -O {owner} {name}\""
     )
 
 
@@ -98,4 +97,4 @@ def pg_isready_cmd(
     """Generate command to check PostgreSQL readiness."""
     if docker_exec:
         return f"docker exec {docker_exec} pg_isready -U {admin_user}"
-    return f"pg_isready -h {conn_host} -p {conn_port} -U {admin_user}"
+    return f"sudo -u {admin_user} pg_isready"
