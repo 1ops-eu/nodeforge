@@ -9,11 +9,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nodeforge.local.inventory_db import InventoryDB
     from nodeforge.runtime.executor import ApplyResult
+    from nodeforge_core.specs.backup_job_schema import BackupJobSpec
     from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
     from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
     from nodeforge_core.specs.file_template_schema import FileTemplateSpec
+    from nodeforge_core.specs.http_check_schema import HttpCheckSpec
+    from nodeforge_core.specs.postgres_ensure_schema import PostgresEnsureSpec
     from nodeforge_core.specs.service_schema import ServiceSpec
     from nodeforge_core.specs.stack_schema import StackSpec
+    from nodeforge_core.specs.systemd_timer_schema import SystemdTimerSpec
+    from nodeforge_core.specs.systemd_unit_schema import SystemdUnitSpec
 
 
 def _now_iso() -> str:
@@ -189,6 +194,192 @@ def record_compose_project_apply(
     db.record_run(
         id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
         kind="compose_project",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+    )
+
+
+def record_postgres_ensure_apply(
+    db: InventoryDB,
+    spec: PostgresEnsureSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After a postgres_ensure apply, record PG resource metadata + run."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+
+    db.upsert_service(
+        server_id=server_id,
+        service_type="postgres_ensure",
+        service_name=f"pg_ensure:{spec.meta.name}",
+        status="active" if "success" in status else "failed",
+        metadata_json=json.dumps(
+            {
+                "users": [u.name for u in spec.users],
+                "databases": [d.name for d in spec.databases],
+                "extensions": [e.name for e in spec.extensions],
+                "grants": len(spec.grants),
+            }
+        ),
+    )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="postgres_ensure",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+    )
+
+
+def record_backup_job_apply(
+    db: InventoryDB,
+    spec: BackupJobSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After a backup_job apply, record backup metadata + run in inventory."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+
+    db.upsert_service(
+        server_id=server_id,
+        service_type="backup_job",
+        service_name=f"backup:{spec.backup.name}",
+        status="active" if "success" in status else "failed",
+        metadata_json=json.dumps(
+            {
+                "name": spec.backup.name,
+                "source_type": spec.backup.source.type,
+                "schedule": spec.backup.schedule,
+                "retention_count": spec.backup.retention.count,
+            }
+        ),
+    )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="backup_job",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+    )
+
+
+def record_systemd_timer_apply(
+    db: InventoryDB,
+    spec: SystemdTimerSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After a systemd_timer apply, record timer metadata + run in inventory."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+
+    db.upsert_service(
+        server_id=server_id,
+        service_type="systemd_timer",
+        service_name=spec.timer.timer_name,
+        status="active" if "success" in status else "failed",
+        metadata_json=json.dumps(
+            {
+                "timer_name": spec.timer.timer_name,
+                "on_calendar": spec.timer.on_calendar,
+                "exec_start": spec.service.exec_start,
+            }
+        ),
+    )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="systemd_timer",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+    )
+
+
+def record_systemd_unit_apply(
+    db: InventoryDB,
+    spec: SystemdUnitSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After a systemd_unit apply, record unit metadata + run in inventory."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+
+    db.upsert_service(
+        server_id=server_id,
+        service_type="systemd_unit",
+        service_name=spec.unit.unit_name,
+        status="active" if "success" in status else "failed",
+        metadata_json=json.dumps(
+            {
+                "unit_name": spec.unit.unit_name,
+                "exec_start": spec.unit.exec_start,
+                "user": spec.unit.user,
+            }
+        ),
+    )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="systemd_unit",
+        spec_hash=apply_result.plan.spec_hash,
+        plan_hash=apply_result.plan.plan_hash,
+        status=status,
+        started_at=apply_result.started_at,
+        finished_at=apply_result.finished_at,
+        server_id=server_id,
+    )
+
+
+def record_http_check_apply(
+    db: InventoryDB,
+    spec: HttpCheckSpec,
+    apply_result: ApplyResult,
+) -> None:
+    """After an http_check apply, record check metadata + run in inventory."""
+    import json
+
+    server_id = spec.host.name
+    status = apply_result.status
+
+    db.upsert_service(
+        server_id=server_id,
+        service_type="http_check",
+        service_name=f"http_check:{spec.meta.name}",
+        status="active" if "success" in status else "failed",
+        metadata_json=json.dumps(
+            {
+                "url": spec.check.url,
+                "expected_status": spec.check.expected_status,
+            }
+        ),
+    )
+
+    db.record_run(
+        id=apply_result.started_at.replace(":", "-").replace("+", "Z"),
+        kind="http_check",
         spec_hash=apply_result.plan.spec_hash,
         plan_hash=apply_result.plan.plan_hash,
         status=status,

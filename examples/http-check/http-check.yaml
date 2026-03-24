@@ -1,0 +1,27 @@
+kind: http_check
+
+meta:
+  name: app-readiness
+  description: Wait for the application to become ready before proceeding
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: admin
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+check:
+  url: http://localhost:8080/health
+  expected_status: 200
+  retries: 10
+  interval: 5
+  timeout: 10
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db

@@ -8,6 +8,40 @@ The roadmap is organized around milestones. Each milestone corresponds to a mean
 
 ---
 
+## Product Identity
+
+**nodeforge** is a product by [1ops](https://1ops.eu). It is a **self-hosted infrastructure compiler** — an open-source tool that turns human-readable YAML specs into reviewable plans and deterministic execution on Linux servers.
+
+**nodeforge is Layer 1.** It makes VMs ready and usable: bootstrap, harden, install services, deploy containers, manage configuration, verify state. Once nodeforge is done, the server is a functioning platform.
+
+**nodeforge does not do Layer 2.** Application-level orchestration — configuring SaaS applications, importing workflows, seeding databases with business logic, wiring services together via API calls — belongs in a separate orchestration layer (e.g. n8n). The boundary: if the outcome depends only on OS/infrastructure state, it's nodeforge; if it depends on application runtime state, it's not.
+
+### The Three Binaries
+
+| Binary | Purpose | Runs on |
+|---|---|---|
+| `nodeforge` | Client CLI — validate, plan, docs, diff, apply, doctor, reconcile | Operator's machine (Linux, macOS, Windows) |
+| `nodeforge-agent` | Server-side executor — receives plans, applies locally, tracks state | Target server (Linux only) |
+| `nodeforge-agent` (companion mode, v0.8+) | Optional visual workflow as alternative to CLI | Operator's machine |
+
+The client is the **transporter** — it parses specs, generates plans, and delivers them to the agent. The agent is the **operator** — it executes plans locally, tracks runtime state, enforces policy, and supports extensible job types.
+
+### Agent Job Types
+
+The nodeforge-agent executes **jobs**. Each job type is a distinct unit of work:
+
+| Job type | Description | Available since |
+|---|---|---|
+| `apply` | Apply an infrastructure plan (the core nodeforge workflow) | v0.3 |
+| `doctor` | Compare desired state against actual state | v0.5 |
+| `reconcile` | Re-apply drifted resources | v0.5 |
+
+The agent's job type system is **extensible via addons**. External packages (including commercial variants) can register additional job types through the `nodeforge.addons` entry_points mechanism. The agent provides the trusted execution surface — discovery of running services, Docker management, SQL execution against local databases, HTTP health checks — and addons define new job types that leverage these primitives.
+
+This design means the agent is a **general-purpose on-machine operations agent**, not limited to infrastructure provisioning. However, the OSS agent ships only with infrastructure job types. The agent's built-in primitives (service discovery, Docker management, database connectivity, HTTP checks) are available to any addon, enabling higher-level workflows without rebuilding low-level capabilities.
+
+---
+
 ## Vision
 
 Nodeforge is a **self-hosted infrastructure compiler** that turns human-readable YAML specs into **reviewable plans** and **deterministic execution**.
@@ -230,48 +264,87 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 ## v0.6 -- Operational Primitives + Day-2 Operations
 
-**Goal:** Make single-host stacks operationally safe and support post-bootstrap lifecycle management.
+**Goal:** Make single-host stacks operationally safe, support post-bootstrap lifecycle management, and formalize the agent's service primitives so addons can build on them.
+
+**Design principle:** nodeforge manages infrastructure resources — deterministic, auditable, and reviewable in the plan. Application-level orchestration (API calls with response chaining, workflow imports, data seeding) belongs in the orchestration layer (e.g. n8n). The boundary: if the outcome depends only on OS/infrastructure state, it's nodeforge; if it depends on application runtime state, it's not.
 
 ### Operational Primitives
 
 | Item | Description |
 |---|---|
-| `kind: systemd_unit` | Deploy and manage host-native systemd services |
-| `kind: systemd_timer` | Deploy scheduled execution via systemd timers |
-| `kind: backup_job` | Define host-local backup operations with retention semantics |
-| Log rotation | Support log rotation policies |
+| `kind: systemd_unit` | Deploy and manage host-native systemd services | Done |
+| `kind: systemd_timer` | Deploy scheduled execution via systemd timers | Done |
+| `kind: backup_job` | Define host-local backup operations with retention semantics | Done |
+| Log rotation | Optional logrotate field on systemd_unit | Done |
 | Resource policies | Encourage CPU/RAM limits, restart policies, volume mounts |
 
-### Integration Primitives
+### Infrastructure Readiness
 
 | Item | Description |
 |---|---|
-| `kind: http_request` | Execute HTTP calls (GET/POST/PUT/DELETE) from the ops machine or via SSH exec on the target host. Supports JSON body, headers, file-based body, and response status assertions. Enables fully automated Phase 1 → Phase 2 transitions (e.g. import n8n workflows, verify service health, trigger webhooks). |
-| `kind: postgres_init` | Idempotent SQL execution against running PostgreSQL instances (container or host). Connects via `docker exec` or host/port, runs `CREATE USER/DATABASE IF NOT EXISTS` patterns, and reports success/failure as a nodeforge health check. Replaces the fragile `docker-entrypoint-initdb.d` bind-mount pattern that only fires on first boot. |
+| `kind: http_check` | GET-only HTTP readiness probe with configurable retry, backoff, and timeout. Usable as a dependency gate in stacks. | Done |
+| `kind: postgres_ensure` | Ensure PostgreSQL resources exist (users, databases, extensions, grants) on running instances. Structured declarations, no arbitrary SQL. | Done |
+
+### Agent Service Primitives
+
+The agent gains formalized **service primitives** — low-level capabilities for interacting with running services on the target machine. These primitives are used by built-in spec kinds (e.g. `postgres_ensure` uses the Postgres primitive) and are also available to external addons via the registry.
+
+| Primitive | Capability | Used by |
+|---|---|---|
+| **Service discovery** | Enumerate running services: Docker containers (`docker ps`), host services (`systemctl`), listening ports. Produces a machine state snapshot. | `kind: stack` (dependency validation), addons |
+| **Postgres executor** | Run structured SQL against a target PostgreSQL instance (host-installed or Docker container). Handles instance resolution when multiple Postgres instances exist. | `kind: postgres_ensure`, addons |
+| **HTTP checker** | Make GET requests with retry, backoff, and timeout against local or container-exposed endpoints. | `kind: http_check`, addons |
+| **Docker manager** | Container lifecycle (inspect, run, stop, rm), image pull, network and volume operations. Already exists in `runtime/steps/container.py` — formalized as a reusable primitive. | `kind: service` (containers), `kind: compose_project`, addons |
+
+These primitives are **general-purpose building blocks**. In the OSS agent, they power built-in spec kinds. The addon system exposes them so external packages can define higher-level job types that leverage service discovery, database connectivity, and container management without reimplementing them.
 
 ### Day-2 Operations
 
 | Item | Description |
 |---|---|
-| `nodeforge rotate-secret <host> <name>` | Rotate a managed secret, re-render dependent config, restart dependent services |
-| Feature toggles | Enable/disable modules through desired state changes |
-| Config updates | Update domains, proxy rules, integration tokens without full re-provision |
+| `nodeforge rotate-secret <spec> --secret <name>` | Rotate a managed secret (password_env), re-normalize, re-apply | Done |
 
 **New capabilities:**
 - Timer-based recurring operations (reconcile, cleanup, scheduled jobs)
 - PostgreSQL dump backups with timestamped naming and retention
 - systemd daemon-reload, enable, start lifecycle
 - Secret rotation as a first-class operation
-- HTTP request execution with response assertions for API-driven deployment automation
-- Idempotent PostgreSQL database/user initialization against running containers
+- GET-only HTTP readiness gates for stack dependency ordering
+- Declarative PostgreSQL resource ensuring (users, databases, extensions) against running containers
+- Formalized service primitives (service discovery, Postgres executor, HTTP checker, Docker manager) available to addons
 
 **Acceptance criteria:**
-- Timers can trigger local jobs or HTTP hooks
+- Timers can trigger local jobs
 - Backup jobs can be installed and run predictably
 - Rerun is idempotent — unchanged units are not recreated
 - Secret rotation works end-to-end: generate → store → re-render → restart → verify
-- `kind: http_request` can POST a JSON file to an API endpoint and assert on status code
-- `kind: postgres_init` can create users and databases idempotently on a running Postgres container
+- `kind: http_check` can gate stack progression on a GET returning 200
+- `kind: postgres_ensure` can ensure users, databases, and extensions exist idempotently on a running Postgres container — every action reviewable in the plan
+- Service primitives are accessible via the addon registry and documented for external use
+
+---
+
+## v0.6.1 -- WireGuard Server Key Auto-Generation
+
+**Goal:** Eliminate the manual `wg genkey` step by auto-generating the server private key when `private_key_file` is omitted.
+
+| Item | Description |
+|---|---|
+| Auto-generate server keypair | When `wireguard.enabled: true` and `private_key_file` is omitted, generate the server Curve25519 private key via PyNaCl (same as client key) — no subprocess, fully cross-platform |
+| Write-once server key | Auto-generated `private.key` in local state uses write-once semantics (same as `client.key`) — prevents accidental key rotation on re-runs |
+| Validator update | `private_key_file` is no longer required when `wireguard.enabled: true`; omitting it triggers auto-generation |
+| Backward compatible | Existing specs with explicit `private_key_file` behave identically to before |
+
+**New capabilities:**
+- Zero-step WireGuard setup: `wireguard.enabled: true` is all that's needed — both server and client keypairs are auto-managed
+- Fully cross-platform key generation via PyNaCl (no `wg genkey` subprocess required)
+- Stable server identity across re-runs via write-once local state
+
+**Acceptance criteria:**
+- `nodeforge apply` with `wireguard.enabled: true` and no `private_key_file` auto-generates the server key, deploys WireGuard, and produces a working `client.conf`
+- Re-running reuses the same server key from local state
+- Existing specs with explicit `private_key_file` are unaffected
+- Works on Linux, macOS, and Windows (PyNaCl only, no shell subprocess)
 
 ---
 
@@ -433,3 +506,7 @@ The target of every spec is always a **remote Linux server (Debian/Ubuntu)**. Th
 > **Policy engine is open source** -- auditable by anyone, activated by configuration.
 
 > **Operational safety over hidden magic** -- health checks, resource limits, and explicit failure handling.
+
+> **Agent is the trusted execution surface** -- one agent per server, extensible via addons. Infrastructure provisioning is the core job type; the agent's service primitives are available to addons for higher-level workflows.
+
+> **nodeforge is Layer 1** -- it makes VMs ready and usable. Application-level configuration (Layer 2) is out of scope for nodeforge OSS but enabled by the agent's extensible job type system.

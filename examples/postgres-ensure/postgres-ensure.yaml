@@ -1,0 +1,43 @@
+kind: postgres_ensure
+
+meta:
+  name: app-database-setup
+  description: Ensure PostgreSQL users, databases, and extensions for the application
+
+host:
+  name: prod-node-1
+  address: 203.0.113.10
+  os_family: debian
+
+login:
+  user: admin
+  private_key: ~/.ssh/id_ed25519
+  port: 2222
+
+connection:
+  docker_exec: postgres-container
+  admin_user: postgres
+
+users:
+  - name: app_user
+    password_env: APP_DB_PASSWORD
+
+databases:
+  - name: app_production
+    owner: app_user
+
+extensions:
+  - name: uuid-ossp
+    database: app_production
+  - name: pg_trgm
+    database: app_production
+
+grants:
+  - privilege: ALL
+    on_database: app_production
+    to_user: app_user
+
+local:
+  inventory:
+    enabled: true
+    db_path: ~/.nodeforge/inventory.db

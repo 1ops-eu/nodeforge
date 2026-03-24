@@ -66,6 +66,9 @@ nodeforge/
       nginx.py          Step builders for Nginx service
       postgres.py       Step builders for PostgreSQL service
       wireguard.py      Step builders for WireGuard VPN
+      systemd.py        Step builders for systemd_unit and systemd_timer kinds
+      backup.py         Step builders for backup_job kind (script generator)
+      postgres_ensure.py Step builders for postgres_ensure kind (SQL generators)
   local/
     __init__.py
     ddl/                SQLite DDL scripts for inventory schema
@@ -151,6 +154,7 @@ Mode selection: `--mode auto` (default) tries agent first, falls back to client.
 | `inspect run <id>` | Inspect a past execution run |
 | `inventory list` | List all servers in local inventory |
 | `inventory show <id>` | Show server details |
+| `rotate-secret <spec>` | Rotate a secret (password_env) and re-apply |
 
 ---
 
@@ -167,7 +171,7 @@ The updater looks for assets matching patterns like `nodeforge-linux-amd64` (cli
 
 ## Built-in Addon Registration
 
-`_builtins.py` registers all built-in spec kinds (bootstrap, service, file_template, compose_project, stack) via the `nodeforge.addons` entry_points group. This happens automatically when the package is imported — no explicit registration calls needed from user code.
+`_builtins.py` registers all built-in spec kinds (bootstrap, service, file_template, compose_project, stack, http_check, systemd_unit, systemd_timer, backup_job, postgres_ensure) via the `nodeforge.addons` entry_points group. This happens automatically when the package is imported — no explicit registration calls needed from user code.
 
 ---
 

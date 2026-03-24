@@ -296,6 +296,26 @@ class Executor:
                 output=check.message,
                 error="" if check.passed else check.message,
             )
+        if step.command and step.command.startswith("http_check:"):
+            # The URL may contain colons (e.g. http://host:port/), so parse
+            # from the right: the trailing 4 fields are always integers.
+            rest = step.command[len("http_check:"):]
+            parts = rest.rsplit(":", 4)
+            if len(parts) == 5:
+                url, status_str, retries_str, interval_str, timeout_str = parts
+                # Translate to a bash retry loop executed via SSH on the target.
+                curl_cmd = (
+                    f"for i in $(seq 1 {retries_str}); do "
+                    f"code=$(curl -s -o /dev/null -w '%{{http_code}}' -m {timeout_str} '{url}' 2>/dev/null); "
+                    f'[ "$code" = "{status_str}" ] && '
+                    f'echo "HTTP {url}: $code (attempt $i/{retries_str})" && exit 0; '
+                    f"[ $i -lt {retries_str} ] && sleep {interval_str}; "
+                    f"done; "
+                    f'echo "HTTP check failed after {retries_str} attempts: last code=$code"; exit 1'
+                )
+                step = step.model_copy(update={"command": curl_cmd})
+            return self._execute_ssh_command(step)
+
         # Default verify: run the command
         return self._execute_ssh_command(step)
 

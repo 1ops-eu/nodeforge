@@ -14,14 +14,30 @@ from datetime import UTC, datetime
 
 from nodeforge.compiler.normalizer import NormalizedContext
 from nodeforge_core.plan.models import Plan, Step, StepKind, StepScope
+from nodeforge_core.specs.backup_job_schema import BackupJobSpec
 from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
 from nodeforge_core.specs.compose_project_schema import ComposeProjectSpec
 from nodeforge_core.specs.file_template_schema import FileTemplateSpec
+from nodeforge_core.specs.http_check_schema import HttpCheckSpec
+from nodeforge_core.specs.postgres_ensure_schema import PostgresEnsureSpec
 from nodeforge_core.specs.service_schema import ServiceSpec
 from nodeforge_core.specs.stack_schema import StackSpec
+from nodeforge_core.specs.systemd_timer_schema import SystemdTimerSpec
+from nodeforge_core.specs.systemd_unit_schema import SystemdUnitSpec
 from nodeforge_core.utils.hashing import sha256_string
 
-AnySpec = BootstrapSpec | ServiceSpec | FileTemplateSpec | ComposeProjectSpec | StackSpec
+AnySpec = (
+    BootstrapSpec
+    | ServiceSpec
+    | FileTemplateSpec
+    | ComposeProjectSpec
+    | StackSpec
+    | HttpCheckSpec
+    | SystemdUnitSpec
+    | SystemdTimerSpec
+    | BackupJobSpec
+    | PostgresEnsureSpec
+)
 
 
 def _encode_check_command(check, spec) -> str:
@@ -1659,6 +1675,811 @@ def _plan_stack(spec: StackSpec, ctx: NormalizedContext) -> list[Step]:
                 StepKind.LOCAL_DB_WRITE,
                 command="init_inventory",
                 tags=["local", "inventory", "stack"],
+            )
+        )
+
+    return steps
+
+
+def _plan_postgres_ensure(spec: PostgresEnsureSpec, ctx: NormalizedContext) -> list[Step]:
+    """Generate steps for ensuring PostgreSQL resources exist."""
+    from nodeforge.runtime.steps.postgres_ensure import (
+        ensure_database_cmd,
+        ensure_extension_cmd,
+        ensure_grant_cmd,
+        ensure_user_cmd,
+        pg_isready_cmd,
+    )
+
+    steps: list[Step] = []
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    conn = spec.connection
+    conn_kwargs = {
+        "conn_host": conn.host,
+        "conn_port": conn.port,
+        "admin_user": conn.admin_user,
+        "docker_exec": conn.docker_exec,
+    }
+
+    # Preflight
+    steps.append(
+        _s(
+            "preflight_connect_admin",
+            f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
+            R,
+            StepKind.SSH_COMMAND,
+            command="echo 'preflight ok'",
+            tags=["preflight"],
+        )
+    )
+
+    # Gate: verify PostgreSQL is ready
+    steps.append(
+        _s(
+            "pg_isready_gate",
+            "Verify PostgreSQL is accepting connections",
+            R,
+            StepKind.GATE,
+            command=pg_isready_cmd(**conn_kwargs),
+            gate=True,
+            sudo=True,
+            tags=["postgres_ensure", "always"],
+        )
+    )
+
+    # Ensure users
+    for u in spec.users:
+        password = u.password_env if u.password_env else None
+        steps.append(
+            _s(
+                f"ensure_user_{u.name}",
+                f"Ensure PostgreSQL user '{u.name}' exists",
+                R,
+                StepKind.SSH_COMMAND,
+                command=ensure_user_cmd(u.name, password, **conn_kwargs),
+                sudo=True,
+                tags=["postgres_ensure", "user"],
+            )
+        )
+
+    # Ensure databases
+    for d in spec.databases:
+        steps.append(
+            _s(
+                f"ensure_database_{d.name}",
+                f"Ensure PostgreSQL database '{d.name}' exists with owner '{d.owner}'",
+                R,
+                StepKind.SSH_COMMAND,
+                command=ensure_database_cmd(d.name, d.owner, **conn_kwargs),
+                sudo=True,
+                tags=["postgres_ensure", "database"],
+            )
+        )
+
+    # Ensure extensions
+    for e in spec.extensions:
+        steps.append(
+            _s(
+                f"ensure_extension_{e.name}_on_{e.database}",
+                f"Ensure extension '{e.name}' on database '{e.database}'",
+                R,
+                StepKind.SSH_COMMAND,
+                command=ensure_extension_cmd(e.name, e.database, **conn_kwargs),
+                sudo=True,
+                tags=["postgres_ensure", "extension"],
+            )
+        )
+
+    # Ensure grants
+    for g in spec.grants:
+        steps.append(
+            _s(
+                f"grant_{g.privilege.lower()}_{g.on_database}_to_{g.to_user}",
+                f"Grant {g.privilege} on {g.on_database} to {g.to_user}",
+                R,
+                StepKind.SSH_COMMAND,
+                command=ensure_grant_cmd(
+                    g.privilege, g.on_database, g.to_user, **conn_kwargs
+                ),
+                sudo=True,
+                tags=["postgres_ensure", "grant"],
+            )
+        )
+
+    # Postflight checks
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"postflight_{check.type}",
+                f"Postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "update_postgres_ensure_metadata",
+                f"Update postgres_ensure metadata in inventory for {spec.host.name}",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="upsert_services",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "record_postgres_ensure_run",
+                "Record postgres_ensure run metadata in inventory",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="record_run",
+                tags=["local", "inventory"],
+            )
+        )
+
+    return steps
+
+
+def _plan_backup_job(spec: BackupJobSpec, ctx: NormalizedContext) -> list[Step]:
+    """Generate steps for deploying a backup job with systemd timer."""
+    from nodeforge.runtime.steps.backup import render_backup_script
+    from nodeforge.runtime.steps.systemd import (
+        daemon_reload,
+        enable_now_unit,
+        is_active,
+        render_service_unit,
+        render_timer_unit,
+    )
+
+    steps: list[Step] = []
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    b = spec.backup
+    src = b.source
+    script_name = f"nodeforge-backup-{b.name}"
+    script_path = f"/usr/local/bin/{script_name}.sh"
+
+    # Preflight
+    steps.append(
+        _s(
+            "preflight_connect_admin",
+            f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
+            R,
+            StepKind.SSH_COMMAND,
+            command="echo 'preflight ok'",
+            tags=["preflight"],
+        )
+    )
+
+    # Create backup destination directory
+    steps.append(
+        _s(
+            f"mkdir_backup_dest_{b.name}",
+            f"Create backup destination directory {b.destination.path}",
+            R,
+            StepKind.SSH_COMMAND,
+            command=f"mkdir -p {b.destination.path}",
+            sudo=True,
+            tags=["backup_job", "mkdir"],
+        )
+    )
+
+    # Write backup script
+    script_content = render_backup_script(
+        name=b.name,
+        source_type=src.type,
+        destination_path=b.destination.path,
+        retention_count=b.retention.count,
+        database=src.database,
+        pg_host=src.host,
+        pg_port=src.port,
+        pg_user=src.user,
+        docker_exec=src.docker_exec,
+        source_path=src.path,
+    )
+    steps.append(
+        _s(
+            f"write_backup_script_{b.name}",
+            f"Write backup script {script_path}",
+            R,
+            StepKind.SSH_UPLOAD,
+            file_content=script_content,
+            target_path=script_path,
+            sudo=True,
+            tags=["backup_job", "upload"],
+        )
+    )
+
+    # Make script executable
+    steps.append(
+        _s(
+            f"chmod_backup_script_{b.name}",
+            "Make backup script executable",
+            R,
+            StepKind.SSH_COMMAND,
+            command=f"chmod 0755 {script_path}",
+            sudo=True,
+            tags=["backup_job"],
+        )
+    )
+
+    # Write systemd service (oneshot)
+    service_content = render_service_unit(
+        description=f"Backup job: {b.name}",
+        exec_start=script_path,
+        service_type="oneshot",
+        restart="no",
+        restart_sec=0,
+        wanted_by="",
+    )
+    service_file = f"/etc/systemd/system/{script_name}.service"
+    steps.append(
+        _s(
+            f"write_backup_service_{b.name}",
+            f"Write backup service file {service_file}",
+            R,
+            StepKind.SSH_UPLOAD,
+            file_content=service_content,
+            target_path=service_file,
+            sudo=True,
+            tags=["backup_job", "upload"],
+        )
+    )
+
+    # Write systemd timer
+    timer_content = render_timer_unit(
+        description=f"Backup timer: {b.name}",
+        on_calendar=b.schedule,
+        persistent=True,
+    )
+    timer_file = f"/etc/systemd/system/{script_name}.timer"
+    steps.append(
+        _s(
+            f"write_backup_timer_{b.name}",
+            f"Write backup timer file {timer_file}",
+            R,
+            StepKind.SSH_UPLOAD,
+            file_content=timer_content,
+            target_path=timer_file,
+            sudo=True,
+            tags=["backup_job", "upload"],
+        )
+    )
+
+    # Daemon reload
+    steps.append(
+        _s(
+            "systemd_daemon_reload",
+            "Reload systemd daemon",
+            R,
+            StepKind.SSH_COMMAND,
+            command=daemon_reload(),
+            sudo=True,
+            tags=["backup_job", "always"],
+        )
+    )
+
+    # Enable and start timer
+    steps.append(
+        _s(
+            f"enable_start_backup_timer_{b.name}",
+            f"Enable and start {script_name}.timer",
+            R,
+            StepKind.SSH_COMMAND,
+            command=enable_now_unit(f"{script_name}.timer"),
+            sudo=True,
+            tags=["backup_job", "always"],
+        )
+    )
+
+    # Verify timer active
+    steps.append(
+        _s(
+            f"verify_backup_timer_{b.name}_active",
+            f"Verify {script_name}.timer is active",
+            V,
+            StepKind.VERIFY,
+            command=is_active(f"{script_name}.timer"),
+            tags=["backup_job", "verify"],
+        )
+    )
+
+    # Postflight checks
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"postflight_{check.type}",
+                f"Postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "update_backup_job_metadata",
+                f"Update backup_job metadata in inventory for {spec.host.name}",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="upsert_services",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "record_backup_job_run",
+                "Record backup_job run metadata in inventory",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="record_run",
+                tags=["local", "inventory"],
+            )
+        )
+
+    return steps
+
+
+def _plan_systemd_unit(spec: SystemdUnitSpec, ctx: NormalizedContext) -> list[Step]:
+    """Generate steps for deploying a systemd service unit."""
+    from nodeforge.runtime.steps.systemd import (
+        daemon_reload,
+        enable_unit,
+        is_active,
+        render_logrotate_config,
+        render_service_unit,
+        restart_unit,
+    )
+
+    steps: list[Step] = []
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    u = spec.unit
+    unit_file = f"/etc/systemd/system/{u.unit_name}.service"
+
+    # Preflight
+    steps.append(
+        _s(
+            "preflight_connect_admin",
+            f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
+            R,
+            StepKind.SSH_COMMAND,
+            command="echo 'preflight ok'",
+            tags=["preflight"],
+        )
+    )
+
+    # Write unit file
+    unit_content = render_service_unit(
+        description=u.description or spec.meta.description or u.unit_name,
+        exec_start=u.exec_start,
+        exec_stop=u.exec_stop,
+        working_directory=u.working_directory,
+        user=u.user,
+        group=u.group,
+        restart=u.restart,
+        restart_sec=u.restart_sec,
+        after=u.after,
+        environment=u.environment,
+        environment_file=u.environment_file,
+        service_type=u.type,
+        wanted_by=u.wanted_by,
+    )
+
+    steps.append(
+        _s(
+            f"write_unit_{u.unit_name}",
+            f"Write systemd unit file {unit_file}",
+            R,
+            StepKind.SSH_UPLOAD,
+            file_content=unit_content,
+            target_path=unit_file,
+            sudo=True,
+            tags=["systemd_unit", "upload"],
+        )
+    )
+
+    # Daemon reload
+    steps.append(
+        _s(
+            "systemd_daemon_reload",
+            "Reload systemd daemon",
+            R,
+            StepKind.SSH_COMMAND,
+            command=daemon_reload(),
+            sudo=True,
+            tags=["systemd_unit", "always"],
+        )
+    )
+
+    # Enable
+    steps.append(
+        _s(
+            f"enable_{u.unit_name}",
+            f"Enable {u.unit_name}.service",
+            R,
+            StepKind.SSH_COMMAND,
+            command=enable_unit(u.unit_name),
+            sudo=True,
+            tags=["systemd_unit"],
+        )
+    )
+
+    # Restart
+    steps.append(
+        _s(
+            f"restart_{u.unit_name}",
+            f"Restart {u.unit_name}.service",
+            R,
+            StepKind.SSH_COMMAND,
+            command=restart_unit(u.unit_name),
+            sudo=True,
+            tags=["systemd_unit", "always"],
+        )
+    )
+
+    # Verify active
+    steps.append(
+        _s(
+            f"verify_{u.unit_name}_active",
+            f"Verify {u.unit_name}.service is active",
+            V,
+            StepKind.VERIFY,
+            command=is_active(u.unit_name),
+            tags=["systemd_unit", "verify"],
+        )
+    )
+
+    # Optional logrotate
+    lr = spec.logrotate
+    if lr and lr.enabled:
+        logrotate_content = render_logrotate_config(
+            name=u.unit_name,
+            path=lr.path,
+            rotate=lr.rotate,
+            frequency=lr.frequency,
+            compress=lr.compress,
+            max_size=lr.max_size,
+        )
+        steps.append(
+            _s(
+                f"write_logrotate_{u.unit_name}",
+                f"Write logrotate config for {u.unit_name}",
+                R,
+                StepKind.SSH_UPLOAD,
+                file_content=logrotate_content,
+                target_path=f"/etc/logrotate.d/nodeforge-{u.unit_name}",
+                sudo=True,
+                tags=["systemd_unit", "logrotate"],
+            )
+        )
+
+    # Postflight checks
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"postflight_{check.type}",
+                f"Postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "update_systemd_unit_metadata",
+                f"Update systemd_unit metadata in inventory for {spec.host.name}",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="upsert_services",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "record_systemd_unit_run",
+                "Record systemd_unit run metadata in inventory",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="record_run",
+                tags=["local", "inventory"],
+            )
+        )
+
+    return steps
+
+
+def _plan_systemd_timer(spec: SystemdTimerSpec, ctx: NormalizedContext) -> list[Step]:
+    """Generate steps for deploying a systemd timer with companion oneshot service."""
+    from nodeforge.runtime.steps.systemd import (
+        daemon_reload,
+        enable_now_unit,
+        is_active,
+        render_service_unit,
+        render_timer_unit,
+    )
+
+    steps: list[Step] = []
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    t = spec.timer
+    s = spec.service
+
+    # Preflight
+    steps.append(
+        _s(
+            "preflight_connect_admin",
+            f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
+            R,
+            StepKind.SSH_COMMAND,
+            command="echo 'preflight ok'",
+            tags=["preflight"],
+        )
+    )
+
+    # Write companion .service (Type=oneshot)
+    service_content = render_service_unit(
+        description=t.description or f"Service for timer {t.timer_name}",
+        exec_start=s.exec_start,
+        working_directory=s.working_directory,
+        user=s.user,
+        group=s.group,
+        restart="no",
+        restart_sec=0,
+        environment=s.environment,
+        service_type="oneshot",
+        wanted_by="",
+    )
+    service_file = f"/etc/systemd/system/{t.timer_name}.service"
+    steps.append(
+        _s(
+            f"write_service_{t.timer_name}",
+            f"Write companion service file {service_file}",
+            R,
+            StepKind.SSH_UPLOAD,
+            file_content=service_content,
+            target_path=service_file,
+            sudo=True,
+            tags=["systemd_timer", "upload"],
+        )
+    )
+
+    # Write .timer
+    timer_content = render_timer_unit(
+        description=t.description or f"Timer for {t.timer_name}",
+        on_calendar=t.on_calendar,
+        persistent=t.persistent,
+        accuracy_sec=t.accuracy_sec,
+    )
+    timer_file = f"/etc/systemd/system/{t.timer_name}.timer"
+    steps.append(
+        _s(
+            f"write_timer_{t.timer_name}",
+            f"Write timer unit file {timer_file}",
+            R,
+            StepKind.SSH_UPLOAD,
+            file_content=timer_content,
+            target_path=timer_file,
+            sudo=True,
+            tags=["systemd_timer", "upload"],
+        )
+    )
+
+    # Daemon reload
+    steps.append(
+        _s(
+            "systemd_daemon_reload",
+            "Reload systemd daemon",
+            R,
+            StepKind.SSH_COMMAND,
+            command=daemon_reload(),
+            sudo=True,
+            tags=["systemd_timer", "always"],
+        )
+    )
+
+    # Enable and start timer
+    steps.append(
+        _s(
+            f"enable_start_{t.timer_name}_timer",
+            f"Enable and start {t.timer_name}.timer",
+            R,
+            StepKind.SSH_COMMAND,
+            command=enable_now_unit(f"{t.timer_name}.timer"),
+            sudo=True,
+            tags=["systemd_timer", "always"],
+        )
+    )
+
+    # Verify timer active
+    steps.append(
+        _s(
+            f"verify_{t.timer_name}_timer_active",
+            f"Verify {t.timer_name}.timer is active",
+            V,
+            StepKind.VERIFY,
+            command=is_active(f"{t.timer_name}.timer"),
+            tags=["systemd_timer", "verify"],
+        )
+    )
+
+    # Postflight checks
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"postflight_{check.type}",
+                f"Postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "update_systemd_timer_metadata",
+                f"Update systemd_timer metadata in inventory for {spec.host.name}",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="upsert_services",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "record_systemd_timer_run",
+                "Record systemd_timer run metadata in inventory",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="record_run",
+                tags=["local", "inventory"],
+            )
+        )
+
+    return steps
+
+
+def _plan_http_check(spec: HttpCheckSpec, ctx: NormalizedContext) -> list[Step]:
+    """Generate steps for a GET-only HTTP readiness probe."""
+    steps: list[Step] = []
+    R = StepScope.REMOTE
+    L = StepScope.LOCAL
+    V = StepScope.VERIFY
+
+    c = spec.check
+
+    # Preflight
+    steps.append(
+        _s(
+            "preflight_connect_admin",
+            f"Verify admin SSH access to {spec.host.address}:{spec.login.port}",
+            R,
+            StepKind.SSH_COMMAND,
+            command="echo 'preflight ok'",
+            tags=["preflight"],
+        )
+    )
+
+    # HTTP check gate — executed by agent with retry loop
+    steps.append(
+        _s(
+            "http_check_gate",
+            f"HTTP readiness check: GET {c.url} expecting {c.expected_status}",
+            R,
+            StepKind.GATE,
+            command=f"http_check:{c.url}:{c.expected_status}:{c.retries}:{c.interval}:{c.timeout}",
+            gate=True,
+            tags=["http_check", "always"],
+        )
+    )
+
+    # Postflight checks
+    for check in spec.checks:
+        steps.append(
+            _s(
+                f"postflight_{check.type}",
+                f"Postflight check: {check.type}",
+                V,
+                StepKind.VERIFY,
+                command=_encode_check_command(check, spec),
+                tags=["postflight", check.type],
+            )
+        )
+
+    # Local inventory
+    if spec.local.inventory.enabled:
+        steps.append(
+            _s(
+                "open_or_init_local_inventory",
+                "Open or initialize local inventory database",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="init_inventory",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "update_http_check_metadata",
+                f"Update http_check metadata in inventory for {spec.host.name}",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="upsert_services",
+                tags=["local", "inventory"],
+            )
+        )
+        steps.append(
+            _s(
+                "record_http_check_run",
+                "Record http_check run metadata in inventory",
+                L,
+                StepKind.LOCAL_DB_WRITE,
+                command="record_run",
+                tags=["local", "inventory"],
             )
         )
 
