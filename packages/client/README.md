@@ -75,7 +75,9 @@ nodeforge/
     inventory.py        High-level inventory operations
     inventory_db.py     Low-level SQLite inventory access (with versionize historization)
     keys.py             SSH key generation (ed25519)
-    ssh_config.py       ~/.ssh/conf.d/ fragment management
+    remove.py           Host removal orchestration (tunnel + WG state + SSH config + inventory)
+    ssh_config.py       ~/.ssh/conf.d/ fragment management (with tunnel_comment support)
+    tunnel.py           WireGuard tunnel management — up, down, status via wg-quick
     wireguard_store.py  WireGuard key material storage (~/.wg/nodeforge/)
   checks/
     __init__.py
@@ -148,6 +150,10 @@ Mode selection: `--mode auto` (default) tries agent first, falls back to client.
 | `apply <spec>` | Execute the plan (supports `--dry-run`, `--mode`) |
 | `doctor <spec>` | Detect drift between desired and actual state |
 | `reconcile <spec>` | Re-apply only drifted resources |
+| `tunnel up <host>` | Bring up a WireGuard tunnel for a host |
+| `tunnel down <host>` | Tear down a WireGuard tunnel for a host |
+| `tunnel status` | List all hosts with WireGuard tunnel status |
+| `remove <host>` | Remove all local state for a decommissioned host |
 | `version` | Print client version (add `--host` for agent version) |
 | `update` | Self-update client from GitHub Releases |
 | `agent-update <host>` | Update agent binary on a remote host |
@@ -166,6 +172,50 @@ Mode selection: `--mode auto` (default) tries agent first, falls back to client.
 - **`nodeforge agent-update <host>`** — downloads the latest agent binary, uploads it to the remote server, replaces the running agent
 
 The updater looks for assets matching patterns like `nodeforge-linux-amd64` (client) and `agent-linux-amd64` (agent) in the latest GitHub Release.
+
+---
+
+## WireGuard Tunnel Lifecycle (v0.6.3)
+
+When `wireguard.enabled: true`, the bootstrap planner inserts a **tunnel safety gate** between `allow_ssh_on_wireguard` and `delete_open_ssh_rule`:
+
+1. `allow_ssh_on_wireguard` — adds UFW rule allowing SSH on WireGuard interface
+2. `verify_ssh_over_wireguard_tunnel` — **GATE**: brings up the local WireGuard tunnel, verifies SSH through the VPN IP, tears down the tunnel
+3. `delete_open_ssh_rule` — removes the open-to-all SSH rule (only if gate passed)
+
+If the gate fails, the open SSH rule is **not** deleted — the server remains accessible via its public IP.
+
+### SSH Config Integration
+
+When WireGuard is enabled, the SSH config fragment uses the server's **VPN IP** as `HostName` instead of the public address. A comment is added noting the tunnel dependency:
+
+```
+# nodeforge managed: myhost
+# Requires: nodeforge tunnel up myhost
+Host myhost
+  HostName 10.10.0.1
+  User deploy
+  Port 2222
+```
+
+### Tunnel Management (`tunnel.py`)
+
+`nodeforge tunnel` subcommands manage client-side WireGuard tunnels via `wg-quick`:
+
+- **`tunnel up <host>`** — creates a temporary config from `~/.wg/nodeforge/{host}/client.conf`, invokes `sudo wg-quick up`
+- **`tunnel down <host>`** — invokes `sudo wg-quick down {interface}`
+- **`tunnel status`** — scans `~/.wg/nodeforge/*/metadata.json`, cross-references with `wg show interfaces`
+
+Interface names use `wg-{host}` (truncated to 15 chars — Linux interface name limit).
+
+### Host Removal (`remove.py`)
+
+`nodeforge remove <host>` tears down all local state in four steps:
+
+1. Tear down active WireGuard tunnel (if running)
+2. Remove WireGuard local state (`~/.wg/nodeforge/{host}/`)
+3. Remove SSH conf.d entry (`~/.ssh/conf.d/nodeforge/{host}.conf`)
+4. Mark inventory record as decommissioned
 
 ---
 

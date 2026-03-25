@@ -264,6 +264,81 @@ class Executor:
         """
         from nodeforge.checks.ssh import check_ssh_reachable
 
+        # Tunnel SSH gate: bring up the WireGuard tunnel locally, verify SSH
+        # through the VPN IP, and tear down the tunnel on failure.
+        if step.command and step.command.startswith("tunnel_ssh_gate:"):
+            from nodeforge.local.tunnel import tunnel_down, tunnel_up
+            from nodeforge.local.wireguard_store import save_wireguard_state
+
+            _, host_name, vpn_ip, port_str, user = step.command.split(":", 4)
+
+            # Save WireGuard state first so tunnel_up can find client.conf
+            if self._spec and self._ctx:
+                spec = self._spec
+                ctx = self._ctx
+                save_wireguard_state(
+                    host_name=spec.host.name,
+                    spec_name=spec.meta.name,
+                    private_key=ctx.wireguard_private_key,
+                    public_key=ctx.wireguard_public_key,
+                    wg_conf_content=ctx.wireguard_conf_content,
+                    client_private_key=ctx.wg_client_private_key,
+                    client_public_key=ctx.wg_client_public_key,
+                    client_conf_content=ctx.wg_client_conf_content,
+                    interface=spec.wireguard.interface,
+                    address=spec.wireguard.address,
+                    endpoint=spec.wireguard.endpoint,
+                    peer_address=spec.wireguard.peer_address,
+                    persistent_keepalive=spec.wireguard.persistent_keepalive,
+                )
+
+            # Bring up the tunnel
+            up_ok, up_msg = tunnel_up(host_name)
+            if not up_ok:
+                return StepResult(
+                    step_index=step.index,
+                    step_id=step.id,
+                    scope=step.scope.value,
+                    status="failed",
+                    error=f"Failed to bring up WireGuard tunnel: {up_msg}",
+                )
+
+            # Verify SSH through the tunnel
+            key_path = None
+            if self._ctx and self._ctx.admin_key_path:
+                key_path = str(self._ctx.admin_key_path)
+            check = check_ssh_reachable(
+                vpn_ip, int(port_str), user, key_path=key_path, retries=5, retry_delay=2.0
+            )
+
+            if check.passed:
+                # Tear down the tunnel after verification — the user can bring
+                # it up again with `nodeforge tunnel up <host>`
+                tunnel_down(host_name)
+                return StepResult(
+                    step_index=step.index,
+                    step_id=step.id,
+                    scope=step.scope.value,
+                    status="success",
+                    output=(
+                        f"SSH through WireGuard tunnel verified: " f"{user}@{vpn_ip}:{port_str}"
+                    ),
+                )
+            else:
+                # Gate failed — tear down the broken tunnel
+                tunnel_down(host_name)
+                return StepResult(
+                    step_index=step.index,
+                    step_id=step.id,
+                    scope=step.scope.value,
+                    status="failed",
+                    error=(
+                        f"SSH through WireGuard tunnel failed: {check.message}. "
+                        f"The open SSH rule will NOT be deleted — server remains "
+                        f"accessible via public IP."
+                    ),
+                )
+
         if step.command and step.command.startswith("ssh_check:"):
             _, host, port_str, user = step.command.split(":", 3)
             # When credential fallback is active, override the compiled port
@@ -565,12 +640,25 @@ class Executor:
 
         if step.id == "write_local_ssh_conf_d" and self._spec and self._ctx:
             spec = self._spec
+
+            # When WireGuard is enabled, SSH is locked to the VPN interface.
+            # Use the server's WireGuard VPN IP instead of the public address
+            # so that `ssh {host}` connects through the tunnel.
+            address = spec.host.address
+            tunnel_comment = None
+            if hasattr(spec, "wireguard") and spec.wireguard.enabled and spec.wireguard.address:
+                import ipaddress as _ip_ssh
+
+                address = str(_ip_ssh.ip_interface(spec.wireguard.address).ip)
+                tunnel_comment = f"# Requires: nodeforge tunnel up {spec.host.name}"
+
             conf_file = write_ssh_conf_d(
                 host_name=spec.host.name,
-                address=spec.host.address,
+                address=address,
                 user=spec.admin_user.name,
                 port=spec.ssh.port,
                 identity_file=spec.login.private_key,
+                tunnel_comment=tunnel_comment,
             )
             return StepResult(
                 step_index=step.index,

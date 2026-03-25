@@ -133,6 +133,12 @@ nodeforge agent-update <host>            Update agent on remote host
 nodeforge inspect   run <run-id>         Inspect a past run
 nodeforge inventory list                 List all servers
 nodeforge inventory show <server-id>     Show server details
+nodeforge rotate-secret <spec> --secret NAME
+                                         Rotate a secret and re-apply
+nodeforge tunnel  up <host>              Bring up WireGuard tunnel for a host
+nodeforge tunnel  down <host>            Tear down WireGuard tunnel for a host
+nodeforge tunnel  status                 List all hosts with WireGuard state
+nodeforge remove  <host> [--force]       Remove all local state for a host
 ```
 
 ### Global CLI Options
@@ -249,6 +255,8 @@ Step 12: disable_password_auth      (depends_on: [10])
 
 Steps 11 and 12 **never execute** unless the gate (SSH login verification) passes. If the gate fails, the plan aborts and you keep root access.
 
+When WireGuard is enabled, an additional **tunnel safety gate** is inserted between the `allow_ssh_on_wireguard` and `delete_open_ssh_rule` steps. This gate brings up the WireGuard tunnel locally, verifies SSH connectivity through the VPN IP, and only then allows the open SSH rule to be deleted. If the gate fails, the tunnel is torn down and the server remains accessible via public IP.
+
 ### Server Verification (Goss)
 
 `nodeforge apply` automatically verifies the server after every successful bootstrap using [Goss](https://github.com/goss-org/goss):
@@ -283,11 +291,11 @@ examples/ubuntu/
 ### Local State Management
 
 After a successful bootstrap:
-- `~/.ssh/conf.d/nodeforge/{host_name}.conf` — SSH alias to the new server
+- `~/.ssh/conf.d/nodeforge/{host_name}.conf` — SSH alias to the new server (uses VPN IP as HostName when WireGuard is enabled)
 - `~/.nodeforge/inventory.db` — local server inventory (SQLite with versionize historization)
 - `~/.nodeforge/runs/` — JSON execution logs
 - `~/.goss/` — goss specs and master gossfile deposited by nodeforge
-- `~/.wg/nodeforge/{host_name}/` — WireGuard key material and configuration:
+- `~/.wg/nodeforge/{host_name}/` — WireGuard key material and configuration (includes `client_interface` name in metadata.json for per-host tunnel naming)
   - `private.key` — server Curve25519 private key
   - `public.key` — server public key (derived via PyNaCl)
   - `wg0.conf` — server wg-quick config as deployed
@@ -442,16 +450,23 @@ flowchart TD
 
     J --> WG["WireGuard setup (if enabled)"]
     WG --> GOSS["Goss server verification"]
-    GOSS --> WG_LOCK["Restrict SSH to WireGuard<br/>(if enabled — last remote step)"]
+    GOSS --> WG_ALLOW["Allow SSH on WireGuard<br/>(if enabled)"]
 
-    WG_LOCK --> L1["LOCAL: Write SSH conf.d entry"]
+    WG_ALLOW --> G3{{"GATE: verify SSH through<br/>WireGuard tunnel"}}
+
+    G3 -->|pass| WG_LOCK["Delete open SSH rule<br/>(lock SSH to tunnel)"]
+    G3 -->|fail| ABORT3["ABORT — open SSH rule preserved<br/>server accessible via public IP"]
+
+    WG_LOCK --> L1["LOCAL: Write SSH conf.d entry<br/>(uses VPN IP when WG enabled)"]
     L1 --> L2["LOCAL: Save WireGuard state"]
     L2 --> L3["LOCAL: Record in inventory"]
 
     style G1 fill:#f96,stroke:#333,color:#000
     style G2 fill:#f96,stroke:#333,color:#000
+    style G3 fill:#f96,stroke:#333,color:#000
     style ABORT1 fill:#f44,stroke:#333,color:#fff
     style ABORT2 fill:#f44,stroke:#333,color:#fff
+    style ABORT3 fill:#f44,stroke:#333,color:#fff
     style WG_LOCK fill:#ffa,stroke:#333,color:#000
 ```
 
@@ -459,6 +474,7 @@ flowchart TD
 
 - **Gate 1** (pre-port-change): Verifies that the admin user can log in with key auth before the SSH port is changed. If this fails, nothing dangerous has happened — the server is still on its original port with root access.
 - **Gate 2** (post-port-change): Verifies that the admin user can log in on the new port. `disable_root_login`, `disable_password_auth`, and `finalize_firewall` all carry `depends_on` pointing to this gate — they **never execute** unless the gate passes.
+- **Gate 3** (WireGuard tunnel, if enabled): After `allow_ssh_on_wireguard`, the client brings up the WireGuard tunnel and verifies SSH through the VPN IP. Only if this succeeds is the open SSH rule deleted. If the gate fails, the tunnel is torn down and the server remains accessible via public IP.
 - **WireGuard SSH restriction** is the absolute last remote step. After it runs, only WireGuard-tunneled connections reach SSH. All subsequent steps are local.
 - **Goss verification** is non-fatal — a failure is reported but does not abort the plan.
 

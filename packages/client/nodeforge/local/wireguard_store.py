@@ -116,6 +116,7 @@ def save_wireguard_state(
         "spec_name": spec_name,
         "deployed_at": datetime.now(UTC).isoformat(),
         "interface": interface,
+        "client_interface": f"wg-{host_name}"[:15],
         "address": address,
         "endpoint": endpoint,
         "peer_address": peer_address,

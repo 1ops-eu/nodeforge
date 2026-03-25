@@ -38,10 +38,18 @@ def write_ssh_conf_d(
     user: str,
     port: int,
     identity_file: str | None = None,
+    tunnel_comment: str | None = None,
 ) -> Path:
     """Write {ssh_conf_d_base}/{host_name}.conf and return the path.
 
     Idempotent: overwrites own file on re-run.
+
+    Parameters
+    ----------
+    tunnel_comment:
+        Optional comment noting a WireGuard tunnel dependency, e.g.
+        ``# Requires: nodeforge tunnel up {host}``.  Inserted as the
+        second line of the generated config.
     """
     base = _conf_d_base()
     base.mkdir(parents=True, exist_ok=True)
@@ -51,11 +59,17 @@ def write_ssh_conf_d(
 
     lines = [
         f"# nodeforge managed: {host_name}",
-        f"Host {host_name}",
-        f"  HostName {address}",
-        f"  User {user}",
-        f"  Port {port}",
     ]
+    if tunnel_comment:
+        lines.append(tunnel_comment)
+    lines.extend(
+        [
+            f"Host {host_name}",
+            f"  HostName {address}",
+            f"  User {user}",
+            f"  Port {port}",
+        ]
+    )
     if identity_file:
         expanded = str(Path(identity_file).expanduser())
         lines.append(f"  IdentityFile {expanded}")

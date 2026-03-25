@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nodeforge"
-version = "0.6.2"
+version = "0.6.3"
 description = "Securely bootstrap Linux servers with auditable plans, generated ops docs, and encrypted local inventory"
 requires-python = ">=3.11"
 dependencies = [

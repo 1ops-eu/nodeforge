@@ -37,8 +37,10 @@ app = typer.Typer(
 )
 inventory_app = typer.Typer(help="Manage local server inventory.", no_args_is_help=True)
 inspect_app = typer.Typer(help="Inspect apply runs.", no_args_is_help=True)
+tunnel_app = typer.Typer(help="Manage WireGuard tunnels.", no_args_is_help=True)
 app.add_typer(inventory_app, name="inventory")
 app.add_typer(inspect_app, name="inspect")
+app.add_typer(tunnel_app, name="tunnel")
 
 console = Console()
 
@@ -912,6 +914,107 @@ def rotate_secret_cmd(
         _apply_single(parsed_spec, ctx, p, "agent", False, console)
 
     console.print(f"\n[bold green]Secret '{secret}' rotated successfully.[/bold green]")
+
+
+# ------------------------------------------------------------------ #
+# tunnel up | down | status
+# ------------------------------------------------------------------ #
+
+
+@tunnel_app.command("up")
+def tunnel_up_cmd(
+    host: str = typer.Argument(..., help="Host name to bring up the tunnel for"),
+) -> None:
+    """Bring up the WireGuard tunnel for a host."""
+    from nodeforge.local.tunnel import tunnel_up
+
+    console.print(f"[bold]Bringing up WireGuard tunnel for {host}...[/bold]")
+    ok, msg = tunnel_up(host)
+    if ok:
+        console.print(f"[bold green]{msg}[/bold green]")
+    else:
+        console.print(f"[bold red]{msg}[/bold red]")
+        raise typer.Exit(1)
+
+
+@tunnel_app.command("down")
+def tunnel_down_cmd(
+    host: str = typer.Argument(..., help="Host name to tear down the tunnel for"),
+) -> None:
+    """Tear down the WireGuard tunnel for a host."""
+    from nodeforge.local.tunnel import tunnel_down
+
+    console.print(f"[bold]Tearing down WireGuard tunnel for {host}...[/bold]")
+    ok, msg = tunnel_down(host)
+    if ok:
+        console.print(f"[bold green]{msg}[/bold green]")
+    else:
+        console.print(f"[bold red]{msg}[/bold red]")
+        raise typer.Exit(1)
+
+
+@tunnel_app.command("status")
+def tunnel_status_cmd() -> None:
+    """List all hosts with WireGuard tunnel status."""
+    from nodeforge.local.tunnel import tunnel_status
+
+    hosts = tunnel_status()
+    if not hosts:
+        console.print("[dim]No WireGuard hosts found.[/dim]")
+        return
+
+    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+    table.add_column("Host", min_width=15)
+    table.add_column("Interface", min_width=12)
+    table.add_column("VPN IP", min_width=12)
+    table.add_column("Endpoint", min_width=20)
+    table.add_column("Status", min_width=8)
+    table.add_column("Deployed")
+
+    for h in hosts:
+        status_text = (
+            Text("active", style="green") if h["active"] else Text("inactive", style="dim")
+        )
+        table.add_row(
+            h["host_name"],
+            h["interface"],
+            h["vpn_ip"],
+            h["endpoint"],
+            status_text,
+            h["deployed_at"][:19] if h["deployed_at"] else "",
+        )
+    console.print(table)
+
+
+# ------------------------------------------------------------------ #
+# remove <host>
+# ------------------------------------------------------------------ #
+
+
+@app.command()
+def remove(
+    host: str = typer.Argument(..., help="Host name to remove all local state for"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
+) -> None:
+    """Remove all local nodeforge state for a decommissioned machine.
+
+    Tears down any active WireGuard tunnel, removes WG state, SSH config,
+    and marks the inventory record as decommissioned.
+    """
+    from nodeforge.local.remove import remove_host
+
+    if not force:
+        confirm = typer.confirm(f"Remove all local state for '{host}'?")
+        if not confirm:
+            console.print("[dim]Cancelled.[/dim]")
+            raise typer.Exit(0)
+
+    results = remove_host(host, console=console)
+
+    if any(r["status"] == "error" for r in results):
+        console.print(f"\n[bold yellow]Host '{host}' removed with warnings.[/bold yellow]")
+    else:
+        console.print(f"\n[bold green]Host '{host}' removed successfully.[/bold green]")
 
 
 # ------------------------------------------------------------------ #
