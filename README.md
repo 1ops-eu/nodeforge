@@ -721,6 +721,25 @@ nodeforge inventory show prod-node-1
 
 ---
 
+## Tested Platforms
+
+nodeforge is continuously tested against real cloud servers. The table below
+shows which examples pass on which OS/provider combinations.
+
+<!-- Auto-generated from https://gist.github.com/ — do not edit manually -->
+
+| OS | Provider | Status | Last tested |
+|---|---|---|---|
+| Ubuntu 24.04 | Hetzner Cloud | *pending first run* | — |
+| Debian 13 | Hetzner Cloud | *pending first run* | — |
+
+> Full results with per-example detail are published as
+> [`compatibility.json`](https://gist.github.com/) after each E2E run.
+> Community-contributed results welcome — see the `tester` field in the
+> registry format.
+
+---
+
 ## Development
 
 ```bash
