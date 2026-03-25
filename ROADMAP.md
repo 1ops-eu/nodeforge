@@ -388,6 +388,96 @@ At that point, `detect_os` needs to become a first-class concept:
 
 ---
 
+## v0.6.3 -- WireGuard Tunnel Lifecycle + SSH Lockout Prevention
+
+**Goal:** Make the WireGuard VPN workflow safe and self-contained -- from bootstrap through daily use to machine decommissioning. After `nodeforge apply`, the user should never be locked out, should always know where their state lives, and should be able to manage tunnels without manual `wg-quick` commands.
+
+**Discovered via:** Manual bootstrap testing against a Hetzner Cloud server with `wireguard.yaml`. After a successful apply, the user was locked out -- SSH was restricted to the WireGuard tunnel (steps `allow_ssh_on_wireguard` + `delete_open_ssh_rule`), but there was no gate verifying the tunnel actually worked from the client side. Additionally, an old Vagrant WireGuard tunnel (`wg0`) was still active on the client machine, conflicting with the new Hetzner tunnel that also wanted `wg0`. The user had to manually debug UFW rules, discover the client config path, tear down the stale tunnel, and bring up the new one.
+
+### 1. SSH-over-tunnel safety gate (lockout prevention)
+
+| Item | Description |
+|---|---|
+| Tunnel-up gate before SSH lockdown | After `allow_ssh_on_wireguard` and before `delete_open_ssh_rule`, nodeforge brings up the WireGuard tunnel locally and verifies SSH connectivity through the VPN IP (`admin@{wg_server_vpn_ip}:{ssh_port}`) |
+| Graceful fallback on gate failure | If SSH through the tunnel fails, the open SSH rule is NOT deleted -- the server remains accessible via public IP. Apply reports a warning with instructions |
+| Automatic tunnel teardown on failure | If the gate fails, nodeforge tears down the tunnel it just brought up to avoid leaving a broken interface active |
+
+**Root cause:** The existing `wireguard_up` postflight check (step 29) only verifies the server-side interface is up (`wg show wg0`). It does NOT verify the client can connect through the tunnel. Steps 32-33 (`allow_ssh_on_wireguard` + `delete_open_ssh_rule`) then lock SSH to the tunnel interface without any client-side connectivity proof.
+
+**Files affected:**
+- `packages/client/nodeforge/compiler/planner.py` -- insert gate step between the two firewall steps
+- `packages/client/nodeforge/runtime/executor.py` -- implement gate: bring up tunnel, verify SSH, proceed or abort
+- `packages/client/nodeforge/runtime/steps/bootstrap.py` -- add gate command builder if needed
+
+### 2. `nodeforge tunnel` CLI subcommand
+
+| Item | Description |
+|---|---|
+| `nodeforge tunnel up <host>` | Bring up the WireGuard tunnel for a host using the saved `client.conf`. Creates a uniquely-named interface (`wg-{host}`) to avoid collisions |
+| `nodeforge tunnel down <host>` | Tear down the tunnel for that host |
+| `nodeforge tunnel status` | List all hosts with WireGuard state (from `~/.wg/nodeforge/`), show which tunnels are currently active, display VPN IP and endpoint |
+| Per-host interface naming | Client-side interfaces use `wg-{hostname}` (e.g. `wg-manufactum`) instead of the generic `wg0`. Server side keeps `wg0` (it only has one tunnel). This allows multiple tunnels to coexist (Vagrant + Hetzner + production) |
+| Sudo handling | `wg-quick` requires root. `nodeforge tunnel up/down` invokes `sudo wg-quick` and provides a clear error if the user lacks sudo access |
+
+**State discovery:** `tunnel status` scans all subdirectories under `wg_state_base` (`~/.wg/nodeforge/`), reads each `metadata.json` for display info (endpoint, VPN IPs, deployment timestamp), and cross-references with `wg show` output to determine active/inactive status.
+
+**Files affected:**
+- `packages/client/nodeforge/cli.py` -- add `tunnel` subcommand group (`tunnel_app`)
+- `packages/client/nodeforge/local/tunnel.py` (new) -- tunnel up/down/status logic
+- `packages/client/nodeforge/local/wireguard_store.py` -- store client interface name in metadata
+- `packages/client/nodeforge/runtime/steps/wireguard.py` -- `generate_client_config` accepts interface name parameter
+
+### 3. SSH config integration with WireGuard
+
+| Item | Description |
+|---|---|
+| VPN IP in SSH conf.d | When `wireguard.enabled: true`, the SSH conf.d entry uses the server's WireGuard VPN IP (e.g. `10.10.0.1`) as `HostName` instead of the public IP -- because after lockdown, only the VPN IP is reachable for SSH |
+| Tunnel dependency comment | The generated SSH config includes a comment noting the WireGuard tunnel requirement: `# Requires: nodeforge tunnel up {host}` |
+
+**Current behavior:** `planner.py:695` writes the SSH conf.d entry with `address=spec.host.address` (the public IP). After WireGuard SSH lockdown, that IP no longer accepts SSH connections.
+
+**Files affected:**
+- `packages/client/nodeforge/compiler/planner.py` -- pass VPN IP to SSH config step when WireGuard is enabled
+- `packages/client/nodeforge/local/ssh_config.py` -- add tunnel dependency comment to generated config
+
+### 4. `nodeforge remove <host>`
+
+| Item | Description |
+|---|---|
+| `nodeforge remove <host>` | Single command to clean up all local nodeforge state for a decommissioned machine |
+| WireGuard cleanup | Tears down active tunnel (if running), removes `~/.wg/nodeforge/{host}/` |
+| SSH config cleanup | Removes `~/.ssh/conf.d/nodeforge/{host}.conf` |
+| Inventory cleanup | Marks the host as decommissioned in `~/.nodeforge/inventory.db` |
+| Goss cleanup | Removes any goss specs for the host |
+| Confirmation prompt | Requires user confirmation (`Remove all local state for '{host}'?`), skippable with `--force` |
+
+**Motivation:** When a cloud machine is destroyed (e.g. `hcloud server delete manufactum`), there is no way to clean up the local nodeforge artifacts. State accumulates silently -- stale tunnel configs, orphaned SSH entries, ghost inventory records. `nodeforge remove` is the lifecycle endpoint: apply creates, doctor monitors, remove cleans up.
+
+**Files affected:**
+- `packages/client/nodeforge/cli.py` -- add `remove` command
+- `packages/client/nodeforge/local/remove.py` (new) -- orchestrate cleanup across all local stores
+- `packages/client/nodeforge/local/wireguard_store.py` -- add `remove_wireguard_state(host_name)` function
+- `packages/client/nodeforge/local/ssh_config.py` -- `remove_ssh_conf_d` already exists
+- `packages/client/nodeforge/local/inventory_db.py` -- add decommission/remove function
+
+**New capabilities:**
+- WireGuard tunnel safety gate -- SSH lockdown only proceeds after verifying client-side tunnel connectivity
+- `nodeforge tunnel up|down|status` -- first-class tunnel management from the CLI
+- Per-host client-side interface naming (`wg-{host}`) -- multiple tunnels coexist without collision
+- SSH config uses VPN IP when WireGuard is active -- `ssh {host}` works once the tunnel is up
+- `nodeforge remove <host>` -- clean lifecycle endpoint for decommissioned machines
+
+**Acceptance criteria:**
+- `nodeforge apply` with `wireguard.enabled: true` does NOT delete the open SSH rule until SSH through the VPN tunnel is verified from the client side
+- If the tunnel gate fails, the server remains accessible via public IP and the user gets a clear warning
+- `nodeforge tunnel up manufactum` brings up a `wg-manufactum` interface; `nodeforge tunnel up vagrant-node` brings up `wg-vagrant-node` -- both can be active simultaneously
+- `nodeforge tunnel status` shows all known hosts, their VPN IPs, endpoints, and active/inactive status
+- After WireGuard bootstrap, `ssh manufactum` (via SSH conf.d) connects through the VPN IP
+- `nodeforge remove manufactum` tears down the tunnel, removes WG state, SSH config, and marks the inventory record as decommissioned
+- Existing specs without WireGuard are completely unaffected
+
+---
+
 ## v0.7 -- Light Blueprints
 
 **Goal:** Introduce reusable composition primitives for common stack patterns.
