@@ -169,6 +169,15 @@ class TestTunnelUp:
 
 
 class TestTunnelDown:
+    def _setup_client_conf(self, host_name="testhost"):
+        """Create a minimal client.conf for testing."""
+        host_dir = _host_dir(host_name)
+        host_dir.mkdir(parents=True, exist_ok=True)
+        conf = host_dir / "client.conf"
+        conf.write_text("[Interface]\nPrivateKey = test\n")
+        conf.chmod(0o600)
+        return conf
+
     @patch("nodeforge.local.tunnel._is_interface_active", return_value=False)
     def test_not_active_returns_success(self, _mock_active):
         ok, msg = tunnel_down("testhost")
@@ -177,19 +186,73 @@ class TestTunnelDown:
 
     @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run")
-    def test_successful_down(self, mock_run, _mock_active):
+    def test_successful_down_with_client_conf(self, mock_run, _mock_active):
+        """When client.conf exists, wg-quick down is called with temp config path."""
+        self._setup_client_conf()
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         ok, msg = tunnel_down("testhost")
         assert ok
         assert "is down" in msg
+        # Verify wg-quick was called with a full path (not bare interface name)
+        args = mock_run.call_args[0][0]
+        assert args[0] == "sudo"
+        assert args[1] == "wg-quick"
+        assert args[2] == "down"
+        assert "/" in args[3]  # full path, not bare iface name
 
     @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run")
-    def test_failed_down(self, mock_run, _mock_active):
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error msg")
+    def test_falls_back_to_ip_link_del_when_wg_quick_fails(self, mock_run, _mock_active):
+        """If wg-quick down fails, ip link del is tried as fallback."""
+        self._setup_client_conf()
+        # First call (wg-quick down) fails, second call (ip link del) succeeds
+        mock_run.side_effect = [
+            MagicMock(returncode=1, stdout="", stderr="config error"),
+            MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+        ok, msg = tunnel_down("testhost")
+        assert ok
+        assert "ip link del fallback" in msg
+        assert mock_run.call_count == 2
+
+    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("subprocess.run")
+    def test_ip_link_del_when_no_client_conf(self, mock_run, _mock_active):
+        """When client.conf is missing, skip wg-quick and use ip link del."""
+        # Don't create client.conf — simulates removed host
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        ok, msg = tunnel_down("testhost")
+        assert ok
+        assert "ip link del fallback" in msg
+        # Only one call — ip link del (no wg-quick attempt)
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert args[:3] == ["sudo", "ip", "link"]
+
+    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("subprocess.run")
+    def test_both_methods_fail(self, mock_run, _mock_active):
+        """When both wg-quick and ip link del fail, returns failure."""
+        self._setup_client_conf()
+        mock_run.side_effect = [
+            MagicMock(returncode=1, stdout="", stderr="wg-quick error"),
+            MagicMock(returncode=1, stdout="", stderr="ip link error"),
+        ]
         ok, msg = tunnel_down("testhost")
         assert not ok
-        assert "error msg" in msg
+        assert "ip link error" in msg
+
+    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("subprocess.run")
+    def test_temp_conf_cleaned_up(self, mock_run, _mock_active):
+        """The temporary interface config file should be cleaned up after down."""
+        self._setup_client_conf()
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        tunnel_down("testhost")
+        host_dir = _host_dir("testhost")
+        iface = _interface_name("testhost")
+        temp_conf = host_dir / f"{iface}.conf"
+        assert not temp_conf.exists(), "Temporary interface config should be cleaned up"
 
     @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run", side_effect=FileNotFoundError)

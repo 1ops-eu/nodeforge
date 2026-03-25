@@ -203,10 +203,28 @@ Host myhost
 `nodeforge tunnel` subcommands manage client-side WireGuard tunnels via `wg-quick`:
 
 - **`tunnel up <host>`** — creates a temporary config from `~/.wg/nodeforge/{host}/client.conf`, invokes `sudo wg-quick up`
-- **`tunnel down <host>`** — invokes `sudo wg-quick down {interface}`
+- **`tunnel down <host>`** — recreates the temporary config and invokes `sudo wg-quick down`; falls back to `sudo ip link del` if the config is missing or `wg-quick` fails
 - **`tunnel status`** — scans `~/.wg/nodeforge/*/metadata.json`, cross-references with `wg show interfaces`
 
 Interface names use `wg-{host}` (truncated to 15 chars — Linux interface name limit).
+
+#### Client-Side Prerequisites
+
+WireGuard tunnel commands (`tunnel up`, `tunnel down`, and the tunnel safety gate during `apply`) require:
+
+1. **`wireguard-tools`** installed on the local machine (provides `wg` and `wg-quick`)
+2. **Passwordless `sudo`** for `wg`, `wg-quick`, and `ip` — these commands manage network interfaces and require root privileges. Without passwordless sudo, `wg-quick` will hang waiting for a password prompt and time out after 30 seconds.
+
+To grant passwordless sudo for WireGuard commands only:
+
+```bash
+# /etc/sudoers.d/wireguard-nodeforge
+%sudo ALL=(ALL) NOPASSWD: /usr/bin/wg, /usr/bin/wg-quick, /usr/sbin/ip
+```
+
+```bash
+sudo visudo -f /etc/sudoers.d/wireguard-nodeforge
+```
 
 ### Host Removal (`remove.py`)
 

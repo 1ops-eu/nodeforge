@@ -76,7 +76,21 @@ nodeforge apply examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.y
 - A fresh server with root SSH access at 203.0.113.50
 - `wg-quick` installed locally (part of `wireguard-tools`)
 - `~/.ssh/id_ed25519.pub` exists locally
-- `sudo` access on the local machine (for wg-quick)
+- Passwordless `sudo` for `wg`, `wg-quick`, and `ip` on the local machine (see below)
+
+### Passwordless sudo for WireGuard
+
+nodeforge runs `wg-quick` and `ip` via `sudo` to manage local tunnel interfaces.
+Without passwordless sudo these commands hang on the password prompt and time out.
+
+```bash
+# /etc/sudoers.d/wireguard-nodeforge
+%sudo ALL=(ALL) NOPASSWD: /usr/bin/wg, /usr/bin/wg-quick, /usr/sbin/ip
+```
+
+```bash
+sudo visudo -f /etc/sudoers.d/wireguard-nodeforge
+```
 
 ## Notes
 

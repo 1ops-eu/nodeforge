@@ -97,6 +97,11 @@ def tunnel_up(host_name: str) -> tuple[bool, str]:
 def tunnel_down(host_name: str) -> tuple[bool, str]:
     """Tear down the WireGuard tunnel for a host.
 
+    Creates a temporary config file (mirroring ``tunnel_up``) so
+    ``wg-quick down`` can find the interface configuration.  If
+    ``client.conf`` is missing (e.g. host already removed), falls back
+    to ``ip link del`` as a last resort.
+
     Returns (success: bool, message: str).
     """
     iface = _interface_name(host_name)
@@ -104,24 +109,44 @@ def tunnel_down(host_name: str) -> tuple[bool, str]:
     if not _is_interface_active(iface):
         return True, f"Tunnel {iface} is not active"
 
+    conf_path = _client_conf_path(host_name)
+    iface_conf = conf_path.parent / f"{iface}.conf" if conf_path.exists() else None
+
     try:
+        # Primary path: use wg-quick down with a temp config file
+        if iface_conf is not None:
+            iface_conf.write_text(conf_path.read_text(encoding="utf-8"), encoding="utf-8")
+            iface_conf.chmod(0o600)
+            result = subprocess.run(
+                ["sudo", "wg-quick", "down", str(iface_conf)],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                return True, f"Tunnel {iface} is down"
+            # wg-quick failed — fall through to ip link del
+
+        # Fallback: delete the interface directly
         result = subprocess.run(
-            ["sudo", "wg-quick", "down", iface],
+            ["sudo", "ip", "link", "del", iface],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=10,
         )
         if result.returncode == 0:
-            return True, f"Tunnel {iface} is down"
-        else:
-            stderr = result.stderr.strip()
-            return False, f"wg-quick down failed (exit {result.returncode}): {stderr}"
+            return True, f"Tunnel {iface} torn down (ip link del fallback)"
+        stderr = result.stderr.strip()
+        return False, f"Failed to tear down {iface}: {stderr}"
     except FileNotFoundError:
         return False, "wg-quick not found — install wireguard-tools"
     except subprocess.TimeoutExpired:
         return False, "wg-quick down timed out (30s)"
     except PermissionError:
         return False, "sudo access required for wg-quick"
+    finally:
+        if iface_conf is not None and iface_conf.exists() and iface_conf != conf_path:
+            iface_conf.unlink(missing_ok=True)
 
 
 def tunnel_status() -> list[dict]:

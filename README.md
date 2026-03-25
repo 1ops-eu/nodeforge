@@ -141,6 +141,27 @@ nodeforge tunnel  status                 List all hosts with WireGuard state
 nodeforge remove  <host> [--force]       Remove all local state for a host
 ```
 
+### WireGuard Client Prerequisites
+
+The `tunnel` commands and the WireGuard safety gate during `apply` run
+`wg-quick` and `ip` via `sudo` on your **local** machine. This requires:
+
+1. **`wireguard-tools`** installed locally (provides `wg` and `wg-quick`)
+2. **Passwordless `sudo`** for `wg`, `wg-quick`, and `ip` — without it, the
+   subprocess hangs waiting for a password prompt and times out after 30s
+
+To grant passwordless sudo for WireGuard commands only:
+
+```bash
+# Create /etc/sudoers.d/wireguard-nodeforge with:
+%sudo ALL=(ALL) NOPASSWD: /usr/bin/wg, /usr/bin/wg-quick, /usr/sbin/ip
+
+# Use visudo to validate syntax:
+sudo visudo -f /etc/sudoers.d/wireguard-nodeforge
+```
+
+If WireGuard is not enabled in your spec, these prerequisites do not apply.
+
 ### Global CLI Options
 
 All commands that load specs support these options:
