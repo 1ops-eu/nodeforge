@@ -3,12 +3,12 @@
 import pytest
 from pydantic import ValidationError
 
-from nodeforge_core.specs.http_check_schema import (
+from loft_cli_core.specs.http_check_schema import (
     HttpCheckConfig,
     HttpCheckLoginBlock,
     HttpCheckSpec,
 )
-from nodeforge_core.specs.validators import has_errors, validate_http_check
+from loft_cli_core.specs.validators import has_errors, validate_http_check
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -126,8 +126,8 @@ class TestHttpCheckValidation:
 
 class TestHttpCheckPlanning:
     def test_plan_generates_gate_step(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_http_check_spec()
         ctx = normalize(spec)
@@ -141,8 +141,8 @@ class TestHttpCheckPlanning:
         assert "http://localhost:8080/health" in gate_steps[0].command
 
     def test_plan_has_preflight(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_http_check_spec()
         ctx = normalize(spec)
@@ -152,8 +152,8 @@ class TestHttpCheckPlanning:
         assert len(preflight) == 1
 
     def test_plan_has_inventory_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_http_check_spec()
         ctx = normalize(spec)
@@ -163,8 +163,8 @@ class TestHttpCheckPlanning:
         assert len(inv_steps) == 3
 
     def test_plan_no_inventory_when_disabled(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_http_check_spec(local={"inventory": {"enabled": False}})
         ctx = normalize(spec)

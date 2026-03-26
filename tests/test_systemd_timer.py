@@ -3,13 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from nodeforge.runtime.steps.systemd import render_timer_unit
-from nodeforge_core.specs.systemd_timer_schema import (
+from loft_cli.runtime.steps.systemd import render_timer_unit
+from loft_cli_core.specs.systemd_timer_schema import (
     SystemdTimerSpec,
     TimerConfig,
     TimerServiceConfig,
 )
-from nodeforge_core.specs.validators import has_errors, validate_systemd_timer
+from loft_cli_core.specs.validators import has_errors, validate_systemd_timer
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -128,8 +128,8 @@ class TestTimerStepHelpers:
 
 class TestSystemdTimerPlanning:
     def test_plan_generates_timer_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_timer_spec()
         ctx = normalize(spec)
@@ -144,8 +144,8 @@ class TestSystemdTimerPlanning:
         assert "verify_cleanup_timer_active" in step_ids
 
     def test_plan_service_is_oneshot(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_timer_spec()
         ctx = normalize(spec)
@@ -155,8 +155,8 @@ class TestSystemdTimerPlanning:
         assert "Type=oneshot" in svc_step.file_content
 
     def test_plan_timer_has_on_calendar(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_timer_spec()
         ctx = normalize(spec)
@@ -166,8 +166,8 @@ class TestSystemdTimerPlanning:
         assert "OnCalendar=*-*-* 02:00:00" in timer_step.file_content
 
     def test_plan_has_inventory_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_timer_spec()
         ctx = normalize(spec)

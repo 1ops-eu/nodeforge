@@ -1,12 +1,12 @@
 # Doctor (Drift Detection) Example
 
-Demonstrates the `nodeforge doctor` command — comparing the desired plan state against the server's runtime state to detect drift.
+Demonstrates the `loft-cli doctor` command — comparing the desired plan state against the server's runtime state to detect drift.
 
 ## What it does
 
 The `doctor` command runs a three-step process:
 
-1. **Compile** — generates the desired plan from the spec (same as `nodeforge plan`)
+1. **Compile** — generates the desired plan from the spec (same as `loft-cli plan`)
 2. **Fetch runtime state** — retrieves the current `runtime-state.json` from the agent
 3. **Compare** — diffs desired steps against runtime resource hashes to find drift
 
@@ -16,13 +16,13 @@ The output shows which resources are **in-sync**, **drifted**, or **missing** fr
 
 ```bash
 # Check drift against a bootstrap spec
-nodeforge doctor examples/bootstrap.yaml
+loft-cli doctor examples/bootstrap.yaml
 
 # Check drift against a stack spec
-nodeforge doctor examples/stack/stack.yaml
+loft-cli doctor examples/stack/stack.yaml
 
 # Reconcile — re-apply only the drifted resources
-nodeforge reconcile examples/stack/stack.yaml
+loft-cli reconcile examples/stack/stack.yaml
 ```
 
 ## How it works
@@ -31,14 +31,14 @@ nodeforge reconcile examples/stack/stack.yaml
 
 The agent stores two files after each successful apply:
 
-- `/var/lib/nodeforge/desired/desired-state.json` — the plan that was applied
-- `/var/lib/nodeforge/state/runtime-state.json` — per-resource hash state
+- `/var/lib/loft-cli/desired/desired-state.json` — the plan that was applied
+- `/var/lib/loft-cli/state/runtime-state.json` — per-resource hash state
 
 ### Client side
 
 The `doctor` command:
 1. Generates a fresh plan from the current spec
-2. SSHs to the host and runs `nodeforge-agent doctor`
+2. SSHs to the host and runs `loft-cli-agent doctor`
 3. The agent compares the desired plan hashes against runtime state
 4. Reports drifted, missing, and in-sync resources
 

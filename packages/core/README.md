@@ -1,8 +1,8 @@
-# nodeforge-core
+# loft-cli-core
 
-> Shared models, specs, and registry infrastructure for nodeforge.
+> Shared models, specs, and registry infrastructure for loft-cli.
 
-`nodeforge-core` is the foundation package that both the client (`nodeforge`) and agent (`nodeforge-agent`) depend on. It contains all Pydantic spec schemas, plan models, the registry system, the policy engine, and shared utilities.
+`loft-cli-core` is the foundation package that both the client (`loft-cli`) and agent (`loft-cli-agent`) depend on. It contains all Pydantic spec schemas, plan models, the registry system, the policy engine, and shared utilities.
 
 **This package has no CLI.** It is a library consumed by the client and agent packages.
 
@@ -11,7 +11,7 @@
 ## Installation
 
 ```bash
-pip install nodeforge-core
+pip install loft-cli-core
 ```
 
 Or as part of the monorepo development setup:
@@ -37,10 +37,10 @@ No Fabric, no paramiko, no sqlcipher. This keeps the package lightweight and ins
 ## Module Structure
 
 ```
-nodeforge_core/
+loft_cli_core/
   __init__.py          Package root, exports __version__
   agent_models.py      AgentApplyResult, AgentStepResult — shared between client and agent
-  agent_paths.py       Server-side path constants (/etc/nodeforge/, /var/lib/nodeforge/, etc.)
+  agent_paths.py       Server-side path constants (/etc/loft-cli/, /var/lib/loft-cli/, etc.)
   policy.py            Policy engine: rules, evaluation, HMAC-SHA256 approval tokens
   state.py             RuntimeState, ResourceState models — server-side state tracking
   plan/
@@ -102,7 +102,7 @@ The registry system is the core extension mechanism. Seven open registries map s
 External packages register as addons via Python `entry_points`:
 
 ```toml
-[project.entry-points."nodeforge.addons"]
+[project.entry-points."loft_cli.addons"]
 my_addon = "my_addon:register"
 ```
 
@@ -118,7 +118,7 @@ The policy engine (`policy.py`) evaluates per-step policy rules:
 - **`require_approval`** -- step requires an HMAC-SHA256 approval token
 - **`deny`** -- step is rejected
 
-Policy is loaded from `/etc/nodeforge/policy.yaml` on the server. If no policy file exists, the engine is inert (all steps execute normally).
+Policy is loaded from `/etc/loft-cli/policy.yaml` on the server. If no policy file exists, the engine is inert (all steps execute normally).
 
 Rules match steps via `fnmatch`-based patterns on step ID, kind, and tags. First matching rule wins. If no rule matches, the `default_action` applies.
 
@@ -126,11 +126,11 @@ Rules match steps via `fnmatch`-based patterns on step ID, kind, and tags. First
 
 ## Import Boundary
 
-`nodeforge-core` must **never** import from `nodeforge` (client) or `nodeforge_agent`. It is the bottom of the dependency graph:
+`loft-cli-core` must **never** import from `loft-cli` (client) or `loft_cli_agent`. It is the bottom of the dependency graph:
 
 ```
-nodeforge (client)  ──depends-on──>  nodeforge-core
-nodeforge-agent     ──depends-on──>  nodeforge-core
+loft-cli (client)  ──depends-on──>  loft-cli-core
+loft-cli-agent     ──depends-on──>  loft-cli-core
 ```
 
 ---

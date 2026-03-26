@@ -1,31 +1,31 @@
-# nodeforge-agent
+# loft-cli-agent
 
-> Server-side agent for nodeforge -- executes plans locally on managed Linux servers.
+> Server-side agent for loft-cli -- executes plans locally on managed Linux servers.
 
-`nodeforge-agent` is the agent package. It runs on every managed server and executes plans locally via subprocess. The agent is intentionally minimal — it depends only on `nodeforge-core`, `typer`, and `rich`. No Fabric, no paramiko, no sqlcipher.
+`loft-cli-agent` is the agent package. It runs on every managed server and executes plans locally via subprocess. The agent is intentionally minimal — it depends only on `loft-cli-core`, `typer`, and `rich`. No Fabric, no paramiko, no sqlcipher.
 
 ---
 
 ## Installation
 
-The agent is typically installed automatically during `nodeforge apply` (bootstrap). For manual installation:
+The agent is typically installed automatically during `loft-cli apply` (bootstrap). For manual installation:
 
 ```bash
-pip install nodeforge-agent
+pip install loft-cli-agent
 ```
 
 Or download the standalone binary from the [Releases](../../releases) page:
 
 | Platform | File |
 |---|---|
-| Linux (x86-64) | `nodeforge-agent-linux-amd64` |
-| Linux (ARM64) | `nodeforge-agent-linux-arm64` |
+| Linux (x86-64) | `loft-cli-agent-linux-amd64` |
+| Linux (ARM64) | `loft-cli-agent-linux-arm64` |
 
 ---
 
 ## Dependencies
 
-- `nodeforge-core>=0.5.0` -- shared models, specs, policy engine
+- `loft-cli-core>=0.5.0` -- shared models, specs, policy engine
 - `typer[all]>=0.9.0` -- CLI framework
 - `rich>=13.0` -- terminal formatting
 
@@ -36,8 +36,8 @@ No Fabric, no paramiko, no sqlcipher3. This keeps the binary small and avoids sy
 ## Module Structure
 
 ```
-nodeforge_agent/
-  __init__.py     Re-exports __version__ from nodeforge-core
+loft_cli_agent/
+  __init__.py     Re-exports __version__ from loft-cli-core
   cli.py          Typer CLI entry point — apply, status, version, doctor
   executor.py     AgentExecutor — local plan execution via subprocess + policy enforcement
   lock.py         Mutation locking via fcntl.flock (one apply at a time)
@@ -50,10 +50,10 @@ nodeforge_agent/
 ## CLI Commands
 
 ```
-nodeforge-agent apply   <plan.json>    Execute a plan locally
-nodeforge-agent status                 Show current agent state
-nodeforge-agent version                Print agent version
-nodeforge-agent doctor  <plan.json>    Compare desired state against runtime state
+loft-cli-agent apply   <plan.json>    Execute a plan locally
+loft-cli-agent status                 Show current agent state
+loft-cli-agent version                Print agent version
+loft-cli-agent doctor  <plan.json>    Compare desired state against runtime state
 ```
 
 ---
@@ -64,12 +64,12 @@ The agent uses these directories on the managed server:
 
 | Path | Purpose |
 |---|---|
-| `/etc/nodeforge/` | Configuration (policy.yaml, platform.conf) |
-| `/var/lib/nodeforge/` | Runtime state, locks, desired state |
-| `/var/lib/nodeforge/desired/desired-state.json` | Last-applied desired state |
-| `/var/lib/nodeforge/runtime-state.json` | Current runtime state (hashes, timestamps) |
-| `/var/lib/nodeforge/locks/` | Mutation lock files |
-| `/var/log/nodeforge/` | Agent execution logs |
+| `/etc/loft-cli/` | Configuration (policy.yaml, platform.conf) |
+| `/var/lib/loft-cli/` | Runtime state, locks, desired state |
+| `/var/lib/loft-cli/desired/desired-state.json` | Last-applied desired state |
+| `/var/lib/loft-cli/runtime-state.json` | Current runtime state (hashes, timestamps) |
+| `/var/lib/loft-cli/locks/` | Mutation lock files |
+| `/var/log/loft-cli/` | Agent execution logs |
 
 `paths.py` provides `ensure_agent_dirs()` which creates all required directories on first run.
 
@@ -80,7 +80,7 @@ The agent uses these directories on the managed server:
 The `AgentExecutor` processes a plan as follows:
 
 1. **Acquire mutation lock** — `fcntl.flock` ensures one apply at a time
-2. **Load policy** — reads `/etc/nodeforge/policy.yaml` (if present)
+2. **Load policy** — reads `/etc/loft-cli/policy.yaml` (if present)
 3. **For each step:**
    a. Check if step is idempotent-skippable (content hash matches runtime state)
    b. Evaluate policy — `auto_apply`, `require_approval`, or `deny`
@@ -92,7 +92,7 @@ The `AgentExecutor` processes a plan as follows:
 
 ### Idempotent Re-Apply
 
-The agent skips unchanged resources on re-apply. Each step's content is hashed (SHA-256). If the hash matches what's recorded in `runtime-state.json`, the step is skipped. This makes `nodeforge apply` safe to run repeatedly.
+The agent skips unchanged resources on re-apply. Each step's content is hashed (SHA-256). If the hash matches what's recorded in `runtime-state.json`, the step is skipped. This makes `loft-cli apply` safe to run repeatedly.
 
 ### Policy Enforcement
 
@@ -108,7 +108,7 @@ No policy file = no checks = agent executes everything it's told.
 
 ## Mutation Locking
 
-`lock.py` uses `fcntl.flock` to ensure only one `nodeforge-agent apply` runs at a time. If a lock is held, a second apply attempt fails immediately with a clear error message. Locks are automatically released when the process exits.
+`lock.py` uses `fcntl.flock` to ensure only one `loft-cli-agent apply` runs at a time. If a lock is held, a second apply attempt fails immediately with a clear error message. Locks are automatically released when the process exits.
 
 ---
 
@@ -138,7 +138,7 @@ make build-agent-binary
 
 The build script installs `packages/core` + `packages/agent`, then produces a single-file executable. No system library dependencies are needed.
 
-Output: `dist/nodeforge-agent`
+Output: `dist/loft-cli-agent`
 
 The agent binary targets **Linux only** (Debian/Ubuntu). There is no macOS or Windows build — the agent runs on managed servers, not developer machines.
 
@@ -146,8 +146,8 @@ The agent binary targets **Linux only** (Debian/Ubuntu). There is no macOS or Wi
 
 ## Import Boundary
 
-`nodeforge-agent` may import from:
-- `nodeforge_core` (shared models, specs, policy engine)
+`loft-cli-agent` may import from:
+- `loft_cli_core` (shared models, specs, policy engine)
 - Standard library
 
-`nodeforge-agent` must **never** import from `nodeforge` (client). The agent and client are independent consumers of core.
+`loft-cli-agent` must **never** import from `loft-cli` (client). The agent and client are independent consumers of core.

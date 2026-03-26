@@ -1,42 +1,42 @@
-# nodeforge Roadmap
+# loft-cli Roadmap
 
-This document tracks the planned evolution of `nodeforge` from its current v0.2 baseline through a production-ready v1.0 release.
+This document tracks the planned evolution of `loft-cli` from its current v0.2 baseline through a production-ready v1.0 release.
 
 The roadmap is organized around milestones. Each milestone corresponds to a meaningful capability jump. Future infrastructure and design decisions are captured in the RFC series below.
 
-**Architectural pivot (v0.3):** Starting with v0.3, nodeforge transitions from a client-driven remote orchestrator to a **server-local agent model**. The `nodeforge-agent` binary is installed as the first step of every bootstrap. The client becomes a thin transporter; the agent is the operator.
+**Architectural pivot (v0.3):** Starting with v0.3, loft-cli transitions from a client-driven remote orchestrator to a **server-local agent model**. The `loft-cli-agent` binary is installed as the first step of every bootstrap. The client becomes a thin transporter; the agent is the operator.
 
 ---
 
 ## Product Identity
 
-**nodeforge** is a product by [1ops](https://1ops.eu). It is a **self-hosted infrastructure compiler** — an open-source tool that turns human-readable YAML specs into reviewable plans and deterministic execution on Linux servers.
+**loft-cli** is a product by [1ops](https://1ops.eu). It is a **self-hosted infrastructure compiler** — an open-source tool that turns human-readable YAML specs into reviewable plans and deterministic execution on Linux servers.
 
-**nodeforge is Layer 1.** It makes VMs ready and usable: bootstrap, harden, install services, deploy containers, manage configuration, verify state. Once nodeforge is done, the server is a functioning platform.
+**loft-cli is Layer 1.** It makes VMs ready and usable: bootstrap, harden, install services, deploy containers, manage configuration, verify state. Once loft-cli is done, the server is a functioning platform.
 
-**nodeforge does not do Layer 2.** Application-level orchestration — configuring SaaS applications, importing workflows, seeding databases with business logic, wiring services together via API calls — belongs in a separate orchestration layer (e.g. n8n). The boundary: if the outcome depends only on OS/infrastructure state, it's nodeforge; if it depends on application runtime state, it's not.
+**loft-cli does not do Layer 2.** Application-level orchestration — configuring SaaS applications, importing workflows, seeding databases with business logic, wiring services together via API calls — belongs in a separate orchestration layer (e.g. n8n). The boundary: if the outcome depends only on OS/infrastructure state, it's loft-cli; if it depends on application runtime state, it's not.
 
 ### The Three Binaries
 
 | Binary | Purpose | Runs on |
 |---|---|---|
-| `nodeforge` | Client CLI — validate, plan, docs, diff, apply, doctor, reconcile | Operator's machine (Linux, macOS, Windows) |
-| `nodeforge-agent` | Server-side executor — receives plans, applies locally, tracks state | Target server (Linux only) |
-| `nodeforge-agent` (companion mode, v0.8+) | Optional visual workflow as alternative to CLI | Operator's machine |
+| `loft-cli` | Client CLI — validate, plan, docs, diff, apply, doctor, reconcile | Operator's machine (Linux, macOS, Windows) |
+| `loft-cli-agent` | Server-side executor — receives plans, applies locally, tracks state | Target server (Linux only) |
+| `loft-cli-agent` (companion mode, v0.8+) | Optional visual workflow as alternative to CLI | Operator's machine |
 
 The client is the **transporter** — it parses specs, generates plans, and delivers them to the agent. The agent is the **operator** — it executes plans locally, tracks runtime state, enforces policy, and supports extensible job types.
 
 ### Agent Job Types
 
-The nodeforge-agent executes **jobs**. Each job type is a distinct unit of work:
+The loft-cli-agent executes **jobs**. Each job type is a distinct unit of work:
 
 | Job type | Description | Available since |
 |---|---|---|
-| `apply` | Apply an infrastructure plan (the core nodeforge workflow) | v0.3 |
+| `apply` | Apply an infrastructure plan (the core loft-cli workflow) | v0.3 |
 | `doctor` | Compare desired state against actual state | v0.5 |
 | `reconcile` | Re-apply drifted resources | v0.5 |
 
-The agent's job type system is **extensible via addons**. External packages (including commercial variants) can register additional job types through the `nodeforge.addons` entry_points mechanism. The agent provides the trusted execution surface — discovery of running services, Docker management, SQL execution against local databases, HTTP health checks — and addons define new job types that leverage these primitives.
+The agent's job type system is **extensible via addons**. External packages (including commercial variants) can register additional job types through the `loft_cli.addons` entry_points mechanism. The agent provides the trusted execution surface — discovery of running services, Docker management, SQL execution against local databases, HTTP health checks — and addons define new job types that leverage these primitives.
 
 This design means the agent is a **general-purpose on-machine operations agent**, not limited to infrastructure provisioning. However, the OSS agent ships only with infrastructure job types. The agent's built-in primitives (service discovery, Docker management, database connectivity, HTTP checks) are available to any addon, enabling higher-level workflows without rebuilding low-level capabilities.
 
@@ -44,7 +44,7 @@ This design means the agent is a **general-purpose on-machine operations agent**
 
 ## Vision
 
-Nodeforge is a **self-hosted infrastructure compiler** that turns human-readable YAML specs into **reviewable plans** and **deterministic execution**.
+Loft-CLI is a **self-hosted infrastructure compiler** that turns human-readable YAML specs into **reviewable plans** and **deterministic execution**.
 
 The product evolves in four deliberate stages:
 
@@ -104,19 +104,19 @@ The product evolves in four deliberate stages:
 
 **Goal:** Introduce the server-local agent model and deliver Docker Compose stack management as the first agent-native workload.
 
-This is the **architectural pivot release**. The `nodeforge-agent` binary becomes the operator on every managed server. The client CLI becomes a thin transporter.
+This is the **architectural pivot release**. The `loft-cli-agent` binary becomes the operator on every managed server. The client CLI becomes a thin transporter.
 
 ### Agent Architecture
 
 | Item | Description |
 |---|---|
-| `nodeforge-agent` binary | Separate binary installed on the target server as the first step of bootstrap |
-| Agent-first bootstrap | Client connects via SSH, uploads agent + desired state, invokes `nodeforge-agent bootstrap`, disconnects. Agent operates locally. |
+| `loft-cli-agent` binary | Separate binary installed on the target server as the first step of bootstrap |
+| Agent-first bootstrap | Client connects via SSH, uploads agent + desired state, invokes `loft-cli-agent bootstrap`, disconnects. Agent operates locally. |
 | Transport abstraction | Fabric wrapped behind `Transport` protocol: `connect()`, `upload()`, `exec()`, `download()` |
-| Server-side state | `/etc/nodeforge/` (config), `/var/lib/nodeforge/` (runtime state, locks, secrets), `/var/log/nodeforge/` (logs) |
+| Server-side state | `/etc/loft-cli/` (config), `/var/lib/loft-cli/` (runtime state, locks, secrets), `/var/log/loft-cli/` (logs) |
 | Local secret generation | Agent generates `.env` values and service secrets on the target server |
 | Runtime state tracking | `runtime-state.json` records applied state (hashes, timestamps, versions) |
-| Mutation locking | Lock file in `/var/lib/nodeforge/locks/` — one mutation at a time |
+| Mutation locking | Lock file in `/var/lib/loft-cli/locks/` — one mutation at a time |
 
 ### Compose Stacks (first agent-native workload)
 
@@ -137,7 +137,7 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 **Acceptance criteria:**
 - Bootstrap installs agent as first step; all subsequent operations run locally on the server
-- A fresh bootstrapped VPS can run a multi-container Compose stack using only nodeforge-managed specs
+- A fresh bootstrapped VPS can run a multi-container Compose stack using only loft-cli-managed specs
 - Template rendering is deterministic and reviewable in the plan
 - Health check failures are surfaced clearly in apply output
 - Client CLI works as a thin transporter (upload, invoke, retrieve status)
@@ -161,10 +161,10 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 | Item | Description | Status |
 |---|---|---|
-| `nodeforge version` | Print current version (client + agent via `--host`) | Done |
-| `nodeforge update` | Self-update client from GitHub Releases; `nodeforge agent-update <host>` for the agent | Done |
+| `loft-cli version` | Print current version (client + agent via `--host`) | Done |
+| `loft-cli update` | Self-update client from GitHub Releases; `loft-cli agent-update <host>` for the agent | Done |
 | Shell completion | Enable `typer` completion (`add_completion=True`) | Done |
-| Spec dry-run diff | `nodeforge diff` shows exactly what would change on the server before applying | Done |
+| Spec dry-run diff | `loft-cli diff` shows exactly what would change on the server before applying | Done |
 | Multiple YAML documents | `yaml.safe_load_all()` with `---` separator support; backward-compatible | Done |
 
 **New capabilities:**
@@ -172,16 +172,16 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 - Agent executor with subprocess-based local execution
 - Mutation locking via `fcntl.flock` (one apply at a time)
 - Runtime state tracking with atomic save (`runtime-state.json`)
-- Agent binary entry point (`nodeforge-agent apply|status|version`)
+- Agent binary entry point (`loft-cli-agent apply|status|version`)
 - Agent detection and auto/manual mode selection (`--mode auto|agent|client`)
 - Dry-run diff with added/changed/unchanged/always-run classification
 - Multi-document YAML with per-document error reporting
 
 **Acceptance criteria:**
 - All existing spec kinds execute through the agent — no direct Fabric orchestration for provisioning steps -- **met**
-- `nodeforge apply` is idempotent — re-running produces no changes if state matches -- **met**
+- `loft-cli apply` is idempotent — re-running produces no changes if state matches -- **met**
 - Plans are reviewable and stable -- **met**
-- Operators can inspect intended changes before execution (`nodeforge diff`) -- **met**
+- Operators can inspect intended changes before execution (`loft-cli diff`) -- **met**
 
 ---
 
@@ -195,9 +195,9 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 |---|---|---|
 | Desired vs. runtime state comparison | Agent compares `desired-state.json` against `runtime-state.json` | Done |
 | Partial apply | Only changed resources are applied — unchanged resources are skipped (hash-based) | Done |
-| Drift detection | `nodeforge doctor <spec>` reports divergence between desired and actual state | Done |
-| `nodeforge reconcile <spec>` | Bring server back to desired state by re-applying drifted resources | Done |
-| Desired state storage | Agent persists last-applied plan to `/var/lib/nodeforge/desired/desired-state.json` | Done |
+| Drift detection | `loft-cli doctor <spec>` reports divergence between desired and actual state | Done |
+| `loft-cli reconcile <spec>` | Bring server back to desired state by re-applying drifted resources | Done |
+| Desired state storage | Agent persists last-applied plan to `/var/lib/loft-cli/desired/desired-state.json` | Done |
 
 ### Policy Engine (OSS Core)
 
@@ -214,7 +214,7 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 | Item | Description | Status |
 |---|---|---|
 | Addon registry | 7 open registries + `load_addons()` via entry_points | Done |
-| Addon discovery | External addons register via `[project.entry-points."nodeforge.addons"]` | Done |
+| Addon discovery | External addons register via `[project.entry-points."loft_cli.addons"]` | Done |
 | `kind: stack` | Group related resources into a single deployable application boundary | Done |
 | Apply ordering | Stack-aware dependency-ordered execution via topological sort | Done |
 | Overlay / env-file layering | Multiple `--env-file` flags with explicit precedence order (RFC 008) | Done |
@@ -223,9 +223,9 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 | Item | Description | Status |
 |---|---|---|
-| `nodeforge-core` package | `plan/`, `specs/`, `registry/` (infrastructure), `utils/` — shared by client and agent | Done |
-| `nodeforge` package | Client: `compiler/`, `runtime/`, `local/`, `logs/`, `checks/`, `addons/`, `cli.py` | Done |
-| `nodeforge-agent` package | Agent: `executor.py`, `state.py`, `lock.py`, `paths.py`, `cli.py` | Done |
+| `loft-cli-core` package | `plan/`, `specs/`, `registry/` (infrastructure), `utils/` — shared by client and agent | Done |
+| `loft-cli` package | Client: `compiler/`, `runtime/`, `local/`, `logs/`, `checks/`, `addons/`, `cli.py` | Done |
+| `loft-cli-agent` package | Agent: `executor.py`, `state.py`, `lock.py`, `paths.py`, `cli.py` | Done |
 | Import boundaries enforced | Agent may not import from client; client may not import from agent | Done |
 | Monorepo layout | All three packages under `packages/` in the same git repo | Done |
 
@@ -234,29 +234,29 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 | Item | Description | Status |
 |---|---|---|
 | Agent binary build script | `scripts/build_agent_binary.py` — PyInstaller build with only core + agent deps (no Fabric/sqlcipher/paramiko) | Done |
-| Agent PyInstaller entrypoint | `scripts/agent_entrypoint.py` — delegates to `nodeforge_agent.cli:app` | Done |
-| Release workflow: agent jobs | `release.yml` split into `build-client` and `build-agent` jobs; agent builds `nodeforge-agent-linux-{amd64,arm64}` | Done |
+| Agent PyInstaller entrypoint | `scripts/agent_entrypoint.py` — delegates to `loft_cli_agent.cli:app` | Done |
+| Release workflow: agent jobs | `release.yml` split into `build-client` and `build-agent` jobs; agent builds `loft-cli-agent-linux-{amd64,arm64}` | Done |
 | Makefile target | `make build-agent-binary` for local agent binary builds | Done |
 | Updater compatibility | `updater.py` `update_agent()` already expects `agent-{suffix}` assets in GitHub Releases — now produced by the pipeline | Done |
 
 **New capabilities:**
-- Doctor command (`nodeforge doctor`) compares desired plan against runtime state, writes doctor-result.json
-- Reconcile command (`nodeforge reconcile`) re-applies only drifted resources
+- Doctor command (`loft-cli doctor`) compares desired plan against runtime state, writes doctor-result.json
+- Reconcile command (`loft-cli reconcile`) re-applies only drifted resources
 - Policy engine with per-step evaluation, fnmatch-based rule matching, AND logic for multi-condition rules
 - HMAC-SHA256 approval tokens with configurable TTL for `require_approval` steps
 - `kind: stack` schema with resources, dependency ordering, and circular dependency detection at validation time
 - Stack planner with topological sort and step ID prefixing for traceability
 - Repeatable `--env-file` CLI option for overlay layering; `env_files` parameter in loader
 - Stack inventory recording (`record_stack_apply`) tracks each resource as a stack_resource entry
-- Agent binary pipeline — `nodeforge-agent` standalone binaries (Linux amd64/arm64) built and published alongside client binaries in GitHub Releases
-- Agent binary is minimal: only `nodeforge-core` + `nodeforge-agent` deps (no Fabric, sqlcipher, paramiko)
+- Agent binary pipeline — `loft-cli-agent` standalone binaries (Linux amd64/arm64) built and published alongside client binaries in GitHub Releases
+- Agent binary is minimal: only `loft-cli-core` + `loft-cli-agent` deps (no Fabric, sqlcipher, paramiko)
 
 **Acceptance criteria:**
-- `nodeforge apply` is safe to re-run at any time — only applies what changed -- **met** (hash-based idempotent skip)
-- `nodeforge doctor` reports drift accurately -- **met** (compares desired plan hashes against runtime state)
+- `loft-cli apply` is safe to re-run at any time — only applies what changed -- **met** (hash-based idempotent skip)
+- `loft-cli doctor` reports drift accurately -- **met** (compares desired plan hashes against runtime state)
 - Policy engine is testable, auditable, and inert by default -- **met** (22 tests, no policy = no checks)
 - Stacks group resources with dependency-ordered execution -- **met** (topological sort, circular dep detection)
-- `pip install nodeforge-core` / `nodeforge` / `nodeforge-agent` each work independently -- **met** (three pyproject.toml, editable installs)
+- `pip install loft-cli-core` / `loft-cli` / `loft-cli-agent` each work independently -- **met** (three pyproject.toml, editable installs)
 - Agent binary only includes agent + core code, not compiler/runtime/Fabric -- **met** (import boundaries enforced)
 - Agent binary assets (`agent-linux-amd64`, `agent-linux-arm64`) produced in release pipeline -- **met** (`build-agent` job in `release.yml`)
 
@@ -266,7 +266,7 @@ This is the **architectural pivot release**. The `nodeforge-agent` binary become
 
 **Goal:** Make single-host stacks operationally safe, support post-bootstrap lifecycle management, and formalize the agent's service primitives so addons can build on them.
 
-**Design principle:** nodeforge manages infrastructure resources — deterministic, auditable, and reviewable in the plan. Application-level orchestration (API calls with response chaining, workflow imports, data seeding) belongs in the orchestration layer (e.g. n8n). The boundary: if the outcome depends only on OS/infrastructure state, it's nodeforge; if it depends on application runtime state, it's not.
+**Design principle:** loft-cli manages infrastructure resources — deterministic, auditable, and reviewable in the plan. Application-level orchestration (API calls with response chaining, workflow imports, data seeding) belongs in the orchestration layer (e.g. n8n). The boundary: if the outcome depends only on OS/infrastructure state, it's loft-cli; if it depends on application runtime state, it's not.
 
 ### Operational Primitives
 
@@ -302,7 +302,7 @@ These primitives are **general-purpose building blocks**. In the OSS agent, they
 
 | Item | Description |
 |---|---|
-| `nodeforge rotate-secret <spec> --secret <name>` | Rotate a managed secret (password_env), re-normalize, re-apply | Done |
+| `loft-cli rotate-secret <spec> --secret <name>` | Rotate a managed secret (password_env), re-normalize, re-apply | Done |
 
 **New capabilities:**
 - Timer-based recurring operations (reconcile, cleanup, scheduled jobs)
@@ -341,7 +341,7 @@ These primitives are **general-purpose building blocks**. In the OSS agent, they
 - Stable server identity across re-runs via write-once local state
 
 **Acceptance criteria:**
-- `nodeforge apply` with `wireguard.enabled: true` and no `private_key_file` auto-generates the server key, deploys WireGuard, and produces a working `client.conf`
+- `loft-cli apply` with `wireguard.enabled: true` and no `private_key_file` auto-generates the server key, deploys WireGuard, and produces a working `client.conf`
 - Re-running reuses the same server key from local state
 - Existing specs with explicit `private_key_file` are unaffected
 - Works on Linux, macOS, and Windows (PyNaCl only, no shell subprocess)
@@ -358,7 +358,7 @@ These primitives are **general-purpose building blocks**. In the OSS agent, they
 | Socket-aware `enable_pubkey_auth()` | Same socket detection for the pubkey auth reload — ensures sshd picks up config changes on socket-activated systems |
 | Robust `write_sshd_config_candidate()` | Use grep+sed+append pattern: if no `Port` line exists in `sshd_config` (common on Ubuntu 24.04 where defaults are implicit), append `Port <port>` instead of silently doing nothing |
 | Cross-distro goss SSH enabled check | Replace `service ssh { enabled: true }` with a command check (`systemctl is-enabled ssh.socket \|\| ssh \|\| sshd`). The static `service` check fails on Ubuntu 24.04 where `ssh.service` is not enabled (only `ssh.socket` is). The command fallback chain works on socket-activated (Ubuntu 24.04+), traditional (Ubuntu 22.04, Debian), and Fedora/RHEL (`sshd`) systems |
-| Fix `__version__` | `nodeforge_core.__init__.__version__` was stuck at `"0.4.0"` — `nodeforge version` reported the wrong version. Now reads `"0.6.2"` |
+| Fix `__version__` | `loft_cli_core.__init__.__version__` was stuck at `"0.4.0"` — `loft-cli version` reported the wrong version. Now reads `"0.6.2"` |
 | Sync all `pyproject.toml` versions | Root workspace, core, client, and agent `pyproject.toml` files all bumped from `"0.6.0"` to `"0.6.2"` |
 
 **Root cause:** Ubuntu 24.04 (Noble) ships with `ssh.socket` active by default. The `Port` directive in `sshd_config` is ignored for listening — systemd's socket unit controls port binding. Changing the port requires `systemctl daemon-reload` (triggers `sshd-socket-generator` to regenerate `ListenStream` from `sshd_config`) followed by `systemctl restart ssh.socket` to re-bind. The previous `systemctl reload ssh` only signaled the sshd process to re-read config, which has no effect on which port the socket listens on.
@@ -366,21 +366,21 @@ These primitives are **general-purpose building blocks**. In the OSS agent, they
 **Discovered via:** Manual bootstrap testing against a Hetzner Cloud server running Ubuntu 24.04. The SSH lockout prevention gate correctly caught the failure — admin login on the new port was unreachable because the socket was still bound to port 22.
 
 **Acceptance criteria:**
-- `nodeforge apply` bootstrap on Ubuntu 24.04 with socket-activated sshd successfully changes the SSH port and passes the lockout prevention gate
+- `loft-cli apply` bootstrap on Ubuntu 24.04 with socket-activated sshd successfully changes the SSH port and passes the lockout prevention gate
 - Goss verification passes on both Ubuntu 24.04 (ssh.socket) and Ubuntu 22.04 (ssh.service)
 - Bootstrap on Ubuntu 22.04 / Debian (traditional `ssh.service`) continues to work unchanged
-- `nodeforge version` reports `0.6.2`
-- `make dev && nodeforge version` shows `0.6.2`
+- `loft-cli version` reports `0.6.2`
+- `make dev && loft-cli version` shows `0.6.2`
 - All unit tests pass including new socket-awareness assertions
 
 **Architectural note — `detect_os` and multi-distro awareness:**
 
-The v0.6.2 goss fix uses a command fallback chain that runs at `goss validate` time on the remote. This works because the SSH service naming is a small, bounded set (ssh.socket / ssh / sshd). However, once nodeforge supports multiple distributions (Fedora, RHEL, Arch, etc.), distro differences will compound across the entire pipeline — not just goss, but also the planner (package manager, service names, firewall provider) and the step builders.
+The v0.6.2 goss fix uses a command fallback chain that runs at `goss validate` time on the remote. This works because the SSH service naming is a small, bounded set (ssh.socket / ssh / sshd). However, once loft-cli supports multiple distributions (Fedora, RHEL, Arch, etc.), distro differences will compound across the entire pipeline — not just goss, but also the planner (package manager, service names, firewall provider) and the step builders.
 
 At that point, `detect_os` needs to become a first-class concept:
 
 1. **Today:** `detect_os` runs `cat /etc/os-release` and discards the output. It is a passive assertion step — if it fails, subsequent steps fail due to dependency ordering, but no code reads the result.
-2. **Dead code:** `nodeforge_core/utils/os_detect.py` contains an `OSInfo` dataclass with a parser for `/etc/os-release` output. It is never imported anywhere.
+2. **Dead code:** `loft_cli_core/utils/os_detect.py` contains an `OSInfo` dataclass with a parser for `/etc/os-release` output. It is never imported anywhere.
 3. **Missing:** There is no inter-step data bus (no Ansible-style `register:`/`set_fact:`). Steps cannot read previous step outputs. The Plan is fully static — baked at compile time with no late-binding.
 4. **Goss is plan-time:** The goss YAML is generated by the planner (no remote access), embedded as `file_content` in the plan, then uploaded verbatim during apply. The generator cannot access runtime-discovered OS info.
 
@@ -390,7 +390,7 @@ At that point, `detect_os` needs to become a first-class concept:
 
 ## v0.6.3 -- WireGuard Tunnel Lifecycle + SSH Lockout Prevention ✅
 
-**Goal:** Make the WireGuard VPN workflow safe and self-contained -- from bootstrap through daily use to machine decommissioning. After `nodeforge apply`, the user should never be locked out, should always know where their state lives, and should be able to manage tunnels without manual `wg-quick` commands.
+**Goal:** Make the WireGuard VPN workflow safe and self-contained -- from bootstrap through daily use to machine decommissioning. After `loft-cli apply`, the user should never be locked out, should always know where their state lives, and should be able to manage tunnels without manual `wg-quick` commands.
 
 **Discovered via:** Manual bootstrap testing against a Hetzner Cloud server with `wireguard.yaml`. After a successful apply, the user was locked out -- SSH was restricted to the WireGuard tunnel (steps `allow_ssh_on_wireguard` + `delete_open_ssh_rule`), but there was no gate verifying the tunnel actually worked from the client side. Additionally, an old Vagrant WireGuard tunnel (`wg0`) was still active on the client machine, conflicting with the new Hetzner tunnel that also wanted `wg0`. The user had to manually debug UFW rules, discover the client config path, tear down the stale tunnel, and bring up the new one.
 
@@ -398,82 +398,82 @@ At that point, `detect_os` needs to become a first-class concept:
 
 | Item | Description |
 |---|---|
-| Tunnel-up gate before SSH lockdown | After `allow_ssh_on_wireguard` and before `delete_open_ssh_rule`, nodeforge brings up the WireGuard tunnel locally and verifies SSH connectivity through the VPN IP (`admin@{wg_server_vpn_ip}:{ssh_port}`) | Done |
+| Tunnel-up gate before SSH lockdown | After `allow_ssh_on_wireguard` and before `delete_open_ssh_rule`, loft-cli brings up the WireGuard tunnel locally and verifies SSH connectivity through the VPN IP (`admin@{wg_server_vpn_ip}:{ssh_port}`) | Done |
 | Graceful fallback on gate failure | If SSH through the tunnel fails, the open SSH rule is NOT deleted -- the server remains accessible via public IP. Apply reports a warning with instructions | Done |
-| Automatic tunnel teardown on failure | If the gate fails, nodeforge tears down the tunnel it just brought up to avoid leaving a broken interface active | Done |
+| Automatic tunnel teardown on failure | If the gate fails, loft-cli tears down the tunnel it just brought up to avoid leaving a broken interface active | Done |
 
 **Root cause:** The existing `wireguard_up` postflight check (step 29) only verifies the server-side interface is up (`wg show wg0`). It does NOT verify the client can connect through the tunnel. Steps 32-33 (`allow_ssh_on_wireguard` + `delete_open_ssh_rule`) then lock SSH to the tunnel interface without any client-side connectivity proof.
 
 **Files affected:**
-- `packages/client/nodeforge/compiler/planner.py` -- insert gate step between the two firewall steps
-- `packages/client/nodeforge/runtime/executor.py` -- implement gate: bring up tunnel, verify SSH, proceed or abort
-- `packages/client/nodeforge/runtime/steps/bootstrap.py` -- add gate command builder if needed
+- `packages/client/loft-cli/compiler/planner.py` -- insert gate step between the two firewall steps
+- `packages/client/loft-cli/runtime/executor.py` -- implement gate: bring up tunnel, verify SSH, proceed or abort
+- `packages/client/loft-cli/runtime/steps/bootstrap.py` -- add gate command builder if needed
 
-### 2. `nodeforge tunnel` CLI subcommand
+### 2. `loft-cli tunnel` CLI subcommand
 
 | Item | Description |
 |---|---|
-| `nodeforge tunnel up <host>` | Bring up the WireGuard tunnel for a host using the saved `client.conf`. Creates a uniquely-named interface (`wg-{host}`) to avoid collisions | Done |
-| `nodeforge tunnel down <host>` | Tear down the tunnel for that host | Done |
-| `nodeforge tunnel status` | List all hosts with WireGuard state (from `~/.wg/nodeforge/`), show which tunnels are currently active, display VPN IP and endpoint | Done |
+| `loft-cli tunnel up <host>` | Bring up the WireGuard tunnel for a host using the saved `client.conf`. Creates a uniquely-named interface (`wg-{host}`) to avoid collisions | Done |
+| `loft-cli tunnel down <host>` | Tear down the tunnel for that host | Done |
+| `loft-cli tunnel status` | List all hosts with WireGuard state (from `~/.wg/loft-cli/`), show which tunnels are currently active, display VPN IP and endpoint | Done |
 | Per-host interface naming | Client-side interfaces use `wg-{hostname}` (e.g. `wg-manufactum`) instead of the generic `wg0`. Server side keeps `wg0` (it only has one tunnel). This allows multiple tunnels to coexist (Vagrant + Hetzner + production) | Done |
-| Sudo handling | `wg-quick` requires root. `nodeforge tunnel up/down` invokes `sudo wg-quick` and provides a clear error if the user lacks sudo access | Done |
+| Sudo handling | `wg-quick` requires root. `loft-cli tunnel up/down` invokes `sudo wg-quick` and provides a clear error if the user lacks sudo access | Done |
 
-**State discovery:** `tunnel status` scans all subdirectories under `wg_state_base` (`~/.wg/nodeforge/`), reads each `metadata.json` for display info (endpoint, VPN IPs, deployment timestamp), and cross-references with `wg show` output to determine active/inactive status.
+**State discovery:** `tunnel status` scans all subdirectories under `wg_state_base` (`~/.wg/loft-cli/`), reads each `metadata.json` for display info (endpoint, VPN IPs, deployment timestamp), and cross-references with `wg show` output to determine active/inactive status.
 
 **Files affected:**
-- `packages/client/nodeforge/cli.py` -- add `tunnel` subcommand group (`tunnel_app`)
-- `packages/client/nodeforge/local/tunnel.py` (new) -- tunnel up/down/status logic
-- `packages/client/nodeforge/local/wireguard_store.py` -- store client interface name in metadata
-- `packages/client/nodeforge/runtime/steps/wireguard.py` -- `generate_client_config` accepts interface name parameter
+- `packages/client/loft-cli/cli.py` -- add `tunnel` subcommand group (`tunnel_app`)
+- `packages/client/loft-cli/local/tunnel.py` (new) -- tunnel up/down/status logic
+- `packages/client/loft-cli/local/wireguard_store.py` -- store client interface name in metadata
+- `packages/client/loft-cli/runtime/steps/wireguard.py` -- `generate_client_config` accepts interface name parameter
 
 ### 3. SSH config integration with WireGuard
 
 | Item | Description |
 |---|---|
 | VPN IP in SSH conf.d | When `wireguard.enabled: true`, the SSH conf.d entry uses the server's WireGuard VPN IP (e.g. `10.10.0.1`) as `HostName` instead of the public IP -- because after lockdown, only the VPN IP is reachable for SSH | Done |
-| Tunnel dependency comment | The generated SSH config includes a comment noting the WireGuard tunnel requirement: `# Requires: nodeforge tunnel up {host}` | Done |
+| Tunnel dependency comment | The generated SSH config includes a comment noting the WireGuard tunnel requirement: `# Requires: loft-cli tunnel up {host}` | Done |
 
 **Current behavior:** `planner.py:695` writes the SSH conf.d entry with `address=spec.host.address` (the public IP). After WireGuard SSH lockdown, that IP no longer accepts SSH connections.
 
 **Files affected:**
-- `packages/client/nodeforge/compiler/planner.py` -- pass VPN IP to SSH config step when WireGuard is enabled
-- `packages/client/nodeforge/local/ssh_config.py` -- add tunnel dependency comment to generated config
+- `packages/client/loft-cli/compiler/planner.py` -- pass VPN IP to SSH config step when WireGuard is enabled
+- `packages/client/loft-cli/local/ssh_config.py` -- add tunnel dependency comment to generated config
 
-### 4. `nodeforge remove <host>`
+### 4. `loft-cli remove <host>`
 
 | Item | Description |
 |---|---|
-| `nodeforge remove <host>` | Single command to clean up all local nodeforge state for a decommissioned machine | Done |
-| WireGuard cleanup | Tears down active tunnel (if running), removes `~/.wg/nodeforge/{host}/` | Done |
-| SSH config cleanup | Removes `~/.ssh/conf.d/nodeforge/{host}.conf` | Done |
-| Inventory cleanup | Marks the host as decommissioned in `~/.nodeforge/inventory.db` | Done |
+| `loft-cli remove <host>` | Single command to clean up all local loft-cli state for a decommissioned machine | Done |
+| WireGuard cleanup | Tears down active tunnel (if running), removes `~/.wg/loft-cli/{host}/` | Done |
+| SSH config cleanup | Removes `~/.ssh/conf.d/loft-cli/{host}.conf` | Done |
+| Inventory cleanup | Marks the host as decommissioned in `~/.loft-cli/inventory.db` | Done |
 | Goss cleanup | Removes any goss specs for the host | Done |
 | Confirmation prompt | Requires user confirmation (`Remove all local state for '{host}'?`), skippable with `--force` | Done |
 
-**Motivation:** When a cloud machine is destroyed (e.g. `hcloud server delete manufactum`), there is no way to clean up the local nodeforge artifacts. State accumulates silently -- stale tunnel configs, orphaned SSH entries, ghost inventory records. `nodeforge remove` is the lifecycle endpoint: apply creates, doctor monitors, remove cleans up.
+**Motivation:** When a cloud machine is destroyed (e.g. `hcloud server delete manufactum`), there is no way to clean up the local loft-cli artifacts. State accumulates silently -- stale tunnel configs, orphaned SSH entries, ghost inventory records. `loft-cli remove` is the lifecycle endpoint: apply creates, doctor monitors, remove cleans up.
 
 **Files affected:**
-- `packages/client/nodeforge/cli.py` -- add `remove` command
-- `packages/client/nodeforge/local/remove.py` (new) -- orchestrate cleanup across all local stores
-- `packages/client/nodeforge/local/wireguard_store.py` -- add `remove_wireguard_state(host_name)` function
-- `packages/client/nodeforge/local/ssh_config.py` -- `remove_ssh_conf_d` already exists
-- `packages/client/nodeforge/local/inventory_db.py` -- add decommission/remove function
+- `packages/client/loft-cli/cli.py` -- add `remove` command
+- `packages/client/loft-cli/local/remove.py` (new) -- orchestrate cleanup across all local stores
+- `packages/client/loft-cli/local/wireguard_store.py` -- add `remove_wireguard_state(host_name)` function
+- `packages/client/loft-cli/local/ssh_config.py` -- `remove_ssh_conf_d` already exists
+- `packages/client/loft-cli/local/inventory_db.py` -- add decommission/remove function
 
 **New capabilities:**
 - WireGuard tunnel safety gate -- SSH lockdown only proceeds after verifying client-side tunnel connectivity
-- `nodeforge tunnel up|down|status` -- first-class tunnel management from the CLI
+- `loft-cli tunnel up|down|status` -- first-class tunnel management from the CLI
 - Per-host client-side interface naming (`wg-{host}`) -- multiple tunnels coexist without collision
 - SSH config uses VPN IP when WireGuard is active -- `ssh {host}` works once the tunnel is up
-- `nodeforge remove <host>` -- clean lifecycle endpoint for decommissioned machines
+- `loft-cli remove <host>` -- clean lifecycle endpoint for decommissioned machines
 
 **Acceptance criteria:**
-- `nodeforge apply` with `wireguard.enabled: true` does NOT delete the open SSH rule until SSH through the VPN tunnel is verified from the client side
+- `loft-cli apply` with `wireguard.enabled: true` does NOT delete the open SSH rule until SSH through the VPN tunnel is verified from the client side
 - If the tunnel gate fails, the server remains accessible via public IP and the user gets a clear warning
-- `nodeforge tunnel up manufactum` brings up a `wg-manufactum` interface; `nodeforge tunnel up vagrant-node` brings up `wg-vagrant-node` -- both can be active simultaneously
-- `nodeforge tunnel status` shows all known hosts, their VPN IPs, endpoints, and active/inactive status
+- `loft-cli tunnel up manufactum` brings up a `wg-manufactum` interface; `loft-cli tunnel up vagrant-node` brings up `wg-vagrant-node` -- both can be active simultaneously
+- `loft-cli tunnel status` shows all known hosts, their VPN IPs, endpoints, and active/inactive status
 - After WireGuard bootstrap, `ssh manufactum` (via SSH conf.d) connects through the VPN IP
-- `nodeforge remove manufactum` tears down the tunnel, removes WG state, SSH config, and marks the inventory record as decommissioned
+- `loft-cli remove manufactum` tears down the tunnel, removes WG state, SSH config, and marks the inventory record as decommissioned
 - Existing specs without WireGuard are completely unaffected
 
 ---
@@ -501,7 +501,7 @@ At that point, `detect_os` needs to become a first-class concept:
 - Circular includes are rejected at validation time
 
 **Acceptance criteria:**
-- Nodeforge can define and expand blueprints
+- Loft-CLI can define and expand blueprints
 - Expanded plans remain explicit and reviewable
 - Official stack fragments can be published and reused
 
@@ -542,7 +542,7 @@ At that point, `detect_os` needs to become a first-class concept:
 
 ## v1.0 -- Production-Ready Release
 
-**Goal:** Make nodeforge stable enough for unattended production use by independent operators.
+**Goal:** Make loft-cli stable enough for unattended production use by independent operators.
 
 | Item | Description |
 |---|---|
@@ -583,26 +583,26 @@ At that point, `detect_os` needs to become a first-class concept:
 
 ## Binary Distribution Architecture
 
-nodeforge ships two standalone binaries:
+loft-cli ships two standalone binaries:
 
 | Binary | Targets | Contents | Build Script |
 |---|---|---|---|
-| `nodeforge` | Linux amd64/arm64, macOS amd64/arm64 | Client + core (includes Fabric, paramiko, sqlcipher3) | `scripts/build_binary.py` |
-| `nodeforge-agent` | Linux amd64/arm64 only | Agent + core (minimal — no Fabric, no sqlcipher, no paramiko) | `scripts/build_agent_binary.py` |
+| `loft-cli` | Linux amd64/arm64, macOS amd64/arm64 | Client + core (includes Fabric, paramiko, sqlcipher3) | `scripts/build_binary.py` |
+| `loft-cli-agent` | Linux amd64/arm64 only | Agent + core (minimal — no Fabric, no sqlcipher, no paramiko) | `scripts/build_agent_binary.py` |
 
-Both binaries are built via PyInstaller and published as GitHub Release assets. The client binary includes `nodeforge update` (self-update) and `nodeforge agent-update <host>` (remote agent update). The `updater.py` module downloads the correct platform-specific asset from the latest GitHub Release.
+Both binaries are built via PyInstaller and published as GitHub Release assets. The client binary includes `loft-cli update` (self-update) and `loft-cli agent-update <host>` (remote agent update). The `updater.py` module downloads the correct platform-specific asset from the latest GitHub Release.
 
 ### Future: OSS-to-Pro Upgrade Path
 
-The Pro variant (`nodeforge-pro`) is a separate binary distributed from self-hosted infrastructure (Minio/S3-compatible, bootstrapped with nodeforge itself). The upgrade flow is planned but not yet built:
+The Pro variant (`loft-cli-pro`) is a separate binary distributed from self-hosted infrastructure (Minio/S3-compatible, bootstrapped with loft-cli itself). The upgrade flow is planned but not yet built:
 
 | Item | Description | Target |
 |---|---|---|
-| `nodeforge upgrade-to-pro --token <TOKEN>` | CLI command that downloads the Pro binary from a presigned URL and replaces the OSS binary | pro-v0.1 |
+| `loft-cli upgrade-to-pro --token <TOKEN>` | CLI command that downloads the Pro binary from a presigned URL and replaces the OSS binary | pro-v0.1 |
 | Presigned URL support in updater | `updater.py` gains a `download_from_url()` path alongside the existing GitHub Releases path | pro-v0.1 |
 | Localhost callback upgrade | Browser-to-localhost handoff (like Spotify auth) — platform sends upgrade token to companion | pro-v0.2 |
 | Self-hosted binary hosting | API endpoint returns presigned S3/Minio URLs; no private GitHub Releases | pro-v0.1 |
-| Auto-install agent during apply | Client automatically installs/updates the agent binary on the target server as part of `nodeforge apply` | v0.6 |
+| Auto-install agent during apply | Client automatically installs/updates the agent binary on the target server as part of `loft-cli apply` | v0.6 |
 
 ---
 
@@ -610,14 +610,14 @@ The Pro variant (`nodeforge-pro`) is a separate binary distributed from self-hos
 
 ### Client (CLI + optional companion)
 
-nodeforge client runs on **Linux, macOS, and Windows**.
+loft-cli client runs on **Linux, macOS, and Windows**.
 
 - Linux and macOS: full support (CLI + companion)
 - Windows: companion support targeted for v1.0+; CLI works where Python is available
 
 ### Agent (target server)
 
-The target of every spec is always a **remote Linux server (Debian/Ubuntu)**. The `nodeforge-agent` binary runs on the target server and performs all provisioning locally.
+The target of every spec is always a **remote Linux server (Debian/Ubuntu)**. The `loft-cli-agent` binary runs on the target server and performs all provisioning locally.
 
 ---
 
@@ -639,4 +639,4 @@ The target of every spec is always a **remote Linux server (Debian/Ubuntu)**. Th
 
 > **Agent is the trusted execution surface** -- one agent per server, extensible via addons. Infrastructure provisioning is the core job type; the agent's service primitives are available to addons for higher-level workflows.
 
-> **nodeforge is Layer 1** -- it makes VMs ready and usable. Application-level configuration (Layer 2) is out of scope for nodeforge OSS but enabled by the agent's extensible job type system.
+> **loft-cli is Layer 1** -- it makes VMs ready and usable. Application-level configuration (Layer 2) is out of scope for loft-cli OSS but enabled by the agent's extensible job type system.

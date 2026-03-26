@@ -12,9 +12,9 @@ GET-only HTTP readiness probe with retry and backoff.
 ## Usage
 
 ```bash
-nodeforge validate examples/http-check/http-check.yaml
-nodeforge plan examples/http-check/http-check.yaml
-nodeforge apply examples/http-check/http-check.yaml
+loft-cli validate examples/http-check/http-check.yaml
+loft-cli plan examples/http-check/http-check.yaml
+loft-cli apply examples/http-check/http-check.yaml
 ```
 
 ## Stack Integration

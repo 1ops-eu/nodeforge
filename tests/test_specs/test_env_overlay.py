@@ -5,7 +5,7 @@ import textwrap
 
 import pytest
 
-from nodeforge_core.specs.loader import SpecLoadError, load_env_file, load_spec
+from loft_cli_core.specs.loader import SpecLoadError, load_env_file, load_spec
 
 
 class TestLoadEnvFile:

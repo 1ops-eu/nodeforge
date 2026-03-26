@@ -16,9 +16,9 @@ Uses environment variable resolution to parameterize:
 export SERVER_IP=203.0.113.10
 export ADMIN_USER=deploy
 
-nodeforge validate examples/bootstrap-env-vars/bootstrap-env-vars.yaml
-nodeforge plan examples/bootstrap-env-vars/bootstrap-env-vars.yaml
-nodeforge apply examples/bootstrap-env-vars/bootstrap-env-vars.yaml
+loft-cli validate examples/bootstrap-env-vars/bootstrap-env-vars.yaml
+loft-cli plan examples/bootstrap-env-vars/bootstrap-env-vars.yaml
+loft-cli apply examples/bootstrap-env-vars/bootstrap-env-vars.yaml
 ```
 
 ## Variable Resolution Syntax

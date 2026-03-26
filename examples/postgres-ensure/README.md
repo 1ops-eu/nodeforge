@@ -15,9 +15,9 @@ Ensure PostgreSQL resources exist on a running instance.
 
 ```bash
 export APP_DB_PASSWORD="secure-password-here"
-nodeforge validate examples/postgres-ensure/postgres-ensure.yaml
-nodeforge plan examples/postgres-ensure/postgres-ensure.yaml
-nodeforge apply examples/postgres-ensure/postgres-ensure.yaml
+loft-cli validate examples/postgres-ensure/postgres-ensure.yaml
+loft-cli plan examples/postgres-ensure/postgres-ensure.yaml
+loft-cli apply examples/postgres-ensure/postgres-ensure.yaml
 ```
 
 ## Connection Modes

@@ -14,9 +14,9 @@ Deploys multiple Docker containers including an API server, a background worker,
 ## Usage
 
 ```bash
-nodeforge validate examples/multi-container/multi-container.yaml
-nodeforge plan examples/multi-container/multi-container.yaml
-nodeforge apply examples/multi-container/multi-container.yaml
+loft-cli validate examples/multi-container/multi-container.yaml
+loft-cli plan examples/multi-container/multi-container.yaml
+loft-cli apply examples/multi-container/multi-container.yaml
 ```
 
 ## Prerequisites

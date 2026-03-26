@@ -2,13 +2,13 @@
 
 import pytest
 
-from nodeforge.local.ssh_config import (
+from loft_cli.local.ssh_config import (
     backup_ssh_config,
     ensure_include,
     remove_ssh_conf_d,
     write_ssh_conf_d,
 )
-from nodeforge_core.registry.local_paths import LocalPathsConfig, register_local_paths
+from loft_cli_core.registry.local_paths import LocalPathsConfig, register_local_paths
 
 
 @pytest.fixture(autouse=True)
@@ -16,8 +16,8 @@ def isolated_local_paths(tmp_path):
     """Override local paths to use tmp_path so tests never touch ~/.ssh."""
     register_local_paths(
         LocalPathsConfig(
-            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "nodeforge",
-            wg_state_base=tmp_path / "wg" / "nodeforge",
+            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "loft-cli",
+            wg_state_base=tmp_path / "wg" / "loft-cli",
         )
     )
     yield
@@ -47,7 +47,7 @@ def test_write_ssh_conf_d_is_idempotent(tmp_path):
     for _ in range(2):
         write_ssh_conf_d("myserver", "1.2.3.4", "deploy", 2222)
 
-    from nodeforge_core.registry.local_paths import get_local_paths
+    from loft_cli_core.registry.local_paths import get_local_paths
 
     conf_file = get_local_paths().ssh_conf_d_base / "myserver.conf"
     content = conf_file.read_text()
@@ -56,15 +56,15 @@ def test_write_ssh_conf_d_is_idempotent(tmp_path):
 
 def test_write_ssh_conf_d_has_comment_marker():
     write_ssh_conf_d("myserver", "1.2.3.4", "deploy", 2222)
-    from nodeforge_core.registry.local_paths import get_local_paths
+    from loft_cli_core.registry.local_paths import get_local_paths
 
     conf_file = get_local_paths().ssh_conf_d_base / "myserver.conf"
-    assert "# nodeforge managed: myserver" in conf_file.read_text()
+    assert "# loft-cli managed: myserver" in conf_file.read_text()
 
 
 def test_remove_ssh_conf_d():
     write_ssh_conf_d("myserver", "1.2.3.4", "deploy", 2222)
-    from nodeforge_core.registry.local_paths import get_local_paths
+    from loft_cli_core.registry.local_paths import get_local_paths
 
     conf_file = get_local_paths().ssh_conf_d_base / "myserver.conf"
     assert conf_file.exists()
@@ -74,7 +74,7 @@ def test_remove_ssh_conf_d():
 
 def test_ensure_include_writes_glob(tmp_path):
     """ensure_include writes 'Include {conf_d_base}/*' — a single glob, not per-file."""
-    from nodeforge_core.registry.local_paths import get_local_paths
+    from loft_cli_core.registry.local_paths import get_local_paths
 
     config = tmp_path / "ssh_config"
     config.touch()
@@ -93,7 +93,7 @@ def test_ensure_include_is_idempotent(tmp_path):
     ensure_include(config)
     ensure_include(config)
 
-    from nodeforge_core.registry.local_paths import get_local_paths
+    from loft_cli_core.registry.local_paths import get_local_paths
 
     expected = f"Include {get_local_paths().ssh_conf_d_base}/*"
     assert config.read_text().count(expected) == 1

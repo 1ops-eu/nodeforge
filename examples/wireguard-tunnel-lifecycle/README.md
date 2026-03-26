@@ -2,10 +2,10 @@
 
 Demonstrates the full WireGuard tunnel lifecycle introduced in v0.6.3:
 
-1. **SSH-over-tunnel safety gate** — during bootstrap, nodeforge verifies SSH connectivity through the WireGuard tunnel before removing the open SSH firewall rule
-2. **SSH config points through tunnel** — `~/.ssh/conf.d/nodeforge/tunnel-demo-1.conf` uses the VPN IP (`10.10.0.1`) as `HostName`, with a comment noting the tunnel dependency
-3. **`nodeforge tunnel` CLI** — manage the client-side WireGuard tunnel after bootstrap
-4. **`nodeforge remove`** — clean up all local state when decommissioning
+1. **SSH-over-tunnel safety gate** — during bootstrap, loft-cli verifies SSH connectivity through the WireGuard tunnel before removing the open SSH firewall rule
+2. **SSH config points through tunnel** — `~/.ssh/conf.d/loft-cli/tunnel-demo-1.conf` uses the VPN IP (`10.10.0.1`) as `HostName`, with a comment noting the tunnel dependency
+3. **`loft-cli tunnel` CLI** — manage the client-side WireGuard tunnel after bootstrap
+4. **`loft-cli remove`** — clean up all local state when decommissioning
 
 ## What Happens During Apply
 
@@ -24,11 +24,11 @@ Demonstrates the full WireGuard tunnel lifecycle introduced in v0.6.3:
 
 ## After Bootstrap
 
-The generated SSH config at `~/.ssh/conf.d/nodeforge/tunnel-demo-1.conf`:
+The generated SSH config at `~/.ssh/conf.d/loft-cli/tunnel-demo-1.conf`:
 
 ```
-# nodeforge managed: tunnel-demo-1
-# Requires: nodeforge tunnel up tunnel-demo-1
+# loft-cli managed: tunnel-demo-1
+# Requires: loft-cli tunnel up tunnel-demo-1
 Host tunnel-demo-1
   HostName 10.10.0.1
   User deploy
@@ -41,34 +41,34 @@ Host tunnel-demo-1
 
 ```bash
 # Bring up the tunnel (required before SSH)
-nodeforge tunnel up tunnel-demo-1
+loft-cli tunnel up tunnel-demo-1
 
 # Check tunnel status for all hosts
-nodeforge tunnel status
+loft-cli tunnel status
 
 # SSH through the tunnel
 ssh tunnel-demo-1
 
 # Tear down the tunnel
-nodeforge tunnel down tunnel-demo-1
+loft-cli tunnel down tunnel-demo-1
 ```
 
 ## Decommissioning
 
 ```bash
 # Remove all local state (tunnel, WG keys, SSH config, inventory)
-nodeforge remove tunnel-demo-1
+loft-cli remove tunnel-demo-1
 
 # Skip confirmation prompt
-nodeforge remove tunnel-demo-1 --force
+loft-cli remove tunnel-demo-1 --force
 ```
 
 ## Usage
 
 ```bash
-nodeforge validate examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.yaml
-nodeforge plan examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.yaml
-nodeforge apply examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.yaml
+loft-cli validate examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.yaml
+loft-cli plan examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.yaml
+loft-cli apply examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.yaml
 ```
 
 ## Prerequisites
@@ -80,21 +80,21 @@ nodeforge apply examples/wireguard-tunnel-lifecycle/wireguard-tunnel-lifecycle.y
 
 ### Passwordless sudo for WireGuard
 
-nodeforge runs `wg-quick` and `ip` via `sudo` to manage local tunnel interfaces.
+loft-cli runs `wg-quick` and `ip` via `sudo` to manage local tunnel interfaces.
 Without passwordless sudo these commands hang on the password prompt and time out.
 
 ```bash
-# /etc/sudoers.d/wireguard-nodeforge
+# /etc/sudoers.d/wireguard-loft-cli
 %sudo ALL=(ALL) NOPASSWD: /usr/bin/wg, /usr/bin/wg-quick, /usr/sbin/ip
 ```
 
 ```bash
-sudo visudo -f /etc/sudoers.d/wireguard-nodeforge
+sudo visudo -f /etc/sudoers.d/wireguard-loft-cli
 ```
 
 ## Notes
 
 - WireGuard server keys are auto-generated (no `private_key_file` needed)
-- Client keys are also auto-generated and stored at `~/.wg/nodeforge/tunnel-demo-1/`
+- Client keys are also auto-generated and stored at `~/.wg/loft-cli/tunnel-demo-1/`
 - The tunnel safety gate prevents SSH lockout: if the tunnel doesn't work, the open SSH rule stays
 - `registered_peers_only: true` means SSH is restricted to peer IP `10.10.0.2` on `wg0`

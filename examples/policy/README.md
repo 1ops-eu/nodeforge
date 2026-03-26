@@ -35,10 +35,10 @@ If no rule matches, the `default_action` (`auto_apply`) is used.
 
 ```bash
 # Deploy policy to the target host
-scp examples/policy/policy.yaml admin@myhost:/etc/nodeforge/policy.yaml
+scp examples/policy/policy.yaml admin@myhost:/etc/loft-cli/policy.yaml
 
 # Or pass it to the agent directly
-nodeforge-agent apply --policy examples/policy/policy.yaml plan.json
+loft-cli-agent apply --policy examples/policy/policy.yaml plan.json
 ```
 
 ## Structure

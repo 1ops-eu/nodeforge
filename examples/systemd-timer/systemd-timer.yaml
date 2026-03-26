@@ -15,7 +15,7 @@ login:
   port: 2222
 
 timer:
-  timer_name: nodeforge-cleanup
+  timer_name: loft-cli-cleanup
   description: Daily cleanup of temporary files
   on_calendar: "*-*-* 02:00:00"
   persistent: true
@@ -29,4 +29,4 @@ service:
 local:
   inventory:
     enabled: true
-    db_path: ~/.nodeforge/inventory.db
+    db_path: ~/.loft-cli/inventory.db

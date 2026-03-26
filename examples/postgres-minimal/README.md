@@ -12,9 +12,9 @@ Installs PostgreSQL 16 with default settings. No roles or databases are created.
 ## Usage
 
 ```bash
-nodeforge validate examples/postgres-minimal/postgres-minimal.yaml
-nodeforge plan examples/postgres-minimal/postgres-minimal.yaml
-nodeforge apply examples/postgres-minimal/postgres-minimal.yaml
+loft-cli validate examples/postgres-minimal/postgres-minimal.yaml
+loft-cli plan examples/postgres-minimal/postgres-minimal.yaml
+loft-cli apply examples/postgres-minimal/postgres-minimal.yaml
 ```
 
 ## Prerequisites

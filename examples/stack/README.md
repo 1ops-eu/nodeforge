@@ -21,9 +21,9 @@ Resources are executed in dependency order: `nginx-config` first, then `blog-app
 ## Usage
 
 ```bash
-nodeforge validate examples/stack/stack.yaml
-nodeforge plan examples/stack/stack.yaml
-nodeforge apply examples/stack/stack.yaml
+loft-cli validate examples/stack/stack.yaml
+loft-cli plan examples/stack/stack.yaml
+loft-cli apply examples/stack/stack.yaml
 ```
 
 ## Structure

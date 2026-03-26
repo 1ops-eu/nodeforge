@@ -1,6 +1,6 @@
-# Policy configuration for the nodeforge agent.
+# Policy configuration for the loft-cli agent.
 #
-# Place this file at /etc/nodeforge/policy.yaml on the target host,
+# Place this file at /etc/loft-cli/policy.yaml on the target host,
 # or pass --policy to the agent CLI.
 #
 # When no policy file is present, the agent auto-applies everything.

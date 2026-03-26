@@ -14,9 +14,9 @@ Deploy a host-native application as a systemd service with optional log rotation
 ## Usage
 
 ```bash
-nodeforge validate examples/systemd-unit/systemd-unit.yaml
-nodeforge plan examples/systemd-unit/systemd-unit.yaml
-nodeforge apply examples/systemd-unit/systemd-unit.yaml
+loft-cli validate examples/systemd-unit/systemd-unit.yaml
+loft-cli plan examples/systemd-unit/systemd-unit.yaml
+loft-cli apply examples/systemd-unit/systemd-unit.yaml
 ```
 
 ## Prerequisites

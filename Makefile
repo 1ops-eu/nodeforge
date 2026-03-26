@@ -5,15 +5,15 @@
 VENV      := .venv
 PYTHON    := $(VENV)/bin/python
 PIP       := $(VENV)/bin/pip
-APP_NAME  := nodeforge
-IMAGE_NAME ?= ghcr.io/1ops-eu/nodeforge
+APP_NAME  := loft-cli
+IMAGE_NAME ?= ghcr.io/1ops-eu/loft-cli
 VERSION   ?= $(shell python -c "import tomllib; print(tomllib.load(open('packages/core/pyproject.toml','rb'))['project']['version'])" 2>/dev/null || python -c "import tomli; print(tomli.load(open('packages/core/pyproject.toml','rb'))['project']['version'])" 2>/dev/null || grep '^version' packages/core/pyproject.toml | head -1 | cut -d'"' -f2)
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 
 help:
 	@echo ""
-	@echo "nodeforge — available targets"
+	@echo "loft-cli — available targets"
 	@echo ""
 	@echo "  Setup"
 	@echo "    make venv            Create .venv virtualenv"
@@ -102,7 +102,7 @@ validate-example:
 	    *) flags="" ;; \
 	  esac; \
 	  echo ">>> Validating $$spec"; \
-	  nodeforge validate "$$spec" $$flags || failed=1; \
+	  loft-cli validate "$$spec" $$flags || failed=1; \
 	done; \
 	[ "$$failed" -eq 0 ]
 
@@ -115,7 +115,7 @@ plan-example:
 	    *) flags="" ;; \
 	  esac; \
 	  echo ">>> Planning $$spec"; \
-	  nodeforge plan "$$spec" $$flags || failed=1; \
+	  loft-cli plan "$$spec" $$flags || failed=1; \
 	done; \
 	[ "$$failed" -eq 0 ]
 
@@ -128,7 +128,7 @@ docs-example:
 	    *) flags="" ;; \
 	  esac; \
 	  echo ">>> Generating docs for $$spec"; \
-	  nodeforge docs "$$spec" $$flags || failed=1; \
+	  loft-cli docs "$$spec" $$flags || failed=1; \
 	done; \
 	[ "$$failed" -eq 0 ]
 

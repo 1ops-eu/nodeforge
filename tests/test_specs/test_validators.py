@@ -1,7 +1,7 @@
 """Tests for cross-field validation logic."""
 
-from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
-from nodeforge_core.specs.validators import has_errors, validate_bootstrap
+from loft_cli_core.specs.bootstrap_schema import BootstrapSpec
+from loft_cli_core.specs.validators import has_errors, validate_bootstrap
 
 
 def _make_spec(**overrides) -> BootstrapSpec:

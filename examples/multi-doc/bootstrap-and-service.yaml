@@ -39,7 +39,7 @@ local:
 
   inventory:
     enabled: true
-    db_path: ~/.nodeforge/inventory.db
+    db_path: ~/.loft-cli/inventory.db
 
 checks:
   - type: ssh_reachable
@@ -82,7 +82,7 @@ postgres:
 local:
   inventory:
     enabled: true
-    db_path: ~/.nodeforge/inventory.db
+    db_path: ~/.loft-cli/inventory.db
 
 checks:
   - type: postgres_ready

@@ -2,7 +2,7 @@
 
 import time
 
-from nodeforge_core.policy import (
+from loft_cli_core.policy import (
     PolicyAction,
     PolicyConfig,
     PolicyRule,

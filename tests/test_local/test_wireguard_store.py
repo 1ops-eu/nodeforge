@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from nodeforge.local.wireguard_store import save_wireguard_state
-from nodeforge_core.registry.local_paths import LocalPathsConfig, register_local_paths
+from loft_cli.local.wireguard_store import save_wireguard_state
+from loft_cli_core.registry.local_paths import LocalPathsConfig, register_local_paths
 
 # Known WireGuard test key pair (Curve25519, base64)
 _SERVER_PRIVATE_KEY = "8IReoXMQH73MyHqq0PKq7jl1md08E5Cd4wfQf31qXHw="
@@ -39,8 +39,8 @@ PersistentKeepalive = 25
 def isolated_local_paths(tmp_path):
     register_local_paths(
         LocalPathsConfig(
-            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "nodeforge",
-            wg_state_base=tmp_path / "wg" / "nodeforge",
+            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "loft-cli",
+            wg_state_base=tmp_path / "wg" / "loft-cli",
         )
     )
     yield
@@ -72,7 +72,7 @@ def test_creates_host_directory(tmp_path):
 
 
 def test_host_dir_under_wg_state_base(tmp_path):
-    from nodeforge_core.registry.local_paths import get_local_paths
+    from loft_cli_core.registry.local_paths import get_local_paths
 
     host_dir = _save(tmp_path)
     assert host_dir.parent == get_local_paths().wg_state_base

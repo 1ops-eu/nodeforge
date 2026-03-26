@@ -17,16 +17,16 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: nodeforge-linux-amd64
-            binary_path: dist/nodeforge
+            artifact_name: loft-cli-linux-amd64
+            binary_path: dist/loft-cli
 
           - os: ubuntu-24.04-arm
-            artifact_name: nodeforge-linux-arm64
-            binary_path: dist/nodeforge
+            artifact_name: loft-cli-linux-arm64
+            binary_path: dist/loft-cli
 
           - os: macos-latest
-            artifact_name: nodeforge-macos-arm64
-            binary_path: dist/nodeforge
+            artifact_name: loft-cli-macos-arm64
+            binary_path: dist/loft-cli
 
     runs-on: ${{ matrix.os }}
 
@@ -60,12 +60,12 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: nodeforge-agent-linux-amd64
-            binary_path: dist/nodeforge-agent
+            artifact_name: loft-cli-agent-linux-amd64
+            binary_path: dist/loft-cli-agent
 
           - os: ubuntu-24.04-arm
-            artifact_name: nodeforge-agent-linux-arm64
-            binary_path: dist/nodeforge-agent
+            artifact_name: loft-cli-agent-linux-arm64
+            binary_path: dist/loft-cli-agent
 
     runs-on: ${{ matrix.os }}
 

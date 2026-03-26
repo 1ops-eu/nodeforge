@@ -3,12 +3,12 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nodeforge"
+name = "loft-cli"
 version = "0.6.3"
 description = "Securely bootstrap Linux servers with auditable plans, generated ops docs, and encrypted local inventory"
 requires-python = ">=3.11"
 dependencies = [
-    "nodeforge-core>=0.5.0",
+    "loft-cli-core>=0.5.0",
     "typer[all]>=0.9.0",
     "fabric>=3.2",
     "rich>=13.0",
@@ -28,12 +28,12 @@ dev = [
 ]
 
 [project.scripts]
-nodeforge = "nodeforge.cli:app"
+loft-cli = "loft_cli.cli:app"
 
 # Register built-in spec kinds so that load_addons() discovers them
-[project.entry-points."nodeforge.addons"]
-builtins = "nodeforge._builtins:_register_builtins"
+[project.entry-points."loft_cli.addons"]
+builtins = "loft_cli._builtins:_register_builtins"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["nodeforge*"]
+include = ["loft_cli*"]

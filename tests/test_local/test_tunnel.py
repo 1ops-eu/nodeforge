@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nodeforge.local.tunnel import (
+from loft_cli.local.tunnel import (
     _client_conf_path,
     _get_active_interfaces,
     _host_dir,
@@ -18,7 +18,7 @@ from nodeforge.local.tunnel import (
     tunnel_status,
     tunnel_up,
 )
-from nodeforge_core.registry.local_paths import LocalPathsConfig, register_local_paths
+from loft_cli_core.registry.local_paths import LocalPathsConfig, register_local_paths
 
 
 @pytest.fixture(autouse=True)
@@ -26,8 +26,8 @@ def isolated_local_paths(tmp_path):
     """Override local paths to use tmp_path so tests never touch real state."""
     register_local_paths(
         LocalPathsConfig(
-            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "nodeforge",
-            wg_state_base=tmp_path / "wg" / "nodeforge",
+            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "loft-cli",
+            wg_state_base=tmp_path / "wg" / "loft-cli",
         )
     )
     yield
@@ -97,14 +97,14 @@ class TestTunnelUp:
         assert not ok
         assert "No client.conf found" in msg
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=True)
     def test_already_active_returns_success(self, _mock_active, tmp_path):
         self._setup_client_conf(tmp_path)
         ok, msg = tunnel_up("testhost")
         assert ok
         assert "already active" in msg
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=False)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=False)
     @patch("subprocess.run")
     def test_successful_up(self, mock_run, _mock_active, tmp_path):
         self._setup_client_conf(tmp_path)
@@ -121,7 +121,7 @@ class TestTunnelUp:
         assert args[1] == "wg-quick"
         assert args[2] == "up"
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=False)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=False)
     @patch("subprocess.run")
     def test_failed_up(self, mock_run, _mock_active, tmp_path):
         self._setup_client_conf(tmp_path)
@@ -132,7 +132,7 @@ class TestTunnelUp:
         assert not ok
         assert "some error" in msg
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=False)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=False)
     @patch("subprocess.run", side_effect=FileNotFoundError)
     def test_wg_quick_not_found(self, _mock_run, _mock_active, tmp_path):
         self._setup_client_conf(tmp_path)
@@ -140,7 +140,7 @@ class TestTunnelUp:
         assert not ok
         assert "wg-quick not found" in msg
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=False)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=False)
     @patch("subprocess.run", side_effect=subprocess.TimeoutExpired("wg-quick", 30))
     def test_timeout(self, _mock_run, _mock_active, tmp_path):
         self._setup_client_conf(tmp_path)
@@ -148,7 +148,7 @@ class TestTunnelUp:
         assert not ok
         assert "timed out" in msg
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=False)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=False)
     @patch("subprocess.run")
     def test_temp_conf_cleaned_up(self, mock_run, _mock_active, tmp_path):
         """The temporary interface config file should be cleaned up."""
@@ -178,13 +178,13 @@ class TestTunnelDown:
         conf.chmod(0o600)
         return conf
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=False)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=False)
     def test_not_active_returns_success(self, _mock_active):
         ok, msg = tunnel_down("testhost")
         assert ok
         assert "not active" in msg
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run")
     def test_successful_down_with_client_conf(self, mock_run, _mock_active):
         """When client.conf exists, wg-quick down is called with temp config path."""
@@ -200,7 +200,7 @@ class TestTunnelDown:
         assert args[2] == "down"
         assert "/" in args[3]  # full path, not bare iface name
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run")
     def test_falls_back_to_ip_link_del_when_wg_quick_fails(self, mock_run, _mock_active):
         """If wg-quick down fails, ip link del is tried as fallback."""
@@ -215,7 +215,7 @@ class TestTunnelDown:
         assert "ip link del fallback" in msg
         assert mock_run.call_count == 2
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run")
     def test_ip_link_del_when_no_client_conf(self, mock_run, _mock_active):
         """When client.conf is missing, skip wg-quick and use ip link del."""
@@ -229,7 +229,7 @@ class TestTunnelDown:
         args = mock_run.call_args[0][0]
         assert args[:3] == ["sudo", "ip", "link"]
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run")
     def test_both_methods_fail(self, mock_run, _mock_active):
         """When both wg-quick and ip link del fail, returns failure."""
@@ -242,7 +242,7 @@ class TestTunnelDown:
         assert not ok
         assert "ip link error" in msg
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run")
     def test_temp_conf_cleaned_up(self, mock_run, _mock_active):
         """The temporary interface config file should be cleaned up after down."""
@@ -254,7 +254,7 @@ class TestTunnelDown:
         temp_conf = host_dir / f"{iface}.conf"
         assert not temp_conf.exists(), "Temporary interface config should be cleaned up"
 
-    @patch("nodeforge.local.tunnel._is_interface_active", return_value=True)
+    @patch("loft_cli.local.tunnel._is_interface_active", return_value=True)
     @patch("subprocess.run", side_effect=FileNotFoundError)
     def test_wg_quick_not_found(self, _mock_run, _mock_active):
         ok, msg = tunnel_down("testhost")
@@ -272,10 +272,10 @@ class TestTunnelStatus:
         hosts = tunnel_status()
         assert hosts == []
 
-    @patch("nodeforge.local.tunnel._get_active_interfaces", return_value=set())
+    @patch("loft_cli.local.tunnel._get_active_interfaces", return_value=set())
     def test_lists_hosts_from_metadata(self, _mock_active, tmp_path):
         """Should discover hosts from metadata.json files."""
-        from nodeforge_core.registry.local_paths import get_local_paths
+        from loft_cli_core.registry.local_paths import get_local_paths
 
         base = get_local_paths().wg_state_base
         host_dir = base / "myhost"
@@ -297,10 +297,10 @@ class TestTunnelStatus:
         assert hosts[0]["endpoint"] == "1.2.3.4:51820"
         assert hosts[0]["active"] is False
 
-    @patch("nodeforge.local.tunnel._get_active_interfaces")
+    @patch("loft_cli.local.tunnel._get_active_interfaces")
     def test_marks_active_interface(self, mock_active, tmp_path):
         """Active interface should be detected."""
-        from nodeforge_core.registry.local_paths import get_local_paths
+        from loft_cli_core.registry.local_paths import get_local_paths
 
         iface = _interface_name("myhost")
         mock_active.return_value = {iface}
@@ -319,10 +319,10 @@ class TestTunnelStatus:
         hosts = tunnel_status()
         assert hosts[0]["active"] is True
 
-    @patch("nodeforge.local.tunnel._get_active_interfaces", return_value=set())
+    @patch("loft_cli.local.tunnel._get_active_interfaces", return_value=set())
     def test_skips_dirs_without_metadata(self, _mock_active, tmp_path):
         """Directories without metadata.json should be skipped."""
-        from nodeforge_core.registry.local_paths import get_local_paths
+        from loft_cli_core.registry.local_paths import get_local_paths
 
         base = get_local_paths().wg_state_base
         (base / "no-metadata-host").mkdir(parents=True)
@@ -330,10 +330,10 @@ class TestTunnelStatus:
         hosts = tunnel_status()
         assert hosts == []
 
-    @patch("nodeforge.local.tunnel._get_active_interfaces", return_value=set())
+    @patch("loft_cli.local.tunnel._get_active_interfaces", return_value=set())
     def test_skips_invalid_json(self, _mock_active, tmp_path):
         """Corrupt metadata.json should be skipped gracefully."""
-        from nodeforge_core.registry.local_paths import get_local_paths
+        from loft_cli_core.registry.local_paths import get_local_paths
 
         base = get_local_paths().wg_state_base
         host_dir = base / "badhost"

@@ -1,10 +1,10 @@
-"""PyInstaller entrypoint for nodeforge.
+"""PyInstaller entrypoint for loft-cli.
 
 This wrapper is used by build_binary.py to produce the standalone executable.
-It delegates directly to the Typer app defined in nodeforge.cli.
+It delegates directly to the Typer app defined in loft_cli.cli.
 """
 
-from nodeforge.cli import app
+from loft_cli.cli import app
 
 if __name__ == "__main__":
     app()

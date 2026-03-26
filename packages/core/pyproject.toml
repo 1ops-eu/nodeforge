@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nodeforge-core"
+name = "loft-cli-core"
 version = "0.6.3"
-description = "Shared models, specs, and registry infrastructure for nodeforge"
+description = "Shared models, specs, and registry infrastructure for loft-cli"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.5",
@@ -17,4 +17,4 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["nodeforge_core*"]
+include = ["loft_cli_core*"]

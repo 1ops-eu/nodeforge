@@ -1,6 +1,6 @@
 # Multi-Document YAML Example
 
-This example demonstrates nodeforge's multi-document YAML support (v0.4+).
+This example demonstrates loft-cli's multi-document YAML support (v0.4+).
 
 A single YAML file contains two specs separated by `---`:
 
@@ -11,17 +11,17 @@ A single YAML file contains two specs separated by `---`:
 
 ```bash
 # Validate both documents
-nodeforge validate bootstrap-and-service.yaml
+loft-cli validate bootstrap-and-service.yaml
 
 # Show plans for both documents
-nodeforge plan bootstrap-and-service.yaml
+loft-cli plan bootstrap-and-service.yaml
 
 # Apply both in sequence
-nodeforge apply bootstrap-and-service.yaml
+loft-cli apply bootstrap-and-service.yaml
 ```
 
 ## How It Works
 
-When nodeforge encounters `---` separators in a YAML file, it parses each
+When loft-cli encounters `---` separators in a YAML file, it parses each
 document independently. Each document must have its own `kind:` field and
 a complete spec structure. Documents are processed in file order.

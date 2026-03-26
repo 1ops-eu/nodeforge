@@ -6,13 +6,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from nodeforge.runtime.steps.file_template import chmod_file, chown_file, mkdir_for_file
-from nodeforge_core.specs.file_template_schema import (
+from loft_cli.runtime.steps.file_template import chmod_file, chown_file, mkdir_for_file
+from loft_cli_core.specs.file_template_schema import (
     FileTemplateLoginBlock,
     FileTemplateSpec,
     TemplateFileBlock,
 )
-from nodeforge_core.specs.validators import has_errors, validate_file_template
+from loft_cli_core.specs.validators import has_errors, validate_file_template
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -232,9 +232,9 @@ class TestFileTemplatePlanner:
         return f
 
     def test_plan_has_file_template_steps(self, ft_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(ft_yaml)
         ctx = normalize(spec, spec_dir=ft_yaml.parent)
@@ -244,9 +244,9 @@ class TestFileTemplatePlanner:
         assert len(ft_steps) > 0
 
     def test_plan_has_preflight(self, ft_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(ft_yaml)
         ctx = normalize(spec, spec_dir=ft_yaml.parent)
@@ -256,9 +256,9 @@ class TestFileTemplatePlanner:
         assert "preflight_connect_admin" in step_ids
 
     def test_plan_has_per_template_steps(self, ft_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(ft_yaml)
         ctx = normalize(spec, spec_dir=ft_yaml.parent)
@@ -272,9 +272,9 @@ class TestFileTemplatePlanner:
         assert any(s.startswith("chown_") for s in step_ids)
 
     def test_upload_step_has_rendered_content(self, ft_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(ft_yaml)
         ctx = normalize(spec, spec_dir=ft_yaml.parent)
@@ -287,9 +287,9 @@ class TestFileTemplatePlanner:
         assert "listen 80" in upload_steps[0].file_content
 
     def test_file_template_remote_steps_are_sudo(self, ft_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(ft_yaml)
         ctx = normalize(spec, spec_dir=ft_yaml.parent)
@@ -300,9 +300,9 @@ class TestFileTemplatePlanner:
             assert step.sudo is True, f"Step {step.id} should be sudo"
 
     def test_step_indices_sequential(self, ft_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(ft_yaml)
         ctx = normalize(spec, spec_dir=ft_yaml.parent)
@@ -347,9 +347,9 @@ class TestFileTemplatePlanner:
         return f
 
     def test_plan_with_inventory_has_local_steps(self, ft_yaml_with_inventory):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(ft_yaml_with_inventory)
         ctx = normalize(spec, spec_dir=ft_yaml_with_inventory.parent)

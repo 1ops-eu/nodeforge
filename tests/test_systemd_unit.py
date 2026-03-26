@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from nodeforge.runtime.steps.systemd import (
+from loft_cli.runtime.steps.systemd import (
     daemon_reload,
     enable_unit,
     is_active,
@@ -11,12 +11,12 @@ from nodeforge.runtime.steps.systemd import (
     render_service_unit,
     restart_unit,
 )
-from nodeforge_core.specs.systemd_unit_schema import (
+from loft_cli_core.specs.systemd_unit_schema import (
     SystemdUnitConfig,
     SystemdUnitLoginBlock,
     SystemdUnitSpec,
 )
-from nodeforge_core.specs.validators import has_errors, validate_systemd_unit
+from loft_cli_core.specs.validators import has_errors, validate_systemd_unit
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -196,8 +196,8 @@ class TestSystemdStepHelpers:
 
 class TestSystemdUnitPlanning:
     def test_plan_generates_unit_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_unit_spec()
         ctx = normalize(spec)
@@ -212,8 +212,8 @@ class TestSystemdUnitPlanning:
         assert "verify_myapp_active" in step_ids
 
     def test_plan_unit_file_content(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_unit_spec()
         ctx = normalize(spec)
@@ -224,8 +224,8 @@ class TestSystemdUnitPlanning:
         assert "ExecStart=/usr/local/bin/myapp serve" in write_step.file_content
 
     def test_plan_with_logrotate(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_unit_spec(logrotate={"enabled": True, "path": "/var/log/app/*.log"})
         ctx = normalize(spec)
@@ -236,8 +236,8 @@ class TestSystemdUnitPlanning:
         assert "/var/log/app/*.log" in lr_steps[0].file_content
 
     def test_plan_without_logrotate(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_unit_spec()
         ctx = normalize(spec)
@@ -247,8 +247,8 @@ class TestSystemdUnitPlanning:
         assert len(lr_steps) == 0
 
     def test_plan_has_inventory_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_systemd_unit_spec()
         ctx = normalize(spec)

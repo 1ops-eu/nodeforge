@@ -13,9 +13,9 @@ Installs nginx and configures it as a reverse proxy for a single backend applica
 ## Usage
 
 ```bash
-nodeforge validate examples/nginx-reverse-proxy/nginx-reverse-proxy.yaml
-nodeforge plan examples/nginx-reverse-proxy/nginx-reverse-proxy.yaml
-nodeforge apply examples/nginx-reverse-proxy/nginx-reverse-proxy.yaml
+loft-cli validate examples/nginx-reverse-proxy/nginx-reverse-proxy.yaml
+loft-cli plan examples/nginx-reverse-proxy/nginx-reverse-proxy.yaml
+loft-cli apply examples/nginx-reverse-proxy/nginx-reverse-proxy.yaml
 ```
 
 ## Prerequisites

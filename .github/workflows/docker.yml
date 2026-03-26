@@ -30,7 +30,7 @@ jobs:
         run: |
           # Strip leading 'v' from tag (v1.2.3 → 1.2.3)
           TAG="${GITHUB_REF_NAME#v}"
-          IMAGE="ghcr.io/${{ github.repository_owner }}/nodeforge"
+          IMAGE="ghcr.io/${{ github.repository_owner }}/loft-cli"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 

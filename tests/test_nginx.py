@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from nodeforge.runtime.steps.nginx import (
+from loft_cli.runtime.steps.nginx import (
     enable_nginx,
     enable_site,
     install_nginx,
@@ -17,12 +17,12 @@ from nodeforge.runtime.steps.nginx import (
     site_config_path,
     validate_nginx_config,
 )
-from nodeforge_core.specs.service_schema import (
+from loft_cli_core.specs.service_schema import (
     NginxBlock,
     NginxSiteBlock,
     ServiceSpec,
 )
-from nodeforge_core.specs.validators import has_errors, validate_service
+from loft_cli_core.specs.validators import has_errors, validate_service
 
 # ---------------------------------------------------------------------------
 # Schema
@@ -290,9 +290,9 @@ class TestNginxPlanner:
         return f
 
     def test_plan_has_nginx_steps(self, nginx_service_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -302,9 +302,9 @@ class TestNginxPlanner:
         assert len(nginx_steps) > 0
 
     def test_plan_has_install_enable_reload(self, nginx_service_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -319,9 +319,9 @@ class TestNginxPlanner:
         assert "nginx_config_check" in step_ids
 
     def test_plan_has_per_site_steps(self, nginx_service_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -334,9 +334,9 @@ class TestNginxPlanner:
         assert "enable_nginx_site_api_example_com" in step_ids
 
     def test_nginx_steps_are_sudo(self, nginx_service_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)
@@ -347,9 +347,9 @@ class TestNginxPlanner:
             assert step.sudo is True, f"Step {step.id} should be sudo"
 
     def test_step_indices_sequential(self, nginx_service_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(nginx_service_yaml)
         ctx = normalize(spec)

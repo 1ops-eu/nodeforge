@@ -69,7 +69,7 @@ jobs:
           name: dist-core
           path: dist/
 
-      - name: Publish nodeforge-core to PyPI
+      - name: Publish loft-cli-core to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-client:
@@ -85,7 +85,7 @@ jobs:
           name: dist-client
           path: dist/
 
-      - name: Publish nodeforge to PyPI
+      - name: Publish loft-cli to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-agent:
@@ -101,5 +101,5 @@ jobs:
           name: dist-agent
           path: dist/
 
-      - name: Publish nodeforge-agent to PyPI
+      - name: Publish loft-cli-agent to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

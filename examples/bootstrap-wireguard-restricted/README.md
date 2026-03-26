@@ -25,9 +25,9 @@ Without `registered_peers_only`, SSH would be allowed from any IP on the WireGua
 ## Usage
 
 ```bash
-nodeforge validate examples/bootstrap-wireguard-restricted/bootstrap-wireguard-restricted.yaml
-nodeforge plan examples/bootstrap-wireguard-restricted/bootstrap-wireguard-restricted.yaml
-nodeforge apply examples/bootstrap-wireguard-restricted/bootstrap-wireguard-restricted.yaml
+loft-cli validate examples/bootstrap-wireguard-restricted/bootstrap-wireguard-restricted.yaml
+loft-cli plan examples/bootstrap-wireguard-restricted/bootstrap-wireguard-restricted.yaml
+loft-cli apply examples/bootstrap-wireguard-restricted/bootstrap-wireguard-restricted.yaml
 ```
 
 ## Prerequisites

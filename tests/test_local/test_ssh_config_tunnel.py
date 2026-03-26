@@ -9,16 +9,16 @@ from __future__ import annotations
 
 import pytest
 
-from nodeforge.local.ssh_config import write_ssh_conf_d
-from nodeforge_core.registry.local_paths import LocalPathsConfig, register_local_paths
+from loft_cli.local.ssh_config import write_ssh_conf_d
+from loft_cli_core.registry.local_paths import LocalPathsConfig, register_local_paths
 
 
 @pytest.fixture(autouse=True)
 def isolated_local_paths(tmp_path):
     register_local_paths(
         LocalPathsConfig(
-            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "nodeforge",
-            wg_state_base=tmp_path / "wg" / "nodeforge",
+            ssh_conf_d_base=tmp_path / "ssh" / "conf.d" / "loft-cli",
+            wg_state_base=tmp_path / "wg" / "loft-cli",
         )
     )
     yield
@@ -33,10 +33,10 @@ class TestTunnelComment:
             address="10.10.0.1",
             user="deploy",
             port=2222,
-            tunnel_comment="# Requires: nodeforge tunnel up wg-host",
+            tunnel_comment="# Requires: loft-cli tunnel up wg-host",
         )
         content = conf_file.read_text()
-        assert "# Requires: nodeforge tunnel up wg-host" in content
+        assert "# Requires: loft-cli tunnel up wg-host" in content
 
     def test_tunnel_comment_is_second_line(self, tmp_path):
         """Tunnel comment should be the second line (after the managed marker)."""
@@ -45,11 +45,11 @@ class TestTunnelComment:
             address="10.10.0.1",
             user="deploy",
             port=2222,
-            tunnel_comment="# Requires: nodeforge tunnel up wg-host",
+            tunnel_comment="# Requires: loft-cli tunnel up wg-host",
         )
         lines = conf_file.read_text().splitlines()
-        assert lines[0] == "# nodeforge managed: wg-host"
-        assert lines[1] == "# Requires: nodeforge tunnel up wg-host"
+        assert lines[0] == "# loft-cli managed: wg-host"
+        assert lines[1] == "# Requires: loft-cli tunnel up wg-host"
 
     def test_no_tunnel_comment_without_param(self, tmp_path):
         """When tunnel_comment is None, no extra comment line should appear."""
@@ -72,7 +72,7 @@ class TestTunnelComment:
             address="10.10.0.1",  # VPN IP, not public IP
             user="deploy",
             port=2222,
-            tunnel_comment="# Requires: nodeforge tunnel up wg-host",
+            tunnel_comment="# Requires: loft-cli tunnel up wg-host",
         )
         content = conf_file.read_text()
         assert "HostName 10.10.0.1" in content
@@ -87,7 +87,7 @@ class TestTunnelComment:
             user="deploy",
             port=2222,
             identity_file="~/.ssh/id_ed25519",
-            tunnel_comment="# Requires: nodeforge tunnel up wg-host",
+            tunnel_comment="# Requires: loft-cli tunnel up wg-host",
         )
         content = conf_file.read_text()
         assert "# Requires:" in content

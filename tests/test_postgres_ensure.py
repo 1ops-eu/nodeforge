@@ -3,14 +3,14 @@
 import pytest
 from pydantic import ValidationError
 
-from nodeforge.runtime.steps.postgres_ensure import (
+from loft_cli.runtime.steps.postgres_ensure import (
     ensure_database_cmd,
     ensure_extension_cmd,
     ensure_grant_cmd,
     ensure_user_cmd,
     pg_isready_cmd,
 )
-from nodeforge_core.specs.postgres_ensure_schema import (
+from loft_cli_core.specs.postgres_ensure_schema import (
     PgConnection,
     PgDatabase,
     PgExtension,
@@ -18,7 +18,7 @@ from nodeforge_core.specs.postgres_ensure_schema import (
     PgUser,
     PostgresEnsureSpec,
 )
-from nodeforge_core.specs.validators import has_errors, validate_postgres_ensure
+from loft_cli_core.specs.validators import has_errors, validate_postgres_ensure
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -228,8 +228,8 @@ class TestPostgresEnsureStepHelpers:
 
 class TestPostgresEnsurePlanning:
     def test_plan_generates_pg_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_postgres_ensure_spec()
         ctx = normalize(spec)
@@ -242,8 +242,8 @@ class TestPostgresEnsurePlanning:
         assert "ensure_database_app_db" in step_ids
 
     def test_plan_gate_step(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_postgres_ensure_spec()
         ctx = normalize(spec)
@@ -253,8 +253,8 @@ class TestPostgresEnsurePlanning:
         assert gate.gate is True
 
     def test_plan_with_extensions_and_grants(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_postgres_ensure_spec(
             extensions=[{"name": "uuid-ossp", "database": "app_db"}],
@@ -268,8 +268,8 @@ class TestPostgresEnsurePlanning:
         assert "grant_all_app_db_to_app_user" in step_ids
 
     def test_plan_has_inventory_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_postgres_ensure_spec()
         ctx = normalize(spec)
@@ -279,8 +279,8 @@ class TestPostgresEnsurePlanning:
         assert len(inv_steps) == 3
 
     def test_plan_docker_exec_connection(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_postgres_ensure_spec(
             connection={"docker_exec": "pg-container", "admin_user": "postgres"}

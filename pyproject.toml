@@ -4,17 +4,17 @@ build-backend = "setuptools.build_meta"
 
 # ── Root workspace config ─────────────────────────────────────────────────────
 # This project is split into three packages under packages/:
-#   - packages/core/    → nodeforge-core   (shared models, specs, registry)
-#   - packages/client/  → nodeforge        (CLI, compiler, runtime, local state)
-#   - packages/agent/   → nodeforge-agent  (server-side executor, state, locking)
+#   - packages/core/    → loft-cli-core   (shared models, specs, registry)
+#   - packages/client/  → loft-cli        (CLI, compiler, runtime, local state)
+#   - packages/agent/   → loft-cli-agent  (server-side executor, state, locking)
 #
 # Install all three for development:
 #   pip install -e packages/core -e packages/client -e packages/agent -e ".[dev]"
 
 [project]
-name = "nodeforge-workspace"
+name = "loft-cli-workspace"
 version = "0.6.3"
-description = "Workspace root for nodeforge monorepo"
+description = "Workspace root for loft-cli monorepo"
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
@@ -54,10 +54,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"packages/client/nodeforge/local/ddl/versionize_system.py" = ["E101", "W191"]  # embedded SQL uses tabs
+"packages/client/loft_cli/local/ddl/versionize_system.py" = ["E101", "W191"]  # embedded SQL uses tabs
 
 [tool.ruff.lint.isort]
-known-first-party = ["nodeforge", "nodeforge_core", "nodeforge_agent"]
+known-first-party = ["loft_cli", "loft_cli_core", "loft_cli_agent"]
 
 [tool.black]
 target-version = ["py311"]

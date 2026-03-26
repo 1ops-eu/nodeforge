@@ -21,9 +21,9 @@ Internet -> nginx:80 (app.example.com) -> webapp:8080 -> PostgreSQL:5432
 # Set the database password
 export APP_DB_PASSWORD="your-secure-password"
 
-nodeforge validate examples/full-stack/full-stack.yaml
-nodeforge plan examples/full-stack/full-stack.yaml
-nodeforge apply examples/full-stack/full-stack.yaml
+loft-cli validate examples/full-stack/full-stack.yaml
+loft-cli plan examples/full-stack/full-stack.yaml
+loft-cli apply examples/full-stack/full-stack.yaml
 ```
 
 ## Prerequisites
@@ -35,4 +35,4 @@ nodeforge apply examples/full-stack/full-stack.yaml
 
 - The execution order is: PostgreSQL -> nginx -> Docker -> containers -> inventory
 - Each service has its own verification check in the `checks` block
-- This demonstrates the core nodeforge value proposition: a single YAML spec defines an entire production-ready stack
+- This demonstrates the core loft-cli value proposition: a single YAML spec defines an entire production-ready stack

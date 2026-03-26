@@ -1,15 +1,15 @@
-# nodeforge (client)
+# loft-cli (client)
 
 > CLI tool that safely bootstraps Linux servers from YAML specs — compiling specs into reviewable plans, generating ops docs, and executing via the server-side agent.
 
-`nodeforge` is the client package. It provides the `nodeforge` CLI command, the three-phase compiler pipeline, transport abstraction for remote execution, local state management, and self-update capabilities.
+`loft-cli` is the client package. It provides the `loft-cli` CLI command, the three-phase compiler pipeline, transport abstraction for remote execution, local state management, and self-update capabilities.
 
 ---
 
 ## Installation
 
 ```bash
-pip install nodeforge
+pip install loft-cli
 ```
 
 Or as part of the monorepo development setup:
@@ -22,7 +22,7 @@ pip install -e packages/core -e packages/client
 
 ## Dependencies
 
-- `nodeforge-core>=0.5.0` -- shared models, specs, registries
+- `loft-cli-core>=0.5.0` -- shared models, specs, registries
 - `typer[all]>=0.9.0` -- CLI framework with shell completion
 - `fabric>=3.2` -- SSH transport (paramiko under the hood)
 - `rich>=13.0` -- terminal formatting and progress
@@ -38,8 +38,8 @@ pip install -e packages/core -e packages/client
 ## Module Structure
 
 ```
-nodeforge/
-  __init__.py           Re-exports __version__ from nodeforge-core
+loft-cli/
+  __init__.py           Re-exports __version__ from loft-cli-core
   _builtins.py          Registers built-in spec kinds via entry_points
   agent_installer.py    Agent detection and installation on target servers
   cli.py                Typer CLI entry point — all user-facing commands
@@ -78,7 +78,7 @@ nodeforge/
     remove.py           Host removal orchestration (tunnel + WG state + SSH config + inventory)
     ssh_config.py       ~/.ssh/conf.d/ fragment management (with tunnel_comment support)
     tunnel.py           WireGuard tunnel management — up, down, status via wg-quick
-    wireguard_store.py  WireGuard key material storage (~/.wg/nodeforge/)
+    wireguard_store.py  WireGuard key material storage (~/.wg/loft-cli/)
   checks/
     __init__.py
     compose.py          Docker Compose health check
@@ -92,7 +92,7 @@ nodeforge/
   logs/
     __init__.py
     reader.py           Read past run logs
-    writer.py           Write JSON run logs to ~/.nodeforge/runs/
+    writer.py           Write JSON run logs to ~/.loft-cli/runs/
   addons/
     __init__.py
     goss/               Built-in addon: Goss server-state verification
@@ -132,7 +132,7 @@ Two implementations:
 
 | Transport | Description | Status |
 |---|---|---|
-| `AgentTransport` | Uploads plan + agent binary, invokes `nodeforge-agent apply`, retrieves result | **Primary** (default) |
+| `AgentTransport` | Uploads plan + agent binary, invokes `loft-cli-agent apply`, retrieves result | **Primary** (default) |
 | `FabricTransport` | Executes each step via individual SSH commands | **Legacy** (deprecated) |
 
 Mode selection: `--mode auto` (default) tries agent first, falls back to client. `--mode agent` forces agent. `--mode client` forces Fabric.
@@ -168,10 +168,10 @@ Mode selection: `--mode auto` (default) tries agent first, falls back to client.
 
 `updater.py` handles binary updates:
 
-- **`nodeforge update`** — downloads the latest client binary from GitHub Releases (matches platform suffix), replaces the running binary
-- **`nodeforge agent-update <host>`** — downloads the latest agent binary, uploads it to the remote server, replaces the running agent
+- **`loft-cli update`** — downloads the latest client binary from GitHub Releases (matches platform suffix), replaces the running binary
+- **`loft-cli agent-update <host>`** — downloads the latest agent binary, uploads it to the remote server, replaces the running agent
 
-The updater looks for assets matching patterns like `nodeforge-linux-amd64` (client) and `agent-linux-amd64` (agent) in the latest GitHub Release.
+The updater looks for assets matching patterns like `loft-cli-linux-amd64` (client) and `agent-linux-amd64` (agent) in the latest GitHub Release.
 
 ---
 
@@ -190,8 +190,8 @@ If the gate fails, the open SSH rule is **not** deleted — the server remains a
 When WireGuard is enabled, the SSH config fragment uses the server's **VPN IP** as `HostName` instead of the public address. A comment is added noting the tunnel dependency:
 
 ```
-# nodeforge managed: myhost
-# Requires: nodeforge tunnel up myhost
+# loft-cli managed: myhost
+# Requires: loft-cli tunnel up myhost
 Host myhost
   HostName 10.10.0.1
   User deploy
@@ -200,11 +200,11 @@ Host myhost
 
 ### Tunnel Management (`tunnel.py`)
 
-`nodeforge tunnel` subcommands manage client-side WireGuard tunnels via `wg-quick`:
+`loft-cli tunnel` subcommands manage client-side WireGuard tunnels via `wg-quick`:
 
-- **`tunnel up <host>`** — creates a temporary config from `~/.wg/nodeforge/{host}/client.conf`, invokes `sudo wg-quick up`
+- **`tunnel up <host>`** — creates a temporary config from `~/.wg/loft-cli/{host}/client.conf`, invokes `sudo wg-quick up`
 - **`tunnel down <host>`** — recreates the temporary config and invokes `sudo wg-quick down`; falls back to `sudo ip link del` if the config is missing or `wg-quick` fails
-- **`tunnel status`** — scans `~/.wg/nodeforge/*/metadata.json`, cross-references with `wg show interfaces`
+- **`tunnel status`** — scans `~/.wg/loft-cli/*/metadata.json`, cross-references with `wg show interfaces`
 
 Interface names use `wg-{host}` (truncated to 15 chars — Linux interface name limit).
 
@@ -218,39 +218,39 @@ WireGuard tunnel commands (`tunnel up`, `tunnel down`, and the tunnel safety gat
 To grant passwordless sudo for WireGuard commands only:
 
 ```bash
-# /etc/sudoers.d/wireguard-nodeforge
+# /etc/sudoers.d/wireguard-loft-cli
 %sudo ALL=(ALL) NOPASSWD: /usr/bin/wg, /usr/bin/wg-quick, /usr/sbin/ip
 ```
 
 ```bash
-sudo visudo -f /etc/sudoers.d/wireguard-nodeforge
+sudo visudo -f /etc/sudoers.d/wireguard-loft-cli
 ```
 
 ### Host Removal (`remove.py`)
 
-`nodeforge remove <host>` tears down all local state in four steps:
+`loft-cli remove <host>` tears down all local state in four steps:
 
 1. Tear down active WireGuard tunnel (if running)
-2. Remove WireGuard local state (`~/.wg/nodeforge/{host}/`)
-3. Remove SSH conf.d entry (`~/.ssh/conf.d/nodeforge/{host}.conf`)
+2. Remove WireGuard local state (`~/.wg/loft-cli/{host}/`)
+3. Remove SSH conf.d entry (`~/.ssh/conf.d/loft-cli/{host}.conf`)
 4. Mark inventory record as decommissioned
 
 ---
 
 ## Built-in Addon Registration
 
-`_builtins.py` registers all built-in spec kinds (bootstrap, service, file_template, compose_project, stack, http_check, systemd_unit, systemd_timer, backup_job, postgres_ensure) via the `nodeforge.addons` entry_points group. This happens automatically when the package is imported — no explicit registration calls needed from user code.
+`_builtins.py` registers all built-in spec kinds (bootstrap, service, file_template, compose_project, stack, http_check, systemd_unit, systemd_timer, backup_job, postgres_ensure) via the `loft_cli.addons` entry_points group. This happens automatically when the package is imported — no explicit registration calls needed from user code.
 
 ---
 
 ## Import Boundary
 
-`nodeforge` (client) may import from:
-- `nodeforge_core` (shared models, specs, registries)
+`loft-cli` (client) may import from:
+- `loft_cli_core` (shared models, specs, registries)
 - Standard library
 - Third-party dependencies (fabric, requests, pynacl, etc.)
 
-`nodeforge` must **never** import from `nodeforge_agent`. The client and agent are independent consumers of core.
+`loft-cli` must **never** import from `loft_cli_agent`. The client and agent are independent consumers of core.
 
 ---
 
@@ -265,4 +265,4 @@ make build-binary
 
 The client binary includes Fabric, paramiko, sqlcipher3, and all core + client code. It requires `libsqlcipher-dev` (Linux) or `brew install sqlcipher` (macOS) on the build host.
 
-Output: `dist/nodeforge`
+Output: `dist/loft-cli`

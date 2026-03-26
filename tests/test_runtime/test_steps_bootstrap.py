@@ -1,6 +1,6 @@
 """Tests for bootstrap step command template correctness."""
 
-from nodeforge.runtime.steps.bootstrap import (
+from loft_cli.runtime.steps.bootstrap import (
     allow_ssh_on_wireguard,
     create_admin_user,
     delete_open_ssh_rule,
@@ -14,7 +14,7 @@ from nodeforge.runtime.steps.bootstrap import (
     ufw_force_enable,
     write_sshd_config_candidate,
 )
-from nodeforge.runtime.steps.wireguard import (
+from loft_cli.runtime.steps.wireguard import (
     enable_wireguard,
     generate_client_config,
     generate_server_config,

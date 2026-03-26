@@ -9,9 +9,9 @@ import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _load_nodeforge_addons():
+def _load_loft_cli_addons():
     """Ensure all built-in registries (step handlers, etc.) are loaded for tests."""
-    from nodeforge_core.registry import load_addons
+    from loft_cli_core.registry import load_addons
 
     load_addons()
 
@@ -94,7 +94,7 @@ def mock_ssh_session(mocker):
     """Mocked SSHSession that records commands without executing."""
     session = mocker.MagicMock()
     session.test_connection.return_value = True
-    from nodeforge.runtime.ssh import CommandResult
+    from loft_cli.runtime.ssh import CommandResult
 
     session.run.return_value = CommandResult(ok=True, stdout="ok", stderr="", return_code=0)
     return session

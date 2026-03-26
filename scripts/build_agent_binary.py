@@ -1,15 +1,15 @@
-"""Binary build script for nodeforge-agent (Linux only).
+"""Binary build script for loft-cli-agent (Linux only).
 
 Builds a standalone single-file executable for the server-side agent
 using PyInstaller.  The agent binary is intentionally minimal — it only
-includes nodeforge-core and nodeforge-agent (no Fabric, no SQLCipher,
+includes loft-cli-core and loft-cli-agent (no Fabric, no SQLCipher,
 no paramiko).
 
 Usage:
     python scripts/build_agent_binary.py
 
 Output:
-    dist/nodeforge-agent     (Linux)
+    dist/loft-cli-agent     (Linux)
 
 The agent binary targets Linux servers only (Debian/Ubuntu).  There is no
 macOS or Windows build — the agent runs on managed servers, not developer
@@ -23,7 +23,7 @@ import shutil
 import subprocess
 import sys
 
-APP_NAME = "nodeforge-agent"
+APP_NAME = "loft-cli-agent"
 
 
 def run(cmd: list[str]) -> None:
@@ -80,9 +80,9 @@ def main() -> None:
             "--paths",
             "packages/agent",
             "--hidden-import",
-            "nodeforge_core",
+            "loft_cli_core",
             "--hidden-import",
-            "nodeforge_agent",
+            "loft_cli_agent",
             "scripts/agent_entrypoint.py",
         ]
     )

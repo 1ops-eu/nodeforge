@@ -3,13 +3,13 @@
 import pytest
 from pydantic import ValidationError
 
-from nodeforge.runtime.steps.backup import render_backup_script
-from nodeforge_core.specs.backup_job_schema import (
+from loft_cli.runtime.steps.backup import render_backup_script
+from loft_cli_core.specs.backup_job_schema import (
     BackupJobSpec,
     BackupRetention,
     BackupSource,
 )
-from nodeforge_core.specs.validators import has_errors, validate_backup_job
+from loft_cli_core.specs.validators import has_errors, validate_backup_job
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -27,7 +27,7 @@ def _make_backup_job_spec(**overrides) -> BackupJobSpec:
                 "type": "postgres_dump",
                 "database": "myapp",
             },
-            "destination": {"path": "/var/backups/nodeforge"},
+            "destination": {"path": "/var/backups/loft-cli"},
         },
     }
     base.update(overrides)
@@ -193,8 +193,8 @@ class TestBackupStepHelpers:
 
 class TestBackupJobPlanning:
     def test_plan_generates_backup_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_backup_job_spec()
         ctx = normalize(spec)
@@ -210,8 +210,8 @@ class TestBackupJobPlanning:
         assert "enable_start_backup_timer_app-db" in step_ids
 
     def test_plan_backup_script_content(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_backup_job_spec()
         ctx = normalize(spec)
@@ -222,8 +222,8 @@ class TestBackupJobPlanning:
         assert "myapp" in script_step.file_content
 
     def test_plan_service_is_oneshot(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_backup_job_spec()
         ctx = normalize(spec)
@@ -233,8 +233,8 @@ class TestBackupJobPlanning:
         assert "Type=oneshot" in svc_step.file_content
 
     def test_plan_has_inventory_steps(self):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
 
         spec = _make_backup_job_spec()
         ctx = normalize(spec)

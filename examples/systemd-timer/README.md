@@ -14,9 +14,9 @@ Deploy a scheduled task via systemd timer and companion oneshot service.
 ## Usage
 
 ```bash
-nodeforge validate examples/systemd-timer/systemd-timer.yaml
-nodeforge plan examples/systemd-timer/systemd-timer.yaml
-nodeforge apply examples/systemd-timer/systemd-timer.yaml
+loft-cli validate examples/systemd-timer/systemd-timer.yaml
+loft-cli plan examples/systemd-timer/systemd-timer.yaml
+loft-cli apply examples/systemd-timer/systemd-timer.yaml
 ```
 
 ## Notes

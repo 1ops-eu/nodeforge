@@ -1,9 +1,9 @@
 """Tests for Markdown docs rendering."""
 
-from nodeforge.compiler.normalizer import normalize
-from nodeforge.compiler.planner import plan
-from nodeforge_core.plan.render_markdown import render_markdown
-from nodeforge_core.specs.loader import load_spec
+from loft_cli.compiler.normalizer import normalize
+from loft_cli.compiler.planner import plan
+from loft_cli_core.plan.render_markdown import render_markdown
+from loft_cli_core.specs.loader import load_spec
 
 
 def test_render_markdown_has_required_sections(bootstrap_yaml):

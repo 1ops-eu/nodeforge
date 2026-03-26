@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from nodeforge.runtime.executor import Executor, StepResult
-from nodeforge_core.plan.models import Plan, Step, StepKind, StepScope
+from loft_cli.runtime.executor import Executor, StepResult
+from loft_cli_core.plan.models import Plan, Step, StepKind, StepScope
 
 
 def _make_plan(steps: list[Step]) -> Plan:
@@ -68,7 +68,7 @@ def test_gate_failure_aborts_plan(mock_ssh_session, mocker):
 
     # Mock the gate check to fail
     mocker.patch(
-        "nodeforge.checks.ssh.check_ssh_reachable",
+        "loft_cli.checks.ssh.check_ssh_reachable",
         return_value=mocker.MagicMock(passed=False, message="connection refused"),
     )
 
@@ -84,7 +84,7 @@ def test_gate_failure_aborts_plan(mock_ssh_session, mocker):
 
 def test_dependency_failure_skips_dependent(mock_ssh_session, mocker):
     """If step A fails, step B with depends_on=[A] should be skipped."""
-    from nodeforge.runtime.ssh import CommandResult
+    from loft_cli.runtime.ssh import CommandResult
 
     # Step 0 succeeds (preflight), step 1 fails, step 2 depends on step 1 → skipped
     ok = CommandResult(ok=True, stdout="ok", stderr="", return_code=0)

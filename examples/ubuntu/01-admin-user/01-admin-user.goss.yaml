@@ -1,5 +1,5 @@
 # Static goss reference spec for: examples/ubuntu/01-admin-user.yaml
-# nodeforge ships this automatically to ~/.goss/ during `apply`.
+# loft-cli ships this automatically to ~/.goss/ during `apply`.
 # Manual run on the target server:
 #   goss -g ~/.goss/goss.yaml validate
 #

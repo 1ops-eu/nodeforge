@@ -2,9 +2,9 @@
 
 import pytest
 
-from nodeforge.compiler.normalizer import normalize
-from nodeforge_core.registry.local_paths import LocalPathsConfig, register_local_paths
-from nodeforge_core.specs.loader import load_spec
+from loft_cli.compiler.normalizer import normalize
+from loft_cli_core.registry.local_paths import LocalPathsConfig, register_local_paths
+from loft_cli_core.specs.loader import load_spec
 
 
 @pytest.fixture(autouse=True)
@@ -20,12 +20,12 @@ def test_normalize_sets_ssh_conf_d_path(bootstrap_yaml):
     assert "test-node-1.conf" in str(ctx.ssh_conf_d_path)
 
 
-def test_normalize_ssh_conf_d_path_uses_nodeforge_subdir(bootstrap_yaml):
-    """Default base is ~/.ssh/conf.d/nodeforge/ — not the old ~/.ssh/conf.d/."""
+def test_normalize_ssh_conf_d_path_uses_loft_cli_subdir(bootstrap_yaml):
+    """Default base is ~/.ssh/conf.d/loft-cli/ — not the old ~/.ssh/conf.d/."""
     spec = load_spec(bootstrap_yaml)
     ctx = normalize(spec)
     assert ctx.ssh_conf_d_path is not None
-    assert "nodeforge" in str(ctx.ssh_conf_d_path)
+    assert "loft-cli" in str(ctx.ssh_conf_d_path)
 
 
 def test_normalize_ssh_conf_d_path_honours_custom_base(bootstrap_yaml, tmp_path):

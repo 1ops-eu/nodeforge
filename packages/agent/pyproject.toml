@@ -3,19 +3,19 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nodeforge-agent"
+name = "loft-cli-agent"
 version = "0.6.3"
-description = "Server-side agent for nodeforge — executes plans locally on managed servers"
+description = "Server-side agent for loft-cli — executes plans locally on managed servers"
 requires-python = ">=3.11"
 dependencies = [
-    "nodeforge-core>=0.5.0",
+    "loft-cli-core>=0.5.0",
     "typer[all]>=0.9.0",
     "rich>=13.0",
 ]
 
 [project.scripts]
-nodeforge-agent = "nodeforge_agent.cli:app"
+loft-cli-agent = "loft_cli_agent.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["nodeforge_agent*"]
+include = ["loft_cli_agent*"]

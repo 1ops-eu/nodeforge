@@ -6,21 +6,21 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from nodeforge.runtime.steps.compose import (
+from loft_cli.runtime.steps.compose import (
     compose_config,
     compose_down,
     compose_pull,
     compose_up,
     mkdir_with_permissions,
 )
-from nodeforge_core.specs.compose_project_schema import (
+from loft_cli_core.specs.compose_project_schema import (
     ComposeHealthCheckBlock,
     ComposeProjectBlock,
     ComposeProjectSpec,
     ComposeTemplateBlock,
     ManagedDirectoryBlock,
 )
-from nodeforge_core.specs.validators import has_errors, validate_compose_project
+from loft_cli_core.specs.validators import has_errors, validate_compose_project
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -282,7 +282,7 @@ class TestComposeSteps:
 
 class TestComposeHealthCheckParsing:
     def test_parse_ndjson(self):
-        from nodeforge.checks.compose import _parse_compose_ps
+        from loft_cli.checks.compose import _parse_compose_ps
 
         stdout = (
             '{"Name":"demo-app-1","State":"running","Health":"healthy","Service":"app"}\n'
@@ -295,41 +295,41 @@ class TestComposeHealthCheckParsing:
         assert containers[1]["name"] == "demo-redis-1"
 
     def test_parse_json_array(self):
-        from nodeforge.checks.compose import _parse_compose_ps
+        from loft_cli.checks.compose import _parse_compose_ps
 
         stdout = '[{"Name":"app","State":"running","Health":"","Service":"app"}]'
         containers = _parse_compose_ps(stdout)
         assert len(containers) == 1
 
     def test_parse_empty(self):
-        from nodeforge.checks.compose import _parse_compose_ps
+        from loft_cli.checks.compose import _parse_compose_ps
 
         assert _parse_compose_ps("") == []
         assert _parse_compose_ps("  \n  ") == []
 
     def test_container_healthy_running(self):
-        from nodeforge.checks.compose import _is_container_healthy
+        from loft_cli.checks.compose import _is_container_healthy
 
         assert _is_container_healthy({"state": "running", "health": "healthy"}) is True
 
     def test_container_healthy_no_healthcheck(self):
-        from nodeforge.checks.compose import _is_container_healthy
+        from loft_cli.checks.compose import _is_container_healthy
 
         assert _is_container_healthy({"state": "running", "health": ""}) is True
 
     def test_container_unhealthy(self):
-        from nodeforge.checks.compose import _is_container_healthy
+        from loft_cli.checks.compose import _is_container_healthy
 
         assert _is_container_healthy({"state": "running", "health": "unhealthy"}) is False
 
     def test_container_not_running(self):
-        from nodeforge.checks.compose import _is_container_healthy
+        from loft_cli.checks.compose import _is_container_healthy
 
         assert _is_container_healthy({"state": "exited", "health": ""}) is False
 
     def test_parse_lowercase_fields(self):
         """Docker Compose v2 may use lowercase field names."""
-        from nodeforge.checks.compose import _parse_compose_ps
+        from loft_cli.checks.compose import _parse_compose_ps
 
         stdout = '{"name":"app","state":"running","health":"healthy","service":"app"}\n'
         containers = _parse_compose_ps(stdout)
@@ -397,9 +397,9 @@ class TestComposeProjectPlanner:
         return f
 
     def test_plan_has_compose_steps(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -409,9 +409,9 @@ class TestComposeProjectPlanner:
         assert len(compose_steps) > 0
 
     def test_plan_has_preflight(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -421,9 +421,9 @@ class TestComposeProjectPlanner:
         assert "preflight_connect_admin" in step_ids
 
     def test_plan_has_project_dir_step(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -433,9 +433,9 @@ class TestComposeProjectPlanner:
         assert "mkdir_project_dir" in step_ids
 
     def test_plan_has_managed_directory_step(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -449,9 +449,9 @@ class TestComposeProjectPlanner:
         assert len(mkdir_steps) >= 1
 
     def test_plan_has_template_upload(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -463,9 +463,9 @@ class TestComposeProjectPlanner:
         assert "example.com" in upload_steps[0].file_content
 
     def test_plan_has_compose_file_upload(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -478,9 +478,9 @@ class TestComposeProjectPlanner:
         assert "httpd:alpine" in upload_step.file_content
 
     def test_plan_has_compose_lifecycle_steps(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -492,9 +492,9 @@ class TestComposeProjectPlanner:
         assert "compose_up" in step_ids
 
     def test_plan_has_health_check(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -509,9 +509,9 @@ class TestComposeProjectPlanner:
         assert ":3" in hc_step.command  # interval
 
     def test_compose_remote_steps_are_sudo(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -522,9 +522,9 @@ class TestComposeProjectPlanner:
             assert step.sudo is True, f"Step {step.id} should be sudo"
 
     def test_step_indices_sequential(self, compose_yaml):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml)
         ctx = normalize(spec, spec_dir=compose_yaml.parent)
@@ -565,9 +565,9 @@ class TestComposeProjectPlanner:
         return f
 
     def test_plan_without_pull(self, compose_yaml_no_pull):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml_no_pull)
         ctx = normalize(spec, spec_dir=compose_yaml_no_pull.parent)
@@ -610,9 +610,9 @@ class TestComposeProjectPlanner:
         return f
 
     def test_plan_with_inventory_has_local_steps(self, compose_yaml_with_inventory):
-        from nodeforge.compiler.normalizer import normalize
-        from nodeforge.compiler.planner import plan
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli.compiler.normalizer import normalize
+        from loft_cli.compiler.planner import plan
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(compose_yaml_with_inventory)
         ctx = normalize(spec, spec_dir=compose_yaml_with_inventory.parent)

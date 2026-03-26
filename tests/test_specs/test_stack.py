@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from nodeforge_core.specs.stack_schema import (
+from loft_cli_core.specs.stack_schema import (
     StackLocalBlock,
     StackLoginBlock,
     StackResourceBlock,
     StackSpec,
 )
-from nodeforge_core.specs.validators import has_errors, validate_stack
+from loft_cli_core.specs.validators import has_errors, validate_stack
 
 # ── Schema tests ─────────────────────────────────────────────────────────────
 
@@ -162,7 +162,7 @@ class TestStackValidator:
 
 class TestStackPlanner:
     def test_topo_sort_orders_dependencies_first(self):
-        from nodeforge.compiler.planner import _topo_sort
+        from loft_cli.compiler.planner import _topo_sort
 
         resources = [
             StackResourceBlock(name="c", kind="file_template", depends_on=["b"]),
@@ -175,7 +175,7 @@ class TestStackPlanner:
         assert names.index("b") < names.index("c")
 
     def test_topo_sort_no_deps(self):
-        from nodeforge.compiler.planner import _topo_sort
+        from loft_cli.compiler.planner import _topo_sort
 
         resources = [
             StackResourceBlock(name="x", kind="file_template"),
@@ -186,8 +186,8 @@ class TestStackPlanner:
 
     def test_plan_stack_prefixes_step_ids(self):
         """Stack planner should prefix child step IDs with stack_{resource_name}_."""
-        from nodeforge.compiler.normalizer import NormalizedContext
-        from nodeforge.compiler.planner import _plan_stack
+        from loft_cli.compiler.normalizer import NormalizedContext
+        from loft_cli.compiler.planner import _plan_stack
 
         spec = StackSpec.model_validate(
             {
@@ -250,7 +250,7 @@ class TestStackYamlLoading:
                     directory: /opt/my-app
                     compose_file: docker-compose.yml
         """))
-        from nodeforge_core.specs.loader import load_spec
+        from loft_cli_core.specs.loader import load_spec
 
         spec = load_spec(spec_file)
         assert isinstance(spec, StackSpec)

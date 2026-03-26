@@ -2,8 +2,8 @@
 
 import pytest
 
-from nodeforge_core.specs.bootstrap_schema import BootstrapSpec
-from nodeforge_core.specs.loader import SpecLoadError, load_spec
+from loft_cli_core.specs.bootstrap_schema import BootstrapSpec
+from loft_cli_core.specs.loader import SpecLoadError, load_spec
 
 
 def test_load_valid_bootstrap(bootstrap_yaml):

@@ -1,4 +1,4 @@
-"""Binary build script for nodeforge (Linux and macOS only).
+"""Binary build script for loft-cli (Linux and macOS only).
 
 Builds a standalone single-file executable using PyInstaller.
 
@@ -6,7 +6,7 @@ Usage:
     python scripts/build_binary.py
 
 Output:
-    dist/nodeforge          (Linux / macOS)
+    dist/loft-cli          (Linux / macOS)
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import sys
 
-APP_NAME = "nodeforge"
+APP_NAME = "loft-cli"
 
 
 def run(cmd: list[str]) -> None:
@@ -74,9 +74,9 @@ def main() -> None:
             "--paths",
             "packages/client",
             "--hidden-import",
-            "nodeforge_core",
+            "loft_cli_core",
             "--hidden-import",
-            "nodeforge",
+            "loft-cli",
             "--hidden-import",
             "paramiko",
             "--hidden-import",

@@ -13,9 +13,9 @@ Renders a Jinja2 template with variables and uploads the result to a remote serv
 ## Usage
 
 ```bash
-nodeforge validate examples/file-template/file-template.yaml
-nodeforge plan examples/file-template/file-template.yaml
-nodeforge apply examples/file-template/file-template.yaml
+loft-cli validate examples/file-template/file-template.yaml
+loft-cli plan examples/file-template/file-template.yaml
+loft-cli apply examples/file-template/file-template.yaml
 ```
 
 ## Prerequisites

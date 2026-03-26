@@ -14,10 +14,10 @@ from __future__ import annotations
 import textwrap
 from pathlib import Path
 
-from nodeforge.compiler.normalizer import normalize
-from nodeforge.compiler.planner import plan
-from nodeforge_core.plan.models import StepKind, StepScope
-from nodeforge_core.specs.loader import load_spec
+from loft_cli.compiler.normalizer import normalize
+from loft_cli.compiler.planner import plan
+from loft_cli_core.plan.models import StepKind, StepScope
+from loft_cli_core.specs.loader import load_spec
 
 
 def _make_wg_plan(tmp_path: Path):

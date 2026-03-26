@@ -2,8 +2,8 @@ kind: bootstrap
 
 # Example 1.5b: WireGuard VPN hub — server key auto-generated
 # Same as 05-wireguard but omits private_key_file entirely.
-# nodeforge auto-generates the server Curve25519 key pair via PyNaCl on the
-# first apply and persists it under ~/.wg/nodeforge/{host}/private.key.
+# loft-cli auto-generates the server Curve25519 key pair via PyNaCl on the
+# first apply and persists it under ~/.wg/loft-cli/{host}/private.key.
 # Re-runs reuse the same key (write-once semantics, stable server identity).
 
 meta:
@@ -36,9 +36,9 @@ firewall:
   provider: ufw
   ssh_only: true
 
-# WireGuard: private_key_file is omitted — nodeforge auto-generates the server
+# WireGuard: private_key_file is omitted — loft-cli auto-generates the server
 # key pair via PyNaCl (no wg genkey subprocess needed, fully cross-platform).
-# The key is stored in ~/.wg/nodeforge/ubuntu-node-1/private.key after the
+# The key is stored in ~/.wg/loft-cli/ubuntu-node-1/private.key after the
 # first successful apply and reused on every subsequent run.
 wireguard:
   enabled: true
@@ -57,7 +57,7 @@ local:
 
   inventory:
     enabled: true
-    db_path: ~/.nodeforge/inventory.db
+    db_path: ~/.loft-cli/inventory.db
 
 checks:
   - type: ssh_reachable

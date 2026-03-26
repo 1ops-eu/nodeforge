@@ -18,9 +18,9 @@ Deploys a multi-service Docker Compose stack with template rendering and health 
 ## Usage
 
 ```bash
-nodeforge validate examples/compose-project/compose-project.yaml
-nodeforge plan examples/compose-project/compose-project.yaml
-nodeforge apply examples/compose-project/compose-project.yaml
+loft-cli validate examples/compose-project/compose-project.yaml
+loft-cli plan examples/compose-project/compose-project.yaml
+loft-cli apply examples/compose-project/compose-project.yaml
 ```
 
 ## Prerequisites

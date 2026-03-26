@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nodeforge.local.inventory_db import InventoryDB
+from loft_cli.local.inventory_db import InventoryDB
 
 
 @pytest.fixture

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nodeforge_core.utils.templates import (
+from loft_cli_core.utils.templates import (
     TemplateRenderError,
     content_hash,
     render_template_file,

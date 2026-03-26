@@ -6,7 +6,7 @@ Define a scheduled PostgreSQL backup with retention.
 
 1. Connects to the target server via SSH
 2. Creates the backup destination directory
-3. Writes a backup shell script to `/usr/local/bin/nodeforge-backup-app-db.sh`
+3. Writes a backup shell script to `/usr/local/bin/loft-cli-backup-app-db.sh`
 4. Creates a systemd oneshot service to run the script
 5. Creates a systemd timer to trigger the backup on schedule
 6. Enables and starts the timer
@@ -14,9 +14,9 @@ Define a scheduled PostgreSQL backup with retention.
 ## Usage
 
 ```bash
-nodeforge validate examples/backup-job/backup-job.yaml
-nodeforge plan examples/backup-job/backup-job.yaml
-nodeforge apply examples/backup-job/backup-job.yaml
+loft-cli validate examples/backup-job/backup-job.yaml
+loft-cli plan examples/backup-job/backup-job.yaml
+loft-cli apply examples/backup-job/backup-job.yaml
 ```
 
 ## Backup Types

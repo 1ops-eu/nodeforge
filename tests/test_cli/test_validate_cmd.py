@@ -2,7 +2,7 @@
 
 from typer.testing import CliRunner
 
-from nodeforge.cli import app
+from loft_cli.cli import app
 
 runner = CliRunner()
 

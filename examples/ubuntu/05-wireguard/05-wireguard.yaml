@@ -11,7 +11,7 @@ kind: bootstrap
 #   - Peers are added via the server's wg config; this spec sets the server
 #     interface and private key only.
 #
-# Local machine client config (wg-quick, NOT managed by nodeforge):
+# Local machine client config (wg-quick, NOT managed by loft-cli):
 #   Create /etc/wireguard/wg0.conf on your local machine:
 #
 #   [Interface]
@@ -78,7 +78,7 @@ local:
 
   inventory:
     enabled: true
-    db_path: ~/.nodeforge/inventory.db
+    db_path: ~/.loft-cli/inventory.db
 
 checks:
   - type: ssh_reachable

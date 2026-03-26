@@ -14,9 +14,9 @@ Demonstrates bootstrapping a server using root password authentication instead o
 ```bash
 export ROOT_PASSWORD="your-root-password"
 
-nodeforge validate examples/bootstrap-password-login/bootstrap-password-login.yaml
-nodeforge plan examples/bootstrap-password-login/bootstrap-password-login.yaml
-nodeforge apply examples/bootstrap-password-login/bootstrap-password-login.yaml
+loft-cli validate examples/bootstrap-password-login/bootstrap-password-login.yaml
+loft-cli plan examples/bootstrap-password-login/bootstrap-password-login.yaml
+loft-cli apply examples/bootstrap-password-login/bootstrap-password-login.yaml
 ```
 
 ## Prerequisites

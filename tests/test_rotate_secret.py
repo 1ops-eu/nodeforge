@@ -2,13 +2,13 @@
 
 import os
 
-from nodeforge.runtime.secret_rotation import (
+from loft_cli.runtime.secret_rotation import (
     SecretRef,
     find_secret_refs,
     generate_password,
     rotate_secret,
 )
-from nodeforge_core.specs.postgres_ensure_schema import PostgresEnsureSpec
+from loft_cli_core.specs.postgres_ensure_schema import PostgresEnsureSpec
 
 
 def _make_pg_spec(**overrides) -> PostgresEnsureSpec:

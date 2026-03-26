@@ -1,6 +1,6 @@
 """Tests for agent runtime state management."""
 
-from nodeforge_agent.state import (
+from loft_cli_agent.state import (
     RuntimeState,
     load_state,
     resource_changed,

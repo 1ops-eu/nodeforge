@@ -1,7 +1,7 @@
 """Tests for agent-side executor."""
 
-from nodeforge_agent.executor import AgentExecutor
-from nodeforge_core.plan.models import Plan, Step, StepKind, StepScope
+from loft_cli_agent.executor import AgentExecutor
+from loft_cli_core.plan.models import Plan, Step, StepKind, StepScope
 
 
 def _make_plan(steps):

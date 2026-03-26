@@ -23,7 +23,7 @@ backup:
     port: 5432
     user: postgres
   destination:
-    path: /var/backups/nodeforge
+    path: /var/backups/loft-cli
   retention:
     count: 7
   schedule: "*-*-* 02:00:00"
@@ -31,4 +31,4 @@ backup:
 local:
   inventory:
     enabled: true
-    db_path: ~/.nodeforge/inventory.db
+    db_path: ~/.loft-cli/inventory.db
